@@ -31,6 +31,8 @@ func main() {
 		&model.Section{},
 		&model.Subject{},
 		&model.TeacherAssignment{},
+		&model.Assignment{},
+		&model.Submission{},
 	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
@@ -56,6 +58,9 @@ func main() {
 		protected.GET("/classes", h.GetClasses)
 		protected.POST("/teacher-assignments", h.CreateTeacherAssignment)
 		protected.GET("/teacher-assignments", h.GetTeacherAssignments)
+		protected.POST("/assignments", h.CreateAssignment)
+		protected.GET("/assignments", h.GetAssignments)
+		protected.POST("/submissions", h.CreateSubmission)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

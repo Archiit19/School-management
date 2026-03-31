@@ -127,3 +127,49 @@ func (r *AcademicRepository) GetTeacherAssignments(
 	err := q.Order("created_at desc").Find(&assignments).Error
 	return assignments, err
 }
+
+func (r *AcademicRepository) CreateAssignment(assignment *model.Assignment) error {
+	return r.db.Create(assignment).Error
+}
+
+func (r *AcademicRepository) GetAssignments(
+	schoolID uuid.UUID,
+	query model.AssignmentQuery,
+) ([]model.Assignment, error) {
+	var assignments []model.Assignment
+	q := r.db.Where("school_id = ?", schoolID)
+	if query.ClassID != "" {
+		q = q.Where("class_id = ?", query.ClassID)
+	}
+	if query.SubjectID != "" {
+		q = q.Where("subject_id = ?", query.SubjectID)
+	}
+	if query.TeacherID != "" {
+		q = q.Where("teacher_user_id = ?", query.TeacherID)
+	}
+
+	err := q.Order("created_at desc").Find(&assignments).Error
+	return assignments, err
+}
+
+func (r *AcademicRepository) GetAssignmentByIDAndSchool(
+	assignmentID, schoolID uuid.UUID,
+) (*model.Assignment, error) {
+	var assignment model.Assignment
+	err := r.db.Where("id = ? AND school_id = ?", assignmentID, schoolID).First(&assignment).Error
+	return &assignment, err
+}
+
+func (r *AcademicRepository) GetSubmissionByComposite(
+	schoolID, assignmentID, studentID uuid.UUID,
+) (*model.Submission, error) {
+	var submission model.Submission
+	err := r.db.
+		Where("school_id = ? AND assignment_id = ? AND student_id = ?", schoolID, assignmentID, studentID).
+		First(&submission).Error
+	return &submission, err
+}
+
+func (r *AcademicRepository) CreateSubmission(submission *model.Submission) error {
+	return r.db.Create(submission).Error
+}

@@ -113,3 +113,58 @@ func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 
 	c.JSON(http.StatusOK, assignments)
 }
+
+func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
+	var req model.CreateAssignmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	requestingUserID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	assignment, err := h.svc.CreateAssignment(req, schoolID, requestingUserID, roleName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, assignment)
+}
+
+func (h *AcademicHandler) GetAssignments(c *gin.Context) {
+	var query model.AssignmentQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	assignments, err := h.svc.GetAssignments(schoolID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, assignments)
+}
+
+func (h *AcademicHandler) CreateSubmission(c *gin.Context) {
+	var req model.CreateSubmissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	submittedBy := c.MustGet("user_id").(uuid.UUID)
+	submission, err := h.svc.CreateSubmission(req, schoolID, submittedBy)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, submission)
+}
