@@ -82,6 +82,26 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # PostgreSQL for Attendance Service
+  # ──────────────────────────────────────
+  attendance-db:
+    image: postgres:16-alpine
+    container_name: attendance-db
+    environment:
+      POSTGRES_USER: attendance_user
+      POSTGRES_PASSWORD: attendance_pass
+      POSTGRES_DB: attendance_db
+    ports:
+      - "5437:5432"
+    volumes:
+      - attendance_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U attendance_user -d attendance_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -179,8 +199,31 @@ services:
       academic-service:
         condition: service_started
 
+  # ──────────────────────────────────────
+  # Attendance Service
+  # ──────────────────────────────────────
+  attendance-service:
+    build:
+      context: ./attendance-service
+      dockerfile: Dockerfile
+    container_name: attendance-service
+    ports:
+      - "8085:8085"
+    environment:
+      DB_HOST: attendance-db
+      DB_PORT: 5432
+      DB_USER: attendance_user
+      DB_PASSWORD: attendance_pass
+      DB_NAME: attendance_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8085
+    depends_on:
+      attendance-db:
+        condition: service_healthy
+
 volumes:
   auth_db_data:
   user_db_data:
   academic_db_data:
   student_db_data:
+  attendance_db_data:
