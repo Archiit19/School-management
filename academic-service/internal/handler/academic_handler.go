@@ -78,3 +78,38 @@ func (h *AcademicHandler) GetClasses(c *gin.Context) {
 
 	c.JSON(http.StatusOK, classes)
 }
+
+func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
+	var req model.CreateTeacherAssignmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	authHeader := c.GetHeader("Authorization")
+	assignment, err := h.svc.CreateTeacherAssignment(req, schoolID, authHeader)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, assignment)
+}
+
+func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
+	var query model.TeacherAssignmentQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	assignments, err := h.svc.GetTeacherAssignments(schoolID, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, assignments)
+}

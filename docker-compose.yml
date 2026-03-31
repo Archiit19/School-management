@@ -145,6 +145,7 @@ services:
       DB_PASSWORD: academic_pass
       DB_NAME: academic_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
+      AUTH_SERVICE_URL: http://auth-service:8081
       PORT: 8083
     depends_on:
       academic-db:

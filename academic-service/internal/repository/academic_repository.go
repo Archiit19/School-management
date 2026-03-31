@@ -83,3 +83,47 @@ func (r *AcademicRepository) GetSubjectsByClassID(classID uuid.UUID) ([]model.Su
 	err := r.db.Where("class_id = ?", classID).Order("created_at asc").Find(&subjects).Error
 	return subjects, err
 }
+
+func (r *AcademicRepository) GetSubjectByIDAndSchool(subjectID, schoolID uuid.UUID) (*model.Subject, error) {
+	var subject model.Subject
+	err := r.db.Where("id = ? AND school_id = ?", subjectID, schoolID).First(&subject).Error
+	return &subject, err
+}
+
+func (r *AcademicRepository) CreateTeacherAssignment(assignment *model.TeacherAssignment) error {
+	return r.db.Create(assignment).Error
+}
+
+func (r *AcademicRepository) GetTeacherAssignmentByComposite(
+	schoolID, teacherUserID, classID, subjectID uuid.UUID,
+) (*model.TeacherAssignment, error) {
+	var assignment model.TeacherAssignment
+	err := r.db.
+		Where(
+			"school_id = ? AND teacher_user_id = ? AND class_id = ? AND subject_id = ?",
+			schoolID, teacherUserID, classID, subjectID,
+		).
+		First(&assignment).Error
+	return &assignment, err
+}
+
+func (r *AcademicRepository) GetTeacherAssignments(
+	schoolID uuid.UUID,
+	query model.TeacherAssignmentQuery,
+) ([]model.TeacherAssignment, error) {
+	var assignments []model.TeacherAssignment
+	q := r.db.Where("school_id = ?", schoolID)
+
+	if query.TeacherUserID != "" {
+		q = q.Where("teacher_user_id = ?", query.TeacherUserID)
+	}
+	if query.ClassID != "" {
+		q = q.Where("class_id = ?", query.ClassID)
+	}
+	if query.SubjectID != "" {
+		q = q.Where("subject_id = ?", query.SubjectID)
+	}
+
+	err := q.Order("created_at desc").Find(&assignments).Error
+	return assignments, err
+}

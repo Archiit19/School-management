@@ -1,9 +1,12 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 
+	"github.com/avaneeshravat/school-management/academic-service/internal/config"
 	"github.com/avaneeshravat/school-management/academic-service/internal/model"
 	"github.com/avaneeshravat/school-management/academic-service/internal/repository"
 	"github.com/google/uuid"
@@ -11,11 +14,21 @@ import (
 )
 
 type AcademicService struct {
-	repo *repository.AcademicRepository
+	repo       *repository.AcademicRepository
+	cfg        *config.Config
+	httpClient *http.Client
 }
 
-func NewAcademicService(repo *repository.AcademicRepository) *AcademicService {
-	return &AcademicService{repo: repo}
+func NewAcademicService(
+	repo *repository.AcademicRepository,
+	cfg *config.Config,
+	httpClient *http.Client,
+) *AcademicService {
+	return &AcademicService{
+		repo:       repo,
+		cfg:        cfg,
+		httpClient: httpClient,
+	}
 }
 
 func (s *AcademicService) CreateClass(req model.CreateClassRequest, schoolID uuid.UUID) (*model.Class, error) {
@@ -141,4 +154,112 @@ func (s *AcademicService) GetClasses(schoolID uuid.UUID) ([]model.ClassWithChild
 		})
 	}
 	return resp, nil
+}
+
+func (s *AcademicService) CreateTeacherAssignment(
+	req model.CreateTeacherAssignmentRequest,
+	schoolID uuid.UUID,
+	authHeader string,
+) (*model.TeacherAssignment, error) {
+	teacherUserID, err := uuid.Parse(req.TeacherUserID)
+	if err != nil {
+		return nil, errors.New("invalid teacher_user_id")
+	}
+	classID, err := uuid.Parse(req.ClassID)
+	if err != nil {
+		return nil, errors.New("invalid class_id")
+	}
+	subjectID, err := uuid.Parse(req.SubjectID)
+	if err != nil {
+		return nil, errors.New("invalid subject_id")
+	}
+
+	_, err = s.repo.GetClassByIDAndSchool(classID, schoolID)
+	if err != nil {
+		return nil, errors.New("class not found")
+	}
+
+	subject, err := s.repo.GetSubjectByIDAndSchool(subjectID, schoolID)
+	if err != nil {
+		return nil, errors.New("subject not found")
+	}
+	if subject.ClassID != classID {
+		return nil, errors.New("subject does not belong to the selected class")
+	}
+
+	if err := s.validateTeacher(authHeader, teacherUserID, schoolID); err != nil {
+		return nil, err
+	}
+
+	_, err = s.repo.GetTeacherAssignmentByComposite(schoolID, teacherUserID, classID, subjectID)
+	if err == nil {
+		return nil, errors.New("teacher assignment already exists")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate assignment uniqueness: %w", err)
+	}
+
+	assignment := &model.TeacherAssignment{
+		SchoolID:      schoolID,
+		TeacherUserID: teacherUserID,
+		ClassID:       classID,
+		SubjectID:     subjectID,
+	}
+	if err := s.repo.CreateTeacherAssignment(assignment); err != nil {
+		return nil, fmt.Errorf("failed to create teacher assignment: %w", err)
+	}
+
+	return assignment, nil
+}
+
+func (s *AcademicService) GetTeacherAssignments(
+	schoolID uuid.UUID,
+	query model.TeacherAssignmentQuery,
+) ([]model.TeacherAssignment, error) {
+	assignments, err := s.repo.GetTeacherAssignments(schoolID, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch teacher assignments: %w", err)
+	}
+	return assignments, nil
+}
+
+type authUserResponse struct {
+	ID       string `json:"id"`
+	SchoolID string `json:"school_id"`
+	RoleName string `json:"role_name"`
+}
+
+func (s *AcademicService) validateTeacher(
+	authHeader string,
+	teacherUserID, schoolID uuid.UUID,
+) error {
+	url := fmt.Sprintf("%s/users/%s", s.cfg.AuthServiceURL, teacherUserID.String())
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return errors.New("failed to validate teacher user with auth-service")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return errors.New("teacher user not found or inaccessible")
+	}
+
+	var user authUserResponse
+	if err := json.NewDecoder(resp.Body).Decode(&user); err != nil {
+		return errors.New("failed to decode teacher user response")
+	}
+
+	userSchoolID, err := uuid.Parse(user.SchoolID)
+	if err != nil || userSchoolID != schoolID {
+		return errors.New("teacher must belong to the same school")
+	}
+
+	if user.RoleName != "teacher" {
+		return errors.New("linked user must have teacher role")
+	}
+
+	return nil
 }

@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/avaneeshravat/school-management/academic-service/internal/config"
 	"github.com/avaneeshravat/school-management/academic-service/internal/handler"
@@ -24,13 +26,19 @@ func main() {
 	}
 	log.Println("connected to Academic DB")
 
-	if err := db.AutoMigrate(&model.Class{}, &model.Section{}, &model.Subject{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.Class{},
+		&model.Section{},
+		&model.Subject{},
+		&model.TeacherAssignment{},
+	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
 	log.Println("academic database migrated")
 
 	repo := repository.NewAcademicRepository(db)
-	svc := service.NewAcademicService(repo)
+	httpClient := &http.Client{Timeout: 8 * time.Second}
+	svc := service.NewAcademicService(repo, cfg, httpClient)
 	h := handler.NewAcademicHandler(svc)
 
 	r := gin.Default()
@@ -46,6 +54,8 @@ func main() {
 		protected.POST("/sections", h.CreateSection)
 		protected.POST("/subjects", h.CreateSubject)
 		protected.GET("/classes", h.GetClasses)
+		protected.POST("/teacher-assignments", h.CreateTeacherAssignment)
+		protected.GET("/teacher-assignments", h.GetTeacherAssignments)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
