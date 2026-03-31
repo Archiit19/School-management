@@ -1,0 +1,228 @@
+basePath: /
+definitions:
+  model.CreateFeeRequest:
+    properties:
+      amount:
+        type: number
+      class_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      section_id:
+        type: string
+      student_id:
+        type: string
+      title:
+        type: string
+    required:
+    - amount
+    - title
+    type: object
+  model.CreatePaymentRequest:
+    properties:
+      amount_paid:
+        type: number
+      fee_id:
+        type: string
+      method:
+        type: string
+      payment_date:
+        type: string
+      reference:
+        type: string
+      student_id:
+        type: string
+    required:
+    - amount_paid
+    - fee_id
+    - payment_date
+    - student_id
+    type: object
+  model.DueItem:
+    properties:
+      amount:
+        type: number
+      balance:
+        type: number
+      class_id:
+        type: string
+      due_date:
+        type: string
+      fee_id:
+        type: string
+      paid_amount:
+        type: number
+      section_id:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: string
+      title:
+        type: string
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: something went wrong
+        type: string
+    type: object
+  model.Fee:
+    properties:
+      amount:
+        type: number
+      class_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      school_id:
+        type: string
+      section_id:
+        type: string
+      student_id:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Payment:
+    properties:
+      amount_paid:
+        type: number
+      created_at:
+        type: string
+      fee_id:
+        type: string
+      id:
+        type: string
+      method:
+        type: string
+      payment_date:
+        type: string
+      received_by:
+        type: string
+      reference:
+        type: string
+      school_id:
+        type: string
+      student_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8087
+info:
+  contact: {}
+  description: Fee structures, payments, and dues management.
+  title: Finance Service API
+  version: "1.0"
+paths:
+  /dues:
+    get:
+      description: Get outstanding dues by student/class/section filters.
+      parameters:
+      - description: Student ID
+        in: query
+        name: student_id
+        type: string
+      - description: Class ID
+        in: query
+        name: class_id
+        type: string
+      - description: Section ID
+        in: query
+        name: section_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.DueItem'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get dues
+      tags:
+      - Finance
+  /fees:
+    post:
+      consumes:
+      - application/json
+      description: Create fee structure and optionally assign it to class/section/student.
+      parameters:
+      - description: Fee payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateFeeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Fee'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create fee
+      tags:
+      - Finance
+  /payments:
+    post:
+      consumes:
+      - application/json
+      description: Record a payment against assigned fee.
+      parameters:
+      - description: Payment payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreatePaymentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Payment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Record payment
+      tags:
+      - Finance
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

@@ -122,6 +122,26 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # PostgreSQL for Finance Service
+  # ──────────────────────────────────────
+  finance-db:
+    image: postgres:16-alpine
+    container_name: finance-db
+    environment:
+      POSTGRES_USER: finance_user
+      POSTGRES_PASSWORD: finance_pass
+      POSTGRES_DB: finance_db
+    ports:
+      - "5439:5432"
+    volumes:
+      - finance_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U finance_user -d finance_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -263,6 +283,28 @@ services:
       exam-db:
         condition: service_healthy
 
+  # ──────────────────────────────────────
+  # Finance Service
+  # ──────────────────────────────────────
+  finance-service:
+    build:
+      context: ./finance-service
+      dockerfile: Dockerfile
+    container_name: finance-service
+    ports:
+      - "8087:8087"
+    environment:
+      DB_HOST: finance-db
+      DB_PORT: 5432
+      DB_USER: finance_user
+      DB_PASSWORD: finance_pass
+      DB_NAME: finance_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8087
+    depends_on:
+      finance-db:
+        condition: service_healthy
+
 volumes:
   auth_db_data:
   user_db_data:
@@ -270,3 +312,4 @@ volumes:
   student_db_data:
   attendance_db_data:
   exam_db_data:
+  finance_db_data:
