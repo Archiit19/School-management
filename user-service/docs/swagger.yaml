@@ -1,0 +1,356 @@
+basePath: /
+definitions:
+  model.AssignPermissionRequest:
+    properties:
+      permission_id:
+        example: 550e8400-e29b-41d4-a716-446655440010
+        type: string
+      role_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    required:
+    - permission_id
+    - role_id
+    type: object
+  model.CreatePermissionRequest:
+    properties:
+      description:
+        example: Can manage student records
+        type: string
+      name:
+        example: manage_students
+        type: string
+    required:
+    - name
+    type: object
+  model.CreateRoleRequest:
+    properties:
+      description:
+        example: Teacher role
+        type: string
+      name:
+        example: teacher
+        type: string
+      school_id:
+        description: set from JWT for public API, from body for internal
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+    required:
+    - name
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: something went wrong
+        type: string
+    type: object
+  model.Permission:
+    properties:
+      created_at:
+        type: string
+      description:
+        example: Can manage student records
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440010
+        type: string
+      name:
+        example: manage_students
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Role:
+    properties:
+      created_at:
+        type: string
+      description:
+        example: Teacher role
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      name:
+        example: teacher
+        type: string
+      school_id:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.RolePermission:
+    properties:
+      created_at:
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440020
+        type: string
+      permission_id:
+        example: 550e8400-e29b-41d4-a716-446655440010
+        type: string
+      role_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+    type: object
+host: localhost:8082
+info:
+  contact: {}
+  description: |-
+    Roles & Permissions management service for the School Management System.
+    Handles role creation, permission management, and role-permission assignments.
+  title: User Service API
+  version: "1.0"
+paths:
+  /api/v1/permissions:
+    get:
+      description: List all available permissions.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Permission'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List permissions
+      tags:
+      - Permissions
+    post:
+      consumes:
+      - application/json
+      description: Create a new system-level permission.
+      parameters:
+      - description: Permission details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreatePermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Permission'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a permission
+      tags:
+      - Permissions
+  /api/v1/roles:
+    get:
+      description: List all roles for the authenticated user's school.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Role'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List roles
+      tags:
+      - Roles
+    post:
+      consumes:
+      - application/json
+      description: Create a new role scoped to the authenticated user's school.
+      parameters:
+      - description: Role details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a role
+      tags:
+      - Roles
+  /api/v1/roles/{id}:
+    get:
+      description: Retrieve a single role by its UUID.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Get role by ID
+      tags:
+      - Roles
+  /api/v1/roles/{id}/permissions:
+    get:
+      description: List all permissions assigned to a specific role.
+      parameters:
+      - description: Role ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Permission'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get role permissions
+      tags:
+      - Roles
+  /api/v1/roles/assign-permission:
+    post:
+      consumes:
+      - application/json
+      description: Assign an existing permission to an existing role.
+      parameters:
+      - description: Role and permission IDs
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.AssignPermissionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.RolePermission'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign permission to role
+      tags:
+      - Roles
+  /api/v1/roles/internal:
+    post:
+      consumes:
+      - application/json
+      description: Internal endpoint used by auth-service during school registration.
+        School ID comes from the request body.
+      parameters:
+      - description: Role details with school_id
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Role'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Create a role (internal)
+      tags:
+      - Internal
+securityDefinitions:
+  BearerAuth:
+    description: Enter your JWT token with the `Bearer ` prefix, e.g. `Bearer eyJhbGci...`
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

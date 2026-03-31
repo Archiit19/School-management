@@ -1,0 +1,480 @@
+basePath: /
+definitions:
+  model.CreateUserRequest:
+    properties:
+      email:
+        example: jane@springfield.edu
+        type: string
+      name:
+        example: Jane Smith
+        type: string
+      password:
+        example: teacher123
+        minLength: 6
+        type: string
+      role_id:
+        example: 550e8400-e29b-41d4-a716-446655440002
+        type: string
+    required:
+    - email
+    - name
+    - password
+    - role_id
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: something went wrong
+        type: string
+    type: object
+  model.LoginRequest:
+    properties:
+      email:
+        example: john@springfield.edu
+        type: string
+      password:
+        example: secret123
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  model.LoginResponse:
+    properties:
+      token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+      user:
+        $ref: '#/definitions/model.User'
+    type: object
+  model.MessageResponse:
+    properties:
+      message:
+        example: operation successful
+        type: string
+    type: object
+  model.RegisterSchoolRequest:
+    properties:
+      admin_email:
+        example: john@springfield.edu
+        type: string
+      admin_name:
+        example: John Doe
+        type: string
+      admin_password:
+        example: secret123
+        minLength: 6
+        type: string
+      school_address:
+        example: 123 Main St
+        type: string
+      school_email:
+        example: info@springfield.edu
+        type: string
+      school_name:
+        example: Springfield Elementary
+        type: string
+      school_phone:
+        example: 555-0100
+        type: string
+    required:
+    - admin_email
+    - admin_name
+    - admin_password
+    - school_email
+    - school_name
+    type: object
+  model.RegisterSchoolResponse:
+    properties:
+      admin:
+        $ref: '#/definitions/model.User'
+      school:
+        $ref: '#/definitions/model.School'
+      token:
+        example: eyJhbGciOiJIUzI1NiIs...
+        type: string
+    type: object
+  model.School:
+    properties:
+      address:
+        example: 123 Main St
+        type: string
+      created_at:
+        type: string
+      email:
+        example: info@springfield.edu
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      name:
+        example: Springfield Elementary
+        type: string
+      phone:
+        example: 555-0100
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.UpdateUserRequest:
+    properties:
+      email:
+        example: jane.doe@springfield.edu
+        type: string
+      is_active:
+        example: false
+        type: boolean
+      name:
+        example: Jane Doe
+        type: string
+      role_id:
+        example: 550e8400-e29b-41d4-a716-446655440002
+        type: string
+    type: object
+  model.User:
+    properties:
+      created_at:
+        type: string
+      email:
+        example: john@springfield.edu
+        type: string
+      id:
+        example: 550e8400-e29b-41d4-a716-446655440001
+        type: string
+      is_active:
+        example: true
+        type: boolean
+      name:
+        example: John Doe
+        type: string
+      role_id:
+        example: 550e8400-e29b-41d4-a716-446655440002
+        type: string
+      role_name:
+        example: super_admin
+        type: string
+      school_id:
+        example: 550e8400-e29b-41d4-a716-446655440000
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.UserListResponse:
+    properties:
+      limit:
+        example: 20
+        type: integer
+      page:
+        example: 1
+        type: integer
+      total:
+        example: 3
+        type: integer
+      users:
+        items:
+          $ref: '#/definitions/model.User'
+        type: array
+    type: object
+host: localhost:8081
+info:
+  contact: {}
+  description: |-
+    Authentication & User Management service for the School Management System.
+    Handles school registration, login, JWT authentication, and user CRUD operations.
+  title: Auth Service API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate with email and password. Returns a JWT token.
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Login
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Returns the profile of the currently authenticated user.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /auth/register-school:
+    post:
+      consumes:
+      - application/json
+      description: Creates a new school, a super_admin role, and the first admin user.
+        Returns a JWT token.
+      parameters:
+      - description: School and admin details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.RegisterSchoolRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.RegisterSchoolResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      summary: Register a new school
+      tags:
+      - Auth
+  /users:
+    get:
+      description: List all users for the school with optional filtering and pagination.
+        Requires super_admin role.
+      parameters:
+      - default: 1
+        description: Page number
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Search by name or email
+        in: query
+        name: search
+        type: string
+      - description: Filter by role ID
+        in: query
+        name: role_id
+        type: string
+      - description: Filter by active status
+        in: query
+        name: is_active
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.UserListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - Users
+    post:
+      consumes:
+      - application/json
+      description: Admin creates a new user (teacher, staff, parent). Requires super_admin
+        role.
+      parameters:
+      - description: User details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a new user
+      tags:
+      - Users
+  /users/{id}:
+    delete:
+      description: Permanently delete a user. Cannot delete yourself. Requires super_admin
+        role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.MessageResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete a user
+      tags:
+      - Users
+    get:
+      description: Get a single user by their ID (scoped to the admin's school). Requires
+        super_admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - Users
+    patch:
+      consumes:
+      - application/json
+      description: Partially update a user's name, email, role, or active status.
+        Requires super_admin role.
+      parameters:
+      - description: User ID (UUID)
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Fields to update
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.User'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update a user
+      tags:
+      - Users
+securityDefinitions:
+  BearerAuth:
+    description: Enter your JWT token with the `Bearer ` prefix, e.g. `Bearer eyJhbGci...`
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

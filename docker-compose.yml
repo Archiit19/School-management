@@ -1,0 +1,185 @@
+version: "3.9"
+
+services:
+  # ──────────────────────────────────────
+  # PostgreSQL for Auth Service
+  # ──────────────────────────────────────
+  auth-db:
+    image: postgres:16-alpine
+    container_name: auth-db
+    environment:
+      POSTGRES_USER: auth_user
+      POSTGRES_PASSWORD: auth_pass
+      POSTGRES_DB: auth_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U auth_user -d auth_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # PostgreSQL for User Service
+  # ──────────────────────────────────────
+  user-db:
+    image: postgres:16-alpine
+    container_name: user-db
+    environment:
+      POSTGRES_USER: user_user
+      POSTGRES_PASSWORD: user_pass
+      POSTGRES_DB: user_db
+    ports:
+      - "5434:5432"
+    volumes:
+      - user_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user_user -d user_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # PostgreSQL for Academic Service
+  # ──────────────────────────────────────
+  academic-db:
+    image: postgres:16-alpine
+    container_name: academic-db
+    environment:
+      POSTGRES_USER: academic_user
+      POSTGRES_PASSWORD: academic_pass
+      POSTGRES_DB: academic_db
+    ports:
+      - "5435:5432"
+    volumes:
+      - academic_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U academic_user -d academic_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # PostgreSQL for Student Service
+  # ──────────────────────────────────────
+  student-db:
+    image: postgres:16-alpine
+    container_name: student-db
+    environment:
+      POSTGRES_USER: student_user
+      POSTGRES_PASSWORD: student_pass
+      POSTGRES_DB: student_db
+    ports:
+      - "5436:5432"
+    volumes:
+      - student_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U student_user -d student_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
+  # Auth Service
+  # ──────────────────────────────────────
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: auth-db
+      DB_PORT: 5432
+      DB_USER: auth_user
+      DB_PASSWORD: auth_pass
+      DB_NAME: auth_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      USER_SERVICE_URL: http://user-service:8082
+      PORT: 8081
+    depends_on:
+      auth-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
+  # ──────────────────────────────────────
+  # User Service
+  # ──────────────────────────────────────
+  user-service:
+    build:
+      context: ./user-service
+      dockerfile: Dockerfile
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: user-db
+      DB_PORT: 5432
+      DB_USER: user_user
+      DB_PASSWORD: user_pass
+      DB_NAME: user_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8082
+    depends_on:
+      user-db:
+        condition: service_healthy
+
+  # ──────────────────────────────────────
+  # Academic Service
+  # ──────────────────────────────────────
+  academic-service:
+    build:
+      context: ./academic-service
+      dockerfile: Dockerfile
+    container_name: academic-service
+    ports:
+      - "8083:8083"
+    environment:
+      DB_HOST: academic-db
+      DB_PORT: 5432
+      DB_USER: academic_user
+      DB_PASSWORD: academic_pass
+      DB_NAME: academic_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8083
+    depends_on:
+      academic-db:
+        condition: service_healthy
+
+  # ──────────────────────────────────────
+  # Student Service
+  # ──────────────────────────────────────
+  student-service:
+    build:
+      context: ./student-service
+      dockerfile: Dockerfile
+    container_name: student-service
+    ports:
+      - "8084:8084"
+    environment:
+      DB_HOST: student-db
+      DB_PORT: 5432
+      DB_USER: student_user
+      DB_PASSWORD: student_pass
+      DB_NAME: student_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      AUTH_SERVICE_URL: http://auth-service:8081
+      ACADEMIC_SERVICE_URL: http://academic-service:8083
+      PORT: 8084
+    depends_on:
+      student-db:
+        condition: service_healthy
+      auth-service:
+        condition: service_started
+      academic-service:
+        condition: service_started
+
+volumes:
+  auth_db_data:
+  user_db_data:
+  academic_db_data:
+  student_db_data:
