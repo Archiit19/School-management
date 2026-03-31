@@ -17,6 +17,17 @@ func NewAttendanceHandler(svc *service.AttendanceService) *AttendanceHandler {
 	return &AttendanceHandler{svc: svc}
 }
 
+// CreateAttendance godoc
+// @Summary      Mark attendance
+// @Description  Teacher or super admin marks daily attendance for a student.
+// @Tags         Attendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateAttendanceRequest  true  "Attendance payload"
+// @Success      201   {object}  model.Attendance
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /attendance [post]
 func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	var req model.CreateAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -37,6 +48,23 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	c.JSON(http.StatusCreated, record)
 }
 
+// GetAttendance godoc
+// @Summary      List attendance
+// @Description  View attendance records with filters and pagination.
+// @Tags         Attendance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        page       query     int     false  "Page"
+// @Param        limit      query     int     false  "Limit"
+// @Param        date       query     string  false  "Date (YYYY-MM-DD)"
+// @Param        student_id query     string  false  "Student ID"
+// @Param        class_id   query     string  false  "Class ID"
+// @Param        section_id query     string  false  "Section ID"
+// @Param        subject_id query     string  false  "Subject ID"
+// @Param        status     query     string  false  "Attendance status"
+// @Success      200        {object}  model.AttendanceListResponse
+// @Failure      400        {object}  model.ErrorResponse
+// @Router       /attendance [get]
 func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	var query model.AttendanceQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -54,6 +82,18 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// UpdateAttendance godoc
+// @Summary      Edit attendance
+// @Description  Update attendance status or remarks for a record.
+// @Tags         Attendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                      true  "Attendance ID"
+// @Param        body  body      model.UpdateAttendanceRequest  true  "Update payload"
+// @Success      200   {object}  model.Attendance
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /attendance/{id} [patch]
 func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

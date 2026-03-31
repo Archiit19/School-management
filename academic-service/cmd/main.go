@@ -13,10 +13,22 @@ import (
 	"github.com/avaneeshravat/school-management/academic-service/internal/repository"
 	"github.com/avaneeshravat/school-management/academic-service/internal/service"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	_ "github.com/avaneeshravat/school-management/academic-service/docs"
 )
 
+// @title           Academic Service API
+// @version         1.0
+// @description     Academic management service for school structure, assignments, and submissions.
+// @host            localhost:8083
+// @BasePath        /
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
 func main() {
 	cfg := config.Load()
 
@@ -48,6 +60,7 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "academic-service is running"})
 	})
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))

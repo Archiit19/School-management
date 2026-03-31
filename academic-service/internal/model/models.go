@@ -127,3 +127,7 @@ type CreateSubmissionRequest struct {
 	Content      string `json:"content"`
 	MaterialURL  string `json:"material_url"`
 }
+
+type ErrorResponse struct {
+	Error string `json:"error" example:"something went wrong"`
+}

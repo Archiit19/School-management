@@ -1,0 +1,202 @@
+basePath: /
+definitions:
+  model.Attendance:
+    properties:
+      class_id:
+        type: string
+      created_at:
+        type: string
+      date:
+        type: string
+      id:
+        type: string
+      remarks:
+        type: string
+      school_id:
+        type: string
+      section_id:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: string
+      subject_id:
+        type: string
+      teacher_user_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.AttendanceListResponse:
+    properties:
+      attendance:
+        items:
+          $ref: '#/definitions/model.Attendance'
+        type: array
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  model.CreateAttendanceRequest:
+    properties:
+      class_id:
+        type: string
+      date:
+        type: string
+      remarks:
+        type: string
+      section_id:
+        type: string
+      status:
+        type: string
+      student_id:
+        type: string
+      subject_id:
+        type: string
+    required:
+    - class_id
+    - date
+    - status
+    - student_id
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: something went wrong
+        type: string
+    type: object
+  model.UpdateAttendanceRequest:
+    properties:
+      remarks:
+        type: string
+      status:
+        type: string
+    type: object
+host: localhost:8085
+info:
+  contact: {}
+  description: Daily attendance management service.
+  title: Attendance Service API
+  version: "1.0"
+paths:
+  /attendance:
+    get:
+      description: View attendance records with filters and pagination.
+      parameters:
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      - description: Student ID
+        in: query
+        name: student_id
+        type: string
+      - description: Class ID
+        in: query
+        name: class_id
+        type: string
+      - description: Section ID
+        in: query
+        name: section_id
+        type: string
+      - description: Subject ID
+        in: query
+        name: subject_id
+        type: string
+      - description: Attendance status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.AttendanceListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List attendance
+      tags:
+      - Attendance
+    post:
+      consumes:
+      - application/json
+      description: Teacher or super admin marks daily attendance for a student.
+      parameters:
+      - description: Attendance payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateAttendanceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Attendance'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark attendance
+      tags:
+      - Attendance
+  /attendance/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Update attendance status or remarks for a record.
+      parameters:
+      - description: Attendance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.UpdateAttendanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/model.Attendance'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Edit attendance
+      tags:
+      - Attendance
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

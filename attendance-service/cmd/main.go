@@ -11,10 +11,22 @@ import (
 	"github.com/avaneeshravat/school-management/attendance-service/internal/repository"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/service"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+
+	_ "github.com/avaneeshravat/school-management/attendance-service/docs"
 )
 
+// @title           Attendance Service API
+// @version         1.0
+// @description     Daily attendance management service.
+// @host            localhost:8085
+// @BasePath        /
+// @securityDefinitions.apikey BearerAuth
+// @in              header
+// @name            Authorization
 func main() {
 	cfg := config.Load()
 
@@ -38,6 +50,7 @@ func main() {
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "attendance-service is running"})
 	})
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))

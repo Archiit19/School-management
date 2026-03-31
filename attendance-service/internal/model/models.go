@@ -53,3 +53,7 @@ type AttendanceListResponse struct {
 	Page       int          `json:"page"`
 	Limit      int          `json:"limit"`
 }
+
+type ErrorResponse struct {
+	Error string `json:"error" example:"something went wrong"`
+}

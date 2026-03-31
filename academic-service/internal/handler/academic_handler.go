@@ -17,6 +17,17 @@ func NewAcademicHandler(svc *service.AcademicService) *AcademicHandler {
 	return &AcademicHandler{svc: svc}
 }
 
+// CreateClass godoc
+// @Summary      Create class
+// @Description  Create a class for the authenticated school.
+// @Tags         Academic
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateClassRequest  true  "Class payload"
+// @Success      201   {object}  model.Class
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /classes [post]
 func (h *AcademicHandler) CreateClass(c *gin.Context) {
 	var req model.CreateClassRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -34,6 +45,17 @@ func (h *AcademicHandler) CreateClass(c *gin.Context) {
 	c.JSON(http.StatusCreated, class)
 }
 
+// CreateSection godoc
+// @Summary      Create section
+// @Description  Create a section under a class.
+// @Tags         Academic
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateSectionRequest  true  "Section payload"
+// @Success      201   {object}  model.Section
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /sections [post]
 func (h *AcademicHandler) CreateSection(c *gin.Context) {
 	var req model.CreateSectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -51,6 +73,17 @@ func (h *AcademicHandler) CreateSection(c *gin.Context) {
 	c.JSON(http.StatusCreated, section)
 }
 
+// CreateSubject godoc
+// @Summary      Create subject
+// @Description  Create a subject for a class and optional section.
+// @Tags         Academic
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateSubjectRequest  true  "Subject payload"
+// @Success      201   {object}  model.Subject
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /subjects [post]
 func (h *AcademicHandler) CreateSubject(c *gin.Context) {
 	var req model.CreateSubjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -68,6 +101,15 @@ func (h *AcademicHandler) CreateSubject(c *gin.Context) {
 	c.JSON(http.StatusCreated, subject)
 }
 
+// GetClasses godoc
+// @Summary      Get classes
+// @Description  List classes with sections and subjects for the authenticated school.
+// @Tags         Academic
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.ClassWithChildren
+// @Failure      500  {object}  model.ErrorResponse
+// @Router       /classes [get]
 func (h *AcademicHandler) GetClasses(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	classes, err := h.svc.GetClasses(schoolID)
@@ -79,6 +121,17 @@ func (h *AcademicHandler) GetClasses(c *gin.Context) {
 	c.JSON(http.StatusOK, classes)
 }
 
+// CreateTeacherAssignment godoc
+// @Summary      Assign teacher
+// @Description  Assign a teacher user to class and subject.
+// @Tags         TeacherAssignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateTeacherAssignmentRequest  true  "Assignment payload"
+// @Success      201   {object}  model.TeacherAssignment
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /teacher-assignments [post]
 func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 	var req model.CreateTeacherAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -97,6 +150,18 @@ func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 	c.JSON(http.StatusCreated, assignment)
 }
 
+// GetTeacherAssignments godoc
+// @Summary      List teacher assignments
+// @Description  List teacher assignments with optional filters.
+// @Tags         TeacherAssignments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        teacher_user_id  query     string  false  "Teacher User ID"
+// @Param        class_id         query     string  false  "Class ID"
+// @Param        subject_id       query     string  false  "Subject ID"
+// @Success      200              {array}   model.TeacherAssignment
+// @Failure      500              {object}  model.ErrorResponse
+// @Router       /teacher-assignments [get]
 func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 	var query model.TeacherAssignmentQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -114,6 +179,17 @@ func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+// CreateAssignment godoc
+// @Summary      Create assignment
+// @Description  Teacher or super admin creates assignment and material.
+// @Tags         Assignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateAssignmentRequest  true  "Assignment payload"
+// @Success      201   {object}  model.Assignment
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /assignments [post]
 func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
 	var req model.CreateAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -134,6 +210,18 @@ func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
 	c.JSON(http.StatusCreated, assignment)
 }
 
+// GetAssignments godoc
+// @Summary      List assignments
+// @Description  List assignments with optional filters.
+// @Tags         Assignments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        class_id    query     string  false  "Class ID"
+// @Param        subject_id  query     string  false  "Subject ID"
+// @Param        teacher_id  query     string  false  "Teacher User ID"
+// @Success      200         {array}   model.Assignment
+// @Failure      500         {object}  model.ErrorResponse
+// @Router       /assignments [get]
 func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 	var query model.AssignmentQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -151,6 +239,17 @@ func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+// CreateSubmission godoc
+// @Summary      Create submission
+// @Description  Submit student work for an assignment.
+// @Tags         Assignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateSubmissionRequest  true  "Submission payload"
+// @Success      201   {object}  model.Submission
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /submissions [post]
 func (h *AcademicHandler) CreateSubmission(c *gin.Context) {
 	var req model.CreateSubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

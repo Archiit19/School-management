@@ -1,0 +1,480 @@
+basePath: /
+definitions:
+  model.Assignment:
+    properties:
+      class_id:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      material_url:
+        type: string
+      school_id:
+        type: string
+      subject_id:
+        type: string
+      teacher_user_id:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Class:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      school_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.ClassWithChildren:
+    properties:
+      class:
+        $ref: '#/definitions/model.Class'
+      sections:
+        items:
+          $ref: '#/definitions/model.Section'
+        type: array
+      subjects:
+        items:
+          $ref: '#/definitions/model.Subject'
+        type: array
+    type: object
+  model.CreateAssignmentRequest:
+    properties:
+      class_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      material_url:
+        type: string
+      subject_id:
+        type: string
+      title:
+        type: string
+    required:
+    - class_id
+    - subject_id
+    - title
+    type: object
+  model.CreateClassRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  model.CreateSectionRequest:
+    properties:
+      class_id:
+        type: string
+      name:
+        type: string
+    required:
+    - class_id
+    - name
+    type: object
+  model.CreateSubjectRequest:
+    properties:
+      class_id:
+        type: string
+      code:
+        type: string
+      name:
+        type: string
+      section_id:
+        type: string
+    required:
+    - class_id
+    - name
+    type: object
+  model.CreateSubmissionRequest:
+    properties:
+      assignment_id:
+        type: string
+      content:
+        type: string
+      material_url:
+        type: string
+      student_id:
+        type: string
+    required:
+    - assignment_id
+    - student_id
+    type: object
+  model.CreateTeacherAssignmentRequest:
+    properties:
+      class_id:
+        type: string
+      subject_id:
+        type: string
+      teacher_user_id:
+        type: string
+    required:
+    - class_id
+    - subject_id
+    - teacher_user_id
+    type: object
+  model.ErrorResponse:
+    properties:
+      error:
+        example: something went wrong
+        type: string
+    type: object
+  model.Section:
+    properties:
+      class_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      school_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Subject:
+    properties:
+      class_id:
+        type: string
+      code:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      school_id:
+        type: string
+      section_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.Submission:
+    properties:
+      assignment_id:
+        type: string
+      content:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      material_url:
+        type: string
+      school_id:
+        type: string
+      student_id:
+        type: string
+      submitted_by:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  model.TeacherAssignment:
+    properties:
+      class_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      school_id:
+        type: string
+      subject_id:
+        type: string
+      teacher_user_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+host: localhost:8083
+info:
+  contact: {}
+  description: Academic management service for school structure, assignments, and
+    submissions.
+  title: Academic Service API
+  version: "1.0"
+paths:
+  /assignments:
+    get:
+      description: List assignments with optional filters.
+      parameters:
+      - description: Class ID
+        in: query
+        name: class_id
+        type: string
+      - description: Subject ID
+        in: query
+        name: subject_id
+        type: string
+      - description: Teacher User ID
+        in: query
+        name: teacher_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.Assignment'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List assignments
+      tags:
+      - Assignments
+    post:
+      consumes:
+      - application/json
+      description: Teacher or super admin creates assignment and material.
+      parameters:
+      - description: Assignment payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateAssignmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Assignment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create assignment
+      tags:
+      - Assignments
+  /classes:
+    get:
+      description: List classes with sections and subjects for the authenticated school.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.ClassWithChildren'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get classes
+      tags:
+      - Academic
+    post:
+      consumes:
+      - application/json
+      description: Create a class for the authenticated school.
+      parameters:
+      - description: Class payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateClassRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Class'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create class
+      tags:
+      - Academic
+  /sections:
+    post:
+      consumes:
+      - application/json
+      description: Create a section under a class.
+      parameters:
+      - description: Section payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateSectionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Section'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create section
+      tags:
+      - Academic
+  /subjects:
+    post:
+      consumes:
+      - application/json
+      description: Create a subject for a class and optional section.
+      parameters:
+      - description: Subject payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateSubjectRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Subject'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create subject
+      tags:
+      - Academic
+  /submissions:
+    post:
+      consumes:
+      - application/json
+      description: Submit student work for an assignment.
+      parameters:
+      - description: Submission payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateSubmissionRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.Submission'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create submission
+      tags:
+      - Assignments
+  /teacher-assignments:
+    get:
+      description: List teacher assignments with optional filters.
+      parameters:
+      - description: Teacher User ID
+        in: query
+        name: teacher_user_id
+        type: string
+      - description: Class ID
+        in: query
+        name: class_id
+        type: string
+      - description: Subject ID
+        in: query
+        name: subject_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/model.TeacherAssignment'
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List teacher assignments
+      tags:
+      - TeacherAssignments
+    post:
+      consumes:
+      - application/json
+      description: Assign a teacher user to class and subject.
+      parameters:
+      - description: Assignment payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/model.CreateTeacherAssignmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/model.TeacherAssignment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/model.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Assign teacher
+      tags:
+      - TeacherAssignments
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

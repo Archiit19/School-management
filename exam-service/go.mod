@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/academic-service
+module github.com/avaneeshravat/school-management/exam-service
 
 go 1.23.0
 

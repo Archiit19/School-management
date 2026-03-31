@@ -102,6 +102,26 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # PostgreSQL for Exam Service
+  # ──────────────────────────────────────
+  exam-db:
+    image: postgres:16-alpine
+    container_name: exam-db
+    environment:
+      POSTGRES_USER: exam_user
+      POSTGRES_PASSWORD: exam_pass
+      POSTGRES_DB: exam_db
+    ports:
+      - "5438:5432"
+    volumes:
+      - exam_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U exam_user -d exam_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -221,9 +241,32 @@ services:
       attendance-db:
         condition: service_healthy
 
+  # ──────────────────────────────────────
+  # Exam Service
+  # ──────────────────────────────────────
+  exam-service:
+    build:
+      context: ./exam-service
+      dockerfile: Dockerfile
+    container_name: exam-service
+    ports:
+      - "8086:8086"
+    environment:
+      DB_HOST: exam-db
+      DB_PORT: 5432
+      DB_USER: exam_user
+      DB_PASSWORD: exam_pass
+      DB_NAME: exam_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8086
+    depends_on:
+      exam-db:
+        condition: service_healthy
+
 volumes:
   auth_db_data:
   user_db_data:
   academic_db_data:
   student_db_data:
   attendance_db_data:
+  exam_db_data:
