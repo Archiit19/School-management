@@ -159,6 +159,87 @@ func (s *AttendanceService) UpdateAttendance(
 	return record, nil
 }
 
+func (s *AttendanceService) BulkCreateAttendance(
+	req model.BulkCreateAttendanceRequest,
+	schoolID, teacherUserID uuid.UUID,
+	roleName string,
+) (*model.BulkAttendanceResponse, error) {
+	if roleName != "teacher" && roleName != "super_admin" {
+		return nil, errors.New("only teacher or super_admin can mark attendance")
+	}
+
+	classID, err := uuid.Parse(req.ClassID)
+	if err != nil {
+		return nil, errors.New("invalid class_id")
+	}
+
+	var sectionID *uuid.UUID
+	if strings.TrimSpace(req.SectionID) != "" {
+		parsed, err := uuid.Parse(req.SectionID)
+		if err != nil {
+			return nil, errors.New("invalid section_id")
+		}
+		sectionID = &parsed
+	}
+
+	var subjectID *uuid.UUID
+	if strings.TrimSpace(req.SubjectID) != "" {
+		parsed, err := uuid.Parse(req.SubjectID)
+		if err != nil {
+			return nil, errors.New("invalid subject_id")
+		}
+		subjectID = &parsed
+	}
+
+	attendanceDate, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return nil, errors.New("invalid date format, use YYYY-MM-DD")
+	}
+
+	resp := &model.BulkAttendanceResponse{}
+
+	for _, entry := range req.Entries {
+		studentID, err := uuid.Parse(entry.StudentID)
+		if err != nil {
+			resp.Skipped++
+			continue
+		}
+
+		status := normalizeStatus(entry.Status)
+		if !isValidStatus(status) {
+			resp.Skipped++
+			continue
+		}
+
+		_, dupErr := s.repo.GetAttendanceByComposite(schoolID, studentID, classID, sectionID, subjectID, attendanceDate)
+		if dupErr == nil {
+			resp.Skipped++
+			continue
+		}
+
+		record := &model.Attendance{
+			SchoolID:      schoolID,
+			TeacherUserID: teacherUserID,
+			StudentID:     studentID,
+			ClassID:       classID,
+			SectionID:     sectionID,
+			SubjectID:     subjectID,
+			Date:          attendanceDate,
+			Status:        status,
+			Remarks:       entry.Remarks,
+		}
+		if err := s.repo.CreateAttendance(record); err != nil {
+			resp.Skipped++
+			continue
+		}
+
+		resp.Created++
+		resp.Records = append(resp.Records, *record)
+	}
+
+	return resp, nil
+}
+
 func normalizeStatus(status string) string {
 	return strings.ToLower(strings.TrimSpace(status))
 }

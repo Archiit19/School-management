@@ -82,16 +82,15 @@ func main() {
 		authProtected.GET("/me", authHandler.GetMe)
 	}
 
-	// ─── User Management routes (protected, admin only) ─────────────
+	// ─── User Management routes (protected, permission-checked) ─────
 	users := r.Group("/users")
 	users.Use(middleware.JWTAuth(cfg.JWTSecret))
-	users.Use(middleware.RequireRole("super_admin"))
 	{
-		users.POST("", userHandler.CreateUser)
-		users.GET("", userHandler.GetUsers)
-		users.GET("/:id", userHandler.GetUserByID)
-		users.PATCH("/:id", userHandler.UpdateUser)
-		users.DELETE("/:id", userHandler.DeleteUser)
+		users.POST("", middleware.RequirePermission("create_user"), userHandler.CreateUser)
+		users.GET("", middleware.RequirePermission("view_users"), userHandler.GetUsers)
+		users.GET("/:id", middleware.RequirePermission("view_users"), userHandler.GetUserByID)
+		users.PATCH("/:id", middleware.RequirePermission("update_user"), userHandler.UpdateUser)
+		users.DELETE("/:id", middleware.RequirePermission("delete_user"), userHandler.DeleteUser)
 	}
 
 	// Start server

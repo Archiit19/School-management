@@ -58,9 +58,9 @@ func main() {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
-		protected.POST("/students", h.CreateStudent)
-		protected.GET("/students", h.GetStudents)
-		protected.PATCH("/students/:id", h.UpdateStudent)
+		protected.POST("/students", middleware.RequirePermission("admit_student"), h.CreateStudent)
+		protected.GET("/students", middleware.RequirePermission("view_students"), h.GetStudents)
+		protected.PATCH("/students/:id", middleware.RequirePermission("update_student"), h.UpdateStudent)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

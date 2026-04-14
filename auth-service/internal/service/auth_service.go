@@ -77,8 +77,9 @@ func (s *AuthService) RegisterSchool(req model.RegisterSchoolRequest) (*model.Re
 		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
 
-	// 7. Generate JWT (with role_name for RBAC middleware)
-	token, err := s.generateToken(admin, "super_admin")
+	// 7. Generate JWT (with role_name + permissions for RBAC middleware)
+	perms := s.fetchRolePermissions(roleID)
+	token, err := s.generateToken(admin, "super_admin", perms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -111,11 +112,12 @@ func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Fetch role name from user service
+	// Fetch role name + permissions from user service
 	roleName := s.fetchRoleName(user.RoleID)
 	user.RoleName = roleName
+	perms := s.fetchRolePermissions(user.RoleID)
 
-	token, err := s.generateToken(user, roleName)
+	token, err := s.generateToken(user, roleName, perms)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
@@ -143,15 +145,16 @@ func (s *AuthService) GetMe(userID uuid.UUID) (*model.User, error) {
 
 // ─── JWT Helpers ────────────────────────────────────────────────────
 
-func (s *AuthService) generateToken(user *model.User, roleName string) (string, error) {
+func (s *AuthService) generateToken(user *model.User, roleName string, permissions []string) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id":   user.ID.String(),
-		"school_id": user.SchoolID.String(),
-		"role_id":   user.RoleID.String(),
-		"role_name": roleName,
-		"email":     user.Email,
-		"exp":       time.Now().Add(24 * time.Hour).Unix(),
-		"iat":       time.Now().Unix(),
+		"user_id":     user.ID.String(),
+		"school_id":   user.SchoolID.String(),
+		"role_id":     user.RoleID.String(),
+		"role_name":   roleName,
+		"permissions": permissions,
+		"email":       user.Email,
+		"exp":         time.Now().Add(24 * time.Hour).Unix(),
+		"iat":         time.Now().Unix(),
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -217,4 +220,35 @@ func (s *AuthService) fetchRoleName(roleID uuid.UUID) string {
 	}
 
 	return result.Name
+}
+
+// fetchRolePermissions calls the User Service to get permission names for a role.
+func (s *AuthService) fetchRolePermissions(roleID uuid.UUID) []string {
+	if roleID == uuid.Nil {
+		return nil
+	}
+
+	url := fmt.Sprintf("%s/api/v1/roles/%s/permissions", s.cfg.UserServiceURL, roleID.String())
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil
+	}
+
+	var perms []struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&perms); err != nil {
+		return nil
+	}
+
+	names := make([]string, len(perms))
+	for i, p := range perms {
+		names[i] = p.Name
+	}
+	return names
 }

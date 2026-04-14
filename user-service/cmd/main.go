@@ -32,6 +32,47 @@ import (
 // @name Authorization
 // @description Enter your JWT token with the `Bearer ` prefix, e.g. `Bearer eyJhbGci...`
 
+var predefinedPermissions = []struct {
+	Name        string
+	Description string
+}{
+	{"create_user", "Create new users (staff, teacher, parent)"},
+	{"view_users", "View the users list"},
+	{"update_user", "Update user details"},
+	{"delete_user", "Delete users"},
+	{"create_role", "Create new roles"},
+	{"manage_permissions", "Assign or revoke role permissions"},
+	{"create_class", "Create classes"},
+	{"create_section", "Create sections"},
+	{"create_subject", "Create subjects"},
+	{"view_academic", "View academic structure (classes, sections, subjects)"},
+	{"admit_student", "Admit new students"},
+	{"view_students", "View the students list"},
+	{"update_student", "Update student details"},
+	{"assign_teacher", "Assign teachers to class + subject"},
+	{"mark_attendance", "Mark daily attendance"},
+	{"view_attendance", "View attendance records"},
+	{"create_assignment", "Create homework / assignments"},
+	{"view_assignments", "View assignments"},
+	{"submit_assignment", "Submit student work for assignments"},
+	{"create_exam", "Create exams"},
+	{"enter_marks", "Enter or update exam marks"},
+	{"publish_results", "Publish exam results"},
+	{"view_results", "View exam results"},
+	{"create_fee", "Create fee structures"},
+	{"record_payment", "Record fee payments"},
+	{"view_dues", "View outstanding dues"},
+}
+
+func seedPermissions(db *gorm.DB) {
+	for _, p := range predefinedPermissions {
+		db.Where("name = ?", p.Name).FirstOrCreate(&model.Permission{
+			Name:        p.Name,
+			Description: p.Description,
+		})
+	}
+}
+
 func main() {
 	// Load config
 	cfg := config.Load()
@@ -48,6 +89,10 @@ func main() {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
 	log.Println("✅ Database migrated")
+
+	// Seed predefined permissions
+	seedPermissions(db)
+	log.Println("✅ Predefined permissions seeded")
 
 	// Wire dependencies
 	repo := repository.NewUserRepository(db)
@@ -67,25 +112,21 @@ func main() {
 
 	api := r.Group("/api/v1")
 	{
-		// Internal endpoint (called by auth-service, no JWT needed)
+		// Internal / public endpoints (called by auth-service, no JWT needed)
 		api.POST("/roles/internal", h.CreateRoleInternal)
-
-		// Public read for role by ID (used by auth-service to fetch role name)
 		api.GET("/roles/:id", h.GetRoleByID)
+		api.GET("/roles/:id/permissions", h.GetRolePermissions)
 	}
 
 	// Protected routes (require JWT)
 	protected := api.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
-		// Roles
-		protected.POST("/roles", h.CreateRole)
+		protected.POST("/roles", middleware.RequirePermission("create_role"), h.CreateRole)
 		protected.GET("/roles", h.GetRoles)
-		protected.POST("/roles/assign-permission", h.AssignPermission)
-		protected.GET("/roles/:id/permissions", h.GetRolePermissions)
+		protected.POST("/roles/assign-permission", middleware.RequirePermission("manage_permissions"), h.AssignPermission)
 
-		// Permissions
-		protected.POST("/permissions", h.CreatePermission)
+		// Permissions (predefined, read-only)
 		protected.GET("/permissions", h.GetPermissions)
 	}
 

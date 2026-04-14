@@ -54,6 +54,26 @@ type AttendanceListResponse struct {
 	Limit      int          `json:"limit"`
 }
 
+type BulkAttendanceEntry struct {
+	StudentID string `json:"student_id" binding:"required,uuid"`
+	Status    string `json:"status" binding:"required"`
+	Remarks   string `json:"remarks"`
+}
+
+type BulkCreateAttendanceRequest struct {
+	ClassID   string                `json:"class_id" binding:"required,uuid"`
+	SectionID string                `json:"section_id" binding:"omitempty,uuid"`
+	SubjectID string                `json:"subject_id" binding:"omitempty,uuid"`
+	Date      string                `json:"date" binding:"required"`
+	Entries   []BulkAttendanceEntry `json:"entries" binding:"required,min=1,dive"`
+}
+
+type BulkAttendanceResponse struct {
+	Created int          `json:"created"`
+	Skipped int          `json:"skipped"`
+	Records []Attendance `json:"records"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error" example:"something went wrong"`
 }

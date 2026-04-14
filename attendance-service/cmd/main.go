@@ -55,9 +55,10 @@ func main() {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
-		protected.POST("/attendance", h.CreateAttendance)
-		protected.GET("/attendance", h.GetAttendance)
-		protected.PATCH("/attendance/:id", h.UpdateAttendance)
+		protected.POST("/attendance", middleware.RequirePermission("mark_attendance"), h.CreateAttendance)
+		protected.POST("/attendance/bulk", middleware.RequirePermission("mark_attendance"), h.BulkCreateAttendance)
+		protected.GET("/attendance", middleware.RequirePermission("view_attendance"), h.GetAttendance)
+		protected.PATCH("/attendance/:id", middleware.RequirePermission("mark_attendance"), h.UpdateAttendance)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

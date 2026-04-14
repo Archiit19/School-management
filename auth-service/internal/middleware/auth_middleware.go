@@ -43,7 +43,6 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		// Extract and set user info in context
 		userIDStr, _ := claims["user_id"].(string)
 		schoolIDStr, _ := claims["school_id"].(string)
 		roleIDStr, _ := claims["role_id"].(string)
@@ -59,13 +58,13 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 		c.Set("role_id", roleID)
 		c.Set("role_name", roleName)
 		c.Set("email", email)
+		c.Set("permissions", parsePermissions(claims))
 
 		c.Next()
 	}
 }
 
 // RequireRole checks that the authenticated user has one of the allowed roles.
-// Must be used AFTER JWTAuth middleware.
 func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName, exists := c.Get("role_name")
@@ -91,4 +90,59 @@ func RequireRole(allowedRoles ...string) gin.HandlerFunc {
 			"error": "insufficient permissions, required roles: " + strings.Join(allowedRoles, ", "),
 		})
 	}
+}
+
+// RequirePermission checks that the authenticated user's role has the required permission.
+// super_admin bypasses all permission checks.
+func RequirePermission(required string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleName, _ := c.Get("role_name")
+		if roleName == "super_admin" {
+			c.Next()
+			return
+		}
+
+		perms, exists := c.Get("permissions")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "no permissions found"})
+			return
+		}
+
+		permList, ok := perms.([]string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid permissions data"})
+			return
+		}
+
+		for _, p := range permList {
+			if p == required {
+				c.Next()
+				return
+			}
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "permission denied, requires: " + required,
+		})
+	}
+}
+
+func parsePermissions(claims jwt.MapClaims) []string {
+	raw, ok := claims["permissions"]
+	if !ok || raw == nil {
+		return nil
+	}
+
+	arr, ok := raw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	perms := make([]string, 0, len(arr))
+	for _, v := range arr {
+		if s, ok := v.(string); ok {
+			perms = append(perms, s)
+		}
+	}
+	return perms
 }

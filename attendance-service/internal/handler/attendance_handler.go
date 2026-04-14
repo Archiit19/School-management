@@ -48,6 +48,37 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	c.JSON(http.StatusCreated, record)
 }
 
+// BulkCreateAttendance godoc
+// @Summary      Bulk mark attendance
+// @Description  Mark attendance for multiple students at once.
+// @Tags         Attendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.BulkCreateAttendanceRequest  true  "Bulk payload"
+// @Success      201   {object}  model.BulkAttendanceResponse
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /attendance/bulk [post]
+func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
+	var req model.BulkCreateAttendanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	resp, err := h.svc.BulkCreateAttendance(req, schoolID, userID, roleName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
 // GetAttendance godoc
 // @Summary      List attendance
 // @Description  View attendance records with filters and pagination.

@@ -54,10 +54,10 @@ func main() {
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
-		protected.POST("/exams", h.CreateExam)
-		protected.POST("/marks", h.EnterMarks)
-		protected.POST("/results/publish", h.PublishResults)
-		protected.GET("/results", h.GetResults)
+		protected.POST("/exams", middleware.RequirePermission("create_exam"), h.CreateExam)
+		protected.POST("/marks", middleware.RequirePermission("enter_marks"), h.EnterMarks)
+		protected.POST("/results/publish", middleware.RequirePermission("publish_results"), h.PublishResults)
+		protected.GET("/results", middleware.RequirePermission("view_results"), h.GetResults)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
