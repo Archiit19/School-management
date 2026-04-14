@@ -25,10 +25,6 @@ func (s *AttendanceService) CreateAttendance(
 	schoolID, teacherUserID uuid.UUID,
 	roleName string,
 ) (*model.Attendance, error) {
-	if roleName != "teacher" && roleName != "super_admin" {
-		return nil, errors.New("only teacher or super_admin can mark attendance")
-	}
-
 	studentID, err := uuid.Parse(req.StudentID)
 	if err != nil {
 		return nil, errors.New("invalid student_id")
@@ -164,10 +160,6 @@ func (s *AttendanceService) BulkCreateAttendance(
 	schoolID, teacherUserID uuid.UUID,
 	roleName string,
 ) (*model.BulkAttendanceResponse, error) {
-	if roleName != "teacher" && roleName != "super_admin" {
-		return nil, errors.New("only teacher or super_admin can mark attendance")
-	}
-
 	classID, err := uuid.Parse(req.ClassID)
 	if err != nil {
 		return nil, errors.New("invalid class_id")

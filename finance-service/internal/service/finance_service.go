@@ -24,10 +24,6 @@ func (s *FinanceService) CreateFee(
 	schoolID, createdBy uuid.UUID,
 	roleName string,
 ) (*model.Fee, error) {
-	if roleName != "super_admin" && roleName != "staff" {
-		return nil, errors.New("only super_admin or staff can create fees")
-	}
-
 	classID, err := parseOptionalUUID(req.ClassID, "class_id")
 	if err != nil {
 		return nil, err
@@ -73,10 +69,6 @@ func (s *FinanceService) RecordPayment(
 	schoolID, receivedBy uuid.UUID,
 	roleName string,
 ) (*model.Payment, error) {
-	if roleName != "super_admin" && roleName != "staff" {
-		return nil, errors.New("only super_admin or staff can record payments")
-	}
-
 	feeID, err := uuid.Parse(req.FeeID)
 	if err != nil {
 		return nil, errors.New("invalid fee_id")

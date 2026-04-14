@@ -94,5 +94,11 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		return
 	}
 
+	if perms, ok := c.Get("permissions"); ok {
+		if permList, ok := perms.([]string); ok {
+			user.Permissions = permList
+		}
+	}
+
 	c.JSON(http.StatusOK, user)
 }

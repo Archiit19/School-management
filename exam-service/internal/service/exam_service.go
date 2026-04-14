@@ -25,10 +25,6 @@ func (s *ExamService) CreateExam(
 	schoolID, createdBy uuid.UUID,
 	roleName string,
 ) (*model.Exam, error) {
-	if roleName != "teacher" && roleName != "super_admin" {
-		return nil, errors.New("only teacher or super_admin can create exams")
-	}
-
 	classID, err := uuid.Parse(req.ClassID)
 	if err != nil {
 		return nil, errors.New("invalid class_id")
@@ -79,10 +75,6 @@ func (s *ExamService) EnterMarks(
 	schoolID, createdBy uuid.UUID,
 	roleName string,
 ) (*model.Mark, error) {
-	if roleName != "teacher" && roleName != "super_admin" {
-		return nil, errors.New("only teacher or super_admin can enter marks")
-	}
-
 	examID, err := uuid.Parse(req.ExamID)
 	if err != nil {
 		return nil, errors.New("invalid exam_id")
@@ -135,10 +127,6 @@ func (s *ExamService) PublishResults(
 	schoolID uuid.UUID,
 	roleName string,
 ) (*model.Exam, error) {
-	if roleName != "teacher" && roleName != "super_admin" {
-		return nil, errors.New("only teacher or super_admin can publish results")
-	}
-
 	examID, err := uuid.Parse(req.ExamID)
 	if err != nil {
 		return nil, errors.New("invalid exam_id")

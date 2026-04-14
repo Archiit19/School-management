@@ -25,7 +25,8 @@ type User struct {
 	Email     string    `json:"email" gorm:"uniqueIndex;not null" example:"john@springfield.edu"`
 	Password  string    `json:"-" gorm:"not null"`
 	RoleID    uuid.UUID `json:"role_id" gorm:"type:uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
-	RoleName  string    `json:"role_name" gorm:"-" example:"super_admin"`
+	RoleName    string   `json:"role_name" gorm:"-" example:"super_admin"`
+	Permissions []string `json:"permissions,omitempty" gorm:"-"`
 	IsActive  bool      `json:"is_active" gorm:"default:true" example:"true"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
