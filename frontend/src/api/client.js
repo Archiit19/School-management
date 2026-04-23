@@ -100,6 +100,13 @@ export const attendanceApi = {
   bulkCreate: (body) => request("attendance", "/attendance/bulk", { method: "POST", body }),
   list: (query) => request("attendance", "/attendance", { query }),
   update: (id, body) => request("attendance", `/attendance/${id}`, { method: "PATCH", body }),
+  createTeacher: (body) =>
+    request("attendance", "/teacher-attendance", { method: "POST", body }),
+  bulkCreateTeacher: (body) =>
+    request("attendance", "/teacher-attendance/bulk", { method: "POST", body }),
+  listTeacher: (query) => request("attendance", "/teacher-attendance", { query }),
+  updateTeacher: (id, body) =>
+    request("attendance", `/teacher-attendance/${id}`, { method: "PATCH", body }),
   health: () => request("attendance", "/health"),
 };
 

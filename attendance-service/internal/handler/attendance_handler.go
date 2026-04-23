@@ -1,13 +1,24 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	"github.com/avaneeshravat/school-management/attendance-service/internal/apierrors"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
+
+func writeErr(c *gin.Context, err error) {
+	var he *apierrors.HTTP
+	if errors.As(err, &he) {
+		c.JSON(he.Status, gin.H{"error": he.Error()})
+		return
+	}
+	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+}
 
 type AttendanceHandler struct {
 	svc *service.AttendanceService
@@ -41,7 +52,7 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 
 	record, err := h.svc.CreateAttendance(req, schoolID, userID, roleName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeErr(c, err)
 		return
 	}
 
@@ -72,7 +83,7 @@ func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 
 	resp, err := h.svc.BulkCreateAttendance(req, schoolID, userID, roleName)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeErr(c, err)
 		return
 	}
 
@@ -106,7 +117,7 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	resp, err := h.svc.GetAttendance(schoolID, query)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		writeErr(c, err)
 		return
 	}
 
@@ -144,7 +155,148 @@ func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 
 	record, err := h.svc.UpdateAttendance(id, req, schoolID, userID, roleName)
 	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, record)
+}
+
+func permissionsFromContext(c *gin.Context) []string {
+	raw, ok := c.Get("permissions")
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]string)
+	if !ok {
+		return nil
+	}
+	return list
+}
+
+// CreateTeacherAttendance godoc
+// @Summary      Mark teacher attendance
+// @Description  Mark daily attendance for a teacher (self or another user with permission).
+// @Tags         TeacherAttendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateTeacherAttendanceRequest  true  "Teacher attendance payload"
+// @Success      201   {object}  model.TeacherAttendance
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /teacher-attendance [post]
+func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
+	var req model.CreateTeacherAttendanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	record, err := h.svc.CreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, record)
+}
+
+// BulkCreateTeacherAttendance godoc
+// @Summary      Bulk mark teacher attendance
+// @Description  Mark attendance for multiple teachers (admin).
+// @Tags         TeacherAttendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.BulkCreateTeacherAttendanceRequest  true  "Bulk payload"
+// @Success      201   {object}  model.BulkTeacherAttendanceResponse
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /teacher-attendance/bulk [post]
+func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
+	var req model.BulkCreateTeacherAttendanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	resp, err := h.svc.BulkCreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusCreated, resp)
+}
+
+// GetTeacherAttendance godoc
+// @Summary      List teacher attendance
+// @Description  View teacher attendance with filters and pagination.
+// @Tags         TeacherAttendance
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  model.TeacherAttendanceListResponse
+// @Failure      400  {object}  model.ErrorResponse
+// @Router       /teacher-attendance [get]
+func (h *AttendanceHandler) GetTeacherAttendance(c *gin.Context) {
+	var query model.TeacherAttendanceQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	resp, err := h.svc.GetTeacherAttendance(schoolID, userID, roleName, permissionsFromContext(c), query)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// UpdateTeacherAttendance godoc
+// @Summary      Edit teacher attendance
+// @Description  Update status or remarks (recorder or super_admin).
+// @Tags         TeacherAttendance
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string  true  "Teacher attendance ID"
+// @Param        body  body      model.UpdateTeacherAttendanceRequest  true  "Update payload"
+// @Success      200   {object}  model.TeacherAttendance
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /teacher-attendance/{id} [patch]
+func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid teacher attendance id"})
+		return
+	}
+
+	var req model.UpdateTeacherAttendanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	record, err := h.svc.UpdateTeacherAttendance(id, req, schoolID, userID, roleName)
+	if err != nil {
+		writeErr(c, err)
 		return
 	}
 

@@ -93,6 +93,12 @@ func main() {
 		users.DELETE("/:id", middleware.RequirePermission("delete_user"), userHandler.DeleteUser)
 	}
 
+	internal := r.Group("/internal")
+	internal.Use(middleware.RequireInternalToken(cfg.InternalServiceToken))
+	{
+		internal.GET("/users/:id", userHandler.GetUserInternal)
+	}
+
 	// Start server
 	addr := fmt.Sprintf(":%s", cfg.Port)
 	log.Printf("🚀 Auth Service starting on %s", addr)

@@ -110,6 +110,20 @@ func (s *UserManagementService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*
 	return user, nil
 }
 
+// GetUserForInternalService returns a user by ID for trusted service-to-service calls (no school scope in request).
+func (s *UserManagementService) GetUserForInternalService(id uuid.UUID) (*model.User, error) {
+	user, err := s.repo.GetUserByID(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
+	user.RoleName = s.auth.fetchRoleName(user.RoleID)
+	return user, nil
+}
+
 // ─── Update User ────────────────────────────────────────────────────
 
 func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, schoolID uuid.UUID) (*model.User, error) {

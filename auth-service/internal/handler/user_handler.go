@@ -114,6 +114,38 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+// GetUserInternal godoc
+// @Summary      Get user (internal)
+// @Description  Service-to-service lookup by user ID. Requires X-Internal-Token.
+// @Tags         Internal
+// @Produce      json
+// @Param        id   path      string  true  "User ID (UUID)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  model.ErrorResponse
+// @Failure      401  {object}  model.ErrorResponse
+// @Failure      404  {object}  model.ErrorResponse
+// @Router       /internal/users/{id} [get]
+func (h *UserHandler) GetUserInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+
+	user, err := h.svc.GetUserForInternalService(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         user.ID,
+		"school_id":  user.SchoolID,
+		"is_active":  user.IsActive,
+		"role_name":  user.RoleName,
+	})
+}
+
 // UpdateUser godoc
 // @Summary      Update a user
 // @Description  Partially update a user's name, email, role, or active status. Requires super_admin role.

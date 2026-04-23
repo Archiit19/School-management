@@ -92,3 +92,62 @@ func (r *AttendanceRepository) GetAttendance(
 	err := q.Order("date desc, created_at desc").Offset(offset).Limit(query.Limit).Find(&records).Error
 	return records, total, err
 }
+
+func (r *AttendanceRepository) CreateTeacherAttendance(record *model.TeacherAttendance) error {
+	return r.db.Create(record).Error
+}
+
+func (r *AttendanceRepository) GetTeacherAttendanceBySchoolTeacherDate(
+	schoolID, teacherUserID uuid.UUID,
+	date time.Time,
+) (*model.TeacherAttendance, error) {
+	var record model.TeacherAttendance
+	err := r.db.Where(
+		"school_id = ? AND teacher_user_id = ? AND date = ?",
+		schoolID, teacherUserID, date,
+	).First(&record).Error
+	return &record, err
+}
+
+func (r *AttendanceRepository) GetTeacherAttendanceByIDAndSchool(
+	id, schoolID uuid.UUID,
+) (*model.TeacherAttendance, error) {
+	var record model.TeacherAttendance
+	err := r.db.Where("id = ? AND school_id = ?", id, schoolID).First(&record).Error
+	return &record, err
+}
+
+func (r *AttendanceRepository) UpdateTeacherAttendance(record *model.TeacherAttendance) error {
+	return r.db.Save(record).Error
+}
+
+func (r *AttendanceRepository) GetTeacherAttendance(
+	schoolID uuid.UUID,
+	query model.TeacherAttendanceQuery,
+) ([]model.TeacherAttendance, int64, error) {
+	var records []model.TeacherAttendance
+	var total int64
+
+	q := r.db.Model(&model.TeacherAttendance{}).Where("school_id = ?", schoolID)
+
+	if query.Date != "" {
+		parsedDate, err := time.Parse("2006-01-02", query.Date)
+		if err == nil {
+			q = q.Where("date = ?", parsedDate)
+		}
+	}
+	if query.TeacherUserID != "" {
+		q = q.Where("teacher_user_id = ?", query.TeacherUserID)
+	}
+	if query.Status != "" {
+		q = q.Where("status = ?", query.Status)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (query.Page - 1) * query.Limit
+	err := q.Order("date desc, created_at desc").Offset(offset).Limit(query.Limit).Find(&records).Error
+	return records, total, err
+}

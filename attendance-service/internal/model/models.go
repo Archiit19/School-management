@@ -77,3 +77,60 @@ type BulkAttendanceResponse struct {
 type ErrorResponse struct {
 	Error string `json:"error" example:"something went wrong"`
 }
+
+// TeacherAttendance records daily presence for staff (teachers); separate from student Attendance.
+type TeacherAttendance struct {
+	ID               uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	SchoolID         uuid.UUID `json:"school_id" gorm:"type:uuid;not null;index"`
+	TeacherUserID    uuid.UUID `json:"teacher_user_id" gorm:"type:uuid;not null;index"`
+	RecordedByUserID uuid.UUID `json:"recorded_by_user_id" gorm:"type:uuid;not null;index"`
+	Date             time.Time `json:"date" gorm:"type:date;not null;index"`
+	Status           string    `json:"status" gorm:"not null"`
+	Remarks          string    `json:"remarks"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type CreateTeacherAttendanceRequest struct {
+	TeacherUserID string `json:"teacher_user_id" binding:"omitempty,uuid"` // omit to mark own attendance
+	Date          string `json:"date" binding:"required"`
+	Status        string `json:"status" binding:"required"`
+	Remarks       string `json:"remarks"`
+}
+
+type UpdateTeacherAttendanceRequest struct {
+	Status  *string `json:"status"`
+	Remarks *string `json:"remarks"`
+}
+
+type TeacherAttendanceQuery struct {
+	Page          int    `form:"page,default=1"`
+	Limit         int    `form:"limit,default=20"`
+	Date          string `form:"date"`
+	TeacherUserID string `form:"teacher_user_id"`
+	Status        string `form:"status"`
+}
+
+type TeacherAttendanceListResponse struct {
+	Attendance []TeacherAttendance `json:"attendance"`
+	Total      int64               `json:"total"`
+	Page       int                 `json:"page"`
+	Limit      int                 `json:"limit"`
+}
+
+type BulkTeacherAttendanceEntry struct {
+	TeacherUserID string `json:"teacher_user_id" binding:"required,uuid"`
+	Status        string `json:"status" binding:"required"`
+	Remarks       string `json:"remarks"`
+}
+
+type BulkCreateTeacherAttendanceRequest struct {
+	Date    string                       `json:"date" binding:"required"`
+	Entries []BulkTeacherAttendanceEntry `json:"entries" binding:"required,min=1,dive"`
+}
+
+type BulkTeacherAttendanceResponse struct {
+	Created int                 `json:"created"`
+	Skipped int                 `json:"skipped"`
+	Records []TeacherAttendance `json:"records"`
+}
