@@ -554,3 +554,143 @@ func (s *AttendanceService) UpdateTeacherAttendance(
 
 	return record, nil
 }
+
+// GetAttendanceStats calculates attendance percentages for students.
+func (s *AttendanceService) GetAttendanceStats(
+	schoolID uuid.UUID,
+	query model.AttendanceStatsQuery,
+) (*model.AttendanceStatsResponse, error) {
+	startDate, endDate, err := s.parseDateRange(query.StartDate, query.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	counts, err := s.repo.GetAttendanceStats(schoolID, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch attendance stats: %w", err)
+	}
+
+	statsMap := make(map[string]*model.AttendanceStats)
+	for _, c := range counts {
+		sid := c.StudentID
+		if _, ok := statsMap[sid]; !ok {
+			statsMap[sid] = &model.AttendanceStats{StudentID: sid, ClassID: query.ClassID}
+		}
+		st := statsMap[sid]
+		switch c.Status {
+		case "present":
+			st.PresentDays = c.Count
+		case "absent":
+			st.AbsentDays = c.Count
+		case "late":
+			st.LateDays = c.Count
+		case "excused":
+			st.ExcusedDays = c.Count
+		}
+	}
+
+	var stats []model.AttendanceStats
+	for _, st := range statsMap {
+		st.TotalDays = st.PresentDays + st.AbsentDays + st.LateDays + st.ExcusedDays
+		if st.TotalDays > 0 {
+			st.AttendanceRate = float64(st.PresentDays+st.LateDays+st.ExcusedDays) / float64(st.TotalDays) * 100
+		}
+		stats = append(stats, *st)
+	}
+
+	return &model.AttendanceStatsResponse{
+		Stats:     stats,
+		StartDate: startDate.Format("2006-01-02"),
+		EndDate:   endDate.Format("2006-01-02"),
+	}, nil
+}
+
+// GetTeacherAttendanceStats calculates attendance percentages for teachers.
+func (s *AttendanceService) GetTeacherAttendanceStats(
+	schoolID, currentUserID uuid.UUID,
+	roleName string,
+	perms []string,
+	query model.TeacherAttendanceStatsQuery,
+) (*model.TeacherAttendanceStatsResponse, error) {
+	if roleName != "super_admin" && !hasPerm(perms, "view_teacher_attendance") && !hasPerm(perms, "mark_teacher_attendance") {
+		if !hasPerm(perms, "mark_own_teacher_attendance") {
+			return nil, apierrors.Forbidden("cannot view teacher attendance stats")
+		}
+		query.TeacherUserID = currentUserID.String()
+	}
+
+	startDate, endDate, err := s.parseDateRange(query.StartDate, query.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	counts, err := s.repo.GetTeacherAttendanceStats(schoolID, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch teacher attendance stats: %w", err)
+	}
+
+	statsMap := make(map[string]*model.TeacherAttendanceStats)
+	for _, c := range counts {
+		tid := c.TeacherUserID
+		if _, ok := statsMap[tid]; !ok {
+			statsMap[tid] = &model.TeacherAttendanceStats{TeacherUserID: tid}
+		}
+		st := statsMap[tid]
+		switch c.Status {
+		case "present":
+			st.PresentDays = c.Count
+		case "absent":
+			st.AbsentDays = c.Count
+		case "late":
+			st.LateDays = c.Count
+		case "excused":
+			st.ExcusedDays = c.Count
+		}
+	}
+
+	var stats []model.TeacherAttendanceStats
+	for _, st := range statsMap {
+		st.TotalDays = st.PresentDays + st.AbsentDays + st.LateDays + st.ExcusedDays
+		if st.TotalDays > 0 {
+			st.AttendanceRate = float64(st.PresentDays+st.LateDays+st.ExcusedDays) / float64(st.TotalDays) * 100
+		}
+		stats = append(stats, *st)
+	}
+
+	return &model.TeacherAttendanceStatsResponse{
+		Stats:     stats,
+		StartDate: startDate.Format("2006-01-02"),
+		EndDate:   endDate.Format("2006-01-02"),
+	}, nil
+}
+
+// parseDateRange parses start/end date strings; defaults to current month if empty.
+func (s *AttendanceService) parseDateRange(startStr, endStr string) (time.Time, time.Time, error) {
+	now := time.Now()
+	var startDate, endDate time.Time
+	var err error
+
+	if strings.TrimSpace(startStr) != "" {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid start_date format, use YYYY-MM-DD")
+		}
+	} else {
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+
+	if strings.TrimSpace(endStr) != "" {
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid end_date format, use YYYY-MM-DD")
+		}
+	} else {
+		endDate = now
+	}
+
+	if endDate.Before(startDate) {
+		return time.Time{}, time.Time{}, errors.New("end_date cannot be before start_date")
+	}
+
+	return startDate, endDate, nil
+}

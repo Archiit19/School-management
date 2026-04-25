@@ -302,3 +302,68 @@ func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
 
 	c.JSON(http.StatusOK, record)
 }
+
+// GetAttendanceStats godoc
+// @Summary      Get student attendance statistics
+// @Description  Calculate attendance percentage for students with optional filters.
+// @Tags         Attendance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        student_id  query     string  false  "Student ID (UUID)"
+// @Param        class_id    query     string  false  "Class ID (UUID)"
+// @Param        section_id  query     string  false  "Section ID (UUID)"
+// @Param        subject_id  query     string  false  "Subject ID (UUID)"
+// @Param        start_date  query     string  false  "Start date (YYYY-MM-DD)"
+// @Param        end_date    query     string  false  "End date (YYYY-MM-DD)"
+// @Success      200         {object}  model.AttendanceStatsResponse
+// @Failure      400         {object}  model.ErrorResponse
+// @Router       /attendance/stats [get]
+func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
+	var query model.AttendanceStatsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+
+	resp, err := h.svc.GetAttendanceStats(schoolID, query)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetTeacherAttendanceStats godoc
+// @Summary      Get teacher attendance statistics
+// @Description  Calculate attendance percentage for teachers with optional filters.
+// @Tags         TeacherAttendance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        teacher_user_id  query     string  false  "Teacher User ID (UUID)"
+// @Param        start_date       query     string  false  "Start date (YYYY-MM-DD)"
+// @Param        end_date         query     string  false  "End date (YYYY-MM-DD)"
+// @Success      200              {object}  model.TeacherAttendanceStatsResponse
+// @Failure      400              {object}  model.ErrorResponse
+// @Router       /teacher-attendance/stats [get]
+func (h *AttendanceHandler) GetTeacherAttendanceStats(c *gin.Context) {
+	var query model.TeacherAttendanceStatsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	resp, err := h.svc.GetTeacherAttendanceStats(schoolID, userID, roleName, permissionsFromContext(c), query)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, resp)
+}

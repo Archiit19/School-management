@@ -134,3 +134,57 @@ type BulkTeacherAttendanceResponse struct {
 	Skipped int                 `json:"skipped"`
 	Records []TeacherAttendance `json:"records"`
 }
+
+// AttendanceStatsQuery filters for calculating attendance statistics.
+type AttendanceStatsQuery struct {
+	StudentID string `form:"student_id" binding:"omitempty,uuid"`
+	ClassID   string `form:"class_id" binding:"omitempty,uuid"`
+	SectionID string `form:"section_id" binding:"omitempty,uuid"`
+	SubjectID string `form:"subject_id" binding:"omitempty,uuid"`
+	StartDate string `form:"start_date"` // YYYY-MM-DD
+	EndDate   string `form:"end_date"`   // YYYY-MM-DD
+}
+
+// AttendanceStats contains calculated attendance percentages.
+type AttendanceStats struct {
+	TotalDays       int     `json:"total_days"`
+	PresentDays     int     `json:"present_days"`
+	AbsentDays      int     `json:"absent_days"`
+	LateDays        int     `json:"late_days"`
+	ExcusedDays     int     `json:"excused_days"`
+	AttendanceRate  float64 `json:"attendance_rate"`  // (present+late+excused)/total * 100
+	StudentID       string  `json:"student_id,omitempty"`
+	ClassID         string  `json:"class_id,omitempty"`
+}
+
+// AttendanceStatsResponse wraps stats with context info.
+type AttendanceStatsResponse struct {
+	Stats     []AttendanceStats `json:"stats"`
+	StartDate string            `json:"start_date"`
+	EndDate   string            `json:"end_date"`
+}
+
+// TeacherAttendanceStatsQuery filters for teacher stats.
+type TeacherAttendanceStatsQuery struct {
+	TeacherUserID string `form:"teacher_user_id" binding:"omitempty,uuid"`
+	StartDate     string `form:"start_date"` // YYYY-MM-DD
+	EndDate       string `form:"end_date"`   // YYYY-MM-DD
+}
+
+// TeacherAttendanceStats contains calculated teacher attendance percentages.
+type TeacherAttendanceStats struct {
+	TotalDays       int     `json:"total_days"`
+	PresentDays     int     `json:"present_days"`
+	AbsentDays      int     `json:"absent_days"`
+	LateDays        int     `json:"late_days"`
+	ExcusedDays     int     `json:"excused_days"`
+	AttendanceRate  float64 `json:"attendance_rate"`
+	TeacherUserID   string  `json:"teacher_user_id,omitempty"`
+}
+
+// TeacherAttendanceStatsResponse wraps teacher stats.
+type TeacherAttendanceStatsResponse struct {
+	Stats     []TeacherAttendanceStats `json:"stats"`
+	StartDate string                   `json:"start_date"`
+	EndDate   string                   `json:"end_date"`
+}

@@ -81,11 +81,13 @@ ON attendances (
 		protected.POST("/attendance", middleware.RequirePermission("mark_attendance"), h.CreateAttendance)
 		protected.POST("/attendance/bulk", middleware.RequirePermission("mark_attendance"), h.BulkCreateAttendance)
 		protected.GET("/attendance", middleware.RequirePermission("view_attendance"), h.GetAttendance)
+		protected.GET("/attendance/stats", middleware.RequirePermission("view_attendance"), h.GetAttendanceStats)
 		protected.PATCH("/attendance/:id", middleware.RequirePermission("mark_attendance"), h.UpdateAttendance)
 
 		protected.POST("/teacher-attendance", middleware.RequireAnyPermission("mark_teacher_attendance", "mark_own_teacher_attendance"), h.CreateTeacherAttendance)
 		protected.POST("/teacher-attendance/bulk", middleware.RequirePermission("mark_teacher_attendance"), h.BulkCreateTeacherAttendance)
 		protected.GET("/teacher-attendance", middleware.RequireAnyPermission("view_teacher_attendance", "mark_teacher_attendance", "mark_own_teacher_attendance"), h.GetTeacherAttendance)
+		protected.GET("/teacher-attendance/stats", middleware.RequireAnyPermission("view_teacher_attendance", "mark_teacher_attendance", "mark_own_teacher_attendance"), h.GetTeacherAttendanceStats)
 		protected.PATCH("/teacher-attendance/:id", middleware.RequireAnyPermission("mark_teacher_attendance", "mark_own_teacher_attendance"), h.UpdateTeacherAttendance)
 	}
 

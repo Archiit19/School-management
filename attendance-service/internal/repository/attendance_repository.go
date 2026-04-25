@@ -151,3 +151,72 @@ func (r *AttendanceRepository) GetTeacherAttendance(
 	err := q.Order("date desc, created_at desc").Offset(offset).Limit(query.Limit).Find(&records).Error
 	return records, total, err
 }
+
+// StatusCount holds counts per status for aggregation.
+type StatusCount struct {
+	StudentID string
+	Status    string
+	Count     int
+}
+
+// GetAttendanceStats aggregates attendance counts by status for students.
+func (r *AttendanceRepository) GetAttendanceStats(
+	schoolID uuid.UUID,
+	query model.AttendanceStatsQuery,
+	startDate, endDate time.Time,
+) ([]StatusCount, error) {
+	q := r.db.Model(&model.Attendance{}).
+		Select("student_id, status, COUNT(*) as count").
+		Where("school_id = ? AND date >= ? AND date <= ?", schoolID, startDate, endDate)
+
+	if query.StudentID != "" {
+		q = q.Where("student_id = ?", query.StudentID)
+	}
+	if query.ClassID != "" {
+		q = q.Where("class_id = ?", query.ClassID)
+	}
+	if query.SectionID != "" {
+		q = q.Where("section_id = ?", query.SectionID)
+	}
+	if query.SubjectID != "" {
+		q = q.Where("subject_id = ?", query.SubjectID)
+	}
+
+	q = q.Group("student_id, status")
+
+	var results []StatusCount
+	if err := q.Find(&results).Error; err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+// TeacherStatusCount holds counts per status for teacher aggregation.
+type TeacherStatusCount struct {
+	TeacherUserID string
+	Status        string
+	Count         int
+}
+
+// GetTeacherAttendanceStats aggregates teacher attendance counts by status.
+func (r *AttendanceRepository) GetTeacherAttendanceStats(
+	schoolID uuid.UUID,
+	query model.TeacherAttendanceStatsQuery,
+	startDate, endDate time.Time,
+) ([]TeacherStatusCount, error) {
+	q := r.db.Model(&model.TeacherAttendance{}).
+		Select("teacher_user_id, status, COUNT(*) as count").
+		Where("school_id = ? AND date >= ? AND date <= ?", schoolID, startDate, endDate)
+
+	if query.TeacherUserID != "" {
+		q = q.Where("teacher_user_id = ?", query.TeacherUserID)
+	}
+
+	q = q.Group("teacher_user_id, status")
+
+	var results []TeacherStatusCount
+	if err := q.Find(&results).Error; err != nil {
+		return nil, err
+	}
+	return results, nil
+}
