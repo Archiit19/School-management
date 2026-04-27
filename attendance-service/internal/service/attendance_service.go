@@ -1,11 +1,15 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/avaneeshravat/school-management/attendance-service/internal/apierrors"
+	"github.com/avaneeshravat/school-management/attendance-service/internal/config"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/repository"
 	"github.com/google/uuid"
@@ -13,11 +17,73 @@ import (
 )
 
 type AttendanceService struct {
-	repo *repository.AttendanceRepository
+	repo       *repository.AttendanceRepository
+	cfg        *config.Config
+	httpClient *http.Client
 }
 
-func NewAttendanceService(repo *repository.AttendanceRepository) *AttendanceService {
-	return &AttendanceService{repo: repo}
+func NewAttendanceService(repo *repository.AttendanceRepository, cfg *config.Config, httpClient *http.Client) *AttendanceService {
+	if httpClient == nil {
+		httpClient = &http.Client{Timeout: 8 * time.Second}
+	}
+	return &AttendanceService{repo: repo, cfg: cfg, httpClient: httpClient}
+}
+
+func isDuplicateKey(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "duplicate key") ||
+		strings.Contains(msg, "unique constraint") ||
+		strings.Contains(msg, "23505")
+}
+
+type authUserInternal struct {
+	ID       string `json:"id"`
+	SchoolID string `json:"school_id"`
+	IsActive bool   `json:"is_active"`
+	RoleName string `json:"role_name"`
+}
+
+func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID) error {
+	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
+		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and AUTH_SERVICE_URL)")
+	}
+	base := strings.TrimRight(s.cfg.AuthServiceURL, "/")
+	url := fmt.Sprintf("%s/internal/users/%s", base, userID.String())
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to build auth request: %w", err)
+	}
+	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return apierrors.ServiceUnavailable("auth-service unreachable for user validation")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return apierrors.BadRequest("user not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return apierrors.ServiceUnavailable("auth-service user validation failed")
+	}
+
+	var u authUserInternal
+	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
+		return apierrors.ServiceUnavailable("invalid response from auth-service")
+	}
+
+	sid, err := uuid.Parse(u.SchoolID)
+	if err != nil || sid != schoolID {
+		return apierrors.Forbidden("user does not belong to this school")
+	}
+	if !u.IsActive {
+		return apierrors.BadRequest("user account is inactive")
+	}
+	return nil
 }
 
 func (s *AttendanceService) CreateAttendance(
@@ -82,6 +148,9 @@ func (s *AttendanceService) CreateAttendance(
 		Remarks:       req.Remarks,
 	}
 	if err := s.repo.CreateAttendance(record); err != nil {
+		if isDuplicateKey(err) {
+			return nil, apierrors.Conflict("attendance already marked for this student and date")
+		}
 		return nil, fmt.Errorf("failed to create attendance: %w", err)
 	}
 
@@ -127,13 +196,13 @@ func (s *AttendanceService) UpdateAttendance(
 	record, err := s.repo.GetAttendanceByIDAndSchool(id, schoolID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("attendance not found")
+			return nil, apierrors.NotFound("attendance not found")
 		}
 		return nil, fmt.Errorf("failed to fetch attendance: %w", err)
 	}
 
 	if roleName != "super_admin" && record.TeacherUserID != requestingUserID {
-		return nil, errors.New("you can edit only your own attendance entries")
+		return nil, apierrors.Forbidden("you can edit only your own attendance entries")
 	}
 
 	if req.Status != nil {
@@ -221,6 +290,10 @@ func (s *AttendanceService) BulkCreateAttendance(
 			Remarks:       entry.Remarks,
 		}
 		if err := s.repo.CreateAttendance(record); err != nil {
+			if isDuplicateKey(err) {
+				resp.Skipped++
+				continue
+			}
 			resp.Skipped++
 			continue
 		}
@@ -243,4 +316,381 @@ func isValidStatus(status string) bool {
 	default:
 		return false
 	}
+}
+
+func hasPerm(perms []string, name string) bool {
+	for _, p := range perms {
+		if p == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *AttendanceService) CreateTeacherAttendance(
+	req model.CreateTeacherAttendanceRequest,
+	schoolID, currentUserID uuid.UUID,
+	roleName string,
+	perms []string,
+) (*model.TeacherAttendance, error) {
+	var targetTeacherID uuid.UUID
+	if strings.TrimSpace(req.TeacherUserID) == "" {
+		targetTeacherID = currentUserID
+	} else {
+		parsed, err := uuid.Parse(req.TeacherUserID)
+		if err != nil {
+			return nil, errors.New("invalid teacher_user_id")
+		}
+		targetTeacherID = parsed
+	}
+
+	if err := s.assertCanMarkTeacherAttendance(roleName, perms, currentUserID, targetTeacherID); err != nil {
+		return nil, err
+	}
+
+	if err := s.validateAuthUserInSchool(targetTeacherID, schoolID); err != nil {
+		return nil, err
+	}
+
+	attendanceDate, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return nil, errors.New("invalid date format, use YYYY-MM-DD")
+	}
+
+	status := normalizeStatus(req.Status)
+	if !isValidStatus(status) {
+		return nil, errors.New("invalid status, allowed: present, absent, late, excused")
+	}
+
+	_, err = s.repo.GetTeacherAttendanceBySchoolTeacherDate(schoolID, targetTeacherID, attendanceDate)
+	if err == nil {
+		return nil, errors.New("attendance already marked for this teacher and date")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate teacher attendance uniqueness: %w", err)
+	}
+
+	record := &model.TeacherAttendance{
+		SchoolID:         schoolID,
+		TeacherUserID:    targetTeacherID,
+		RecordedByUserID: currentUserID,
+		Date:             attendanceDate,
+		Status:           status,
+		Remarks:          req.Remarks,
+	}
+	if err := s.repo.CreateTeacherAttendance(record); err != nil {
+		if isDuplicateKey(err) {
+			return nil, apierrors.Conflict("attendance already marked for this teacher and date")
+		}
+		return nil, fmt.Errorf("failed to create teacher attendance: %w", err)
+	}
+
+	return record, nil
+}
+
+func (s *AttendanceService) assertCanMarkTeacherAttendance(
+	roleName string,
+	perms []string,
+	currentUserID, targetTeacherID uuid.UUID,
+) error {
+	if roleName == "super_admin" {
+		return nil
+	}
+	hasMarkAll := hasPerm(perms, "mark_teacher_attendance")
+	hasMarkOwn := hasPerm(perms, "mark_own_teacher_attendance")
+	if targetTeacherID == currentUserID {
+		if hasMarkAll || hasMarkOwn {
+			return nil
+		}
+		return apierrors.Forbidden("cannot mark your own attendance with current permissions")
+	}
+	if hasMarkAll {
+		return nil
+	}
+	return apierrors.Forbidden("can only mark your own attendance")
+}
+
+func (s *AttendanceService) BulkCreateTeacherAttendance(
+	req model.BulkCreateTeacherAttendanceRequest,
+	schoolID, currentUserID uuid.UUID,
+	roleName string,
+	perms []string,
+) (*model.BulkTeacherAttendanceResponse, error) {
+	if roleName != "super_admin" && !hasPerm(perms, "mark_teacher_attendance") {
+		return nil, apierrors.Forbidden("bulk teacher attendance requires mark_teacher_attendance")
+	}
+
+	attendanceDate, err := time.Parse("2006-01-02", req.Date)
+	if err != nil {
+		return nil, errors.New("invalid date format, use YYYY-MM-DD")
+	}
+
+	resp := &model.BulkTeacherAttendanceResponse{}
+
+	for _, entry := range req.Entries {
+		teacherID, err := uuid.Parse(entry.TeacherUserID)
+		if err != nil {
+			resp.Skipped++
+			continue
+		}
+
+		if err := s.validateAuthUserInSchool(teacherID, schoolID); err != nil {
+			resp.Skipped++
+			continue
+		}
+
+		status := normalizeStatus(entry.Status)
+		if !isValidStatus(status) {
+			resp.Skipped++
+			continue
+		}
+
+		_, dupErr := s.repo.GetTeacherAttendanceBySchoolTeacherDate(schoolID, teacherID, attendanceDate)
+		if dupErr == nil {
+			resp.Skipped++
+			continue
+		}
+		if dupErr != nil && !errors.Is(dupErr, gorm.ErrRecordNotFound) {
+			resp.Skipped++
+			continue
+		}
+
+		record := &model.TeacherAttendance{
+			SchoolID:         schoolID,
+			TeacherUserID:    teacherID,
+			RecordedByUserID: currentUserID,
+			Date:             attendanceDate,
+			Status:           status,
+			Remarks:          entry.Remarks,
+		}
+		if err := s.repo.CreateTeacherAttendance(record); err != nil {
+			if isDuplicateKey(err) {
+				resp.Skipped++
+				continue
+			}
+			resp.Skipped++
+			continue
+		}
+
+		resp.Created++
+		resp.Records = append(resp.Records, *record)
+	}
+
+	return resp, nil
+}
+
+func (s *AttendanceService) GetTeacherAttendance(
+	schoolID, currentUserID uuid.UUID,
+	roleName string,
+	perms []string,
+	query model.TeacherAttendanceQuery,
+) (*model.TeacherAttendanceListResponse, error) {
+	if query.Page < 1 {
+		query.Page = 1
+	}
+	if query.Limit < 1 || query.Limit > 100 {
+		query.Limit = 20
+	}
+
+	if strings.TrimSpace(query.Date) != "" {
+		if _, err := time.Parse("2006-01-02", query.Date); err != nil {
+			return nil, errors.New("invalid date format, use YYYY-MM-DD")
+		}
+	}
+
+	if roleName != "super_admin" && !hasPerm(perms, "view_teacher_attendance") && !hasPerm(perms, "mark_teacher_attendance") {
+		if !hasPerm(perms, "mark_own_teacher_attendance") {
+			return nil, apierrors.Forbidden("cannot view teacher attendance")
+		}
+		query.TeacherUserID = currentUserID.String()
+	}
+
+	records, total, err := s.repo.GetTeacherAttendance(schoolID, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch teacher attendance: %w", err)
+	}
+
+	return &model.TeacherAttendanceListResponse{
+		Attendance: records,
+		Total:      total,
+		Page:       query.Page,
+		Limit:      query.Limit,
+	}, nil
+}
+
+func (s *AttendanceService) UpdateTeacherAttendance(
+	id uuid.UUID,
+	req model.UpdateTeacherAttendanceRequest,
+	schoolID, requestingUserID uuid.UUID,
+	roleName string,
+) (*model.TeacherAttendance, error) {
+	record, err := s.repo.GetTeacherAttendanceByIDAndSchool(id, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, apierrors.NotFound("teacher attendance not found")
+		}
+		return nil, fmt.Errorf("failed to fetch teacher attendance: %w", err)
+	}
+
+	if roleName != "super_admin" && record.RecordedByUserID != requestingUserID {
+		return nil, apierrors.Forbidden("you can edit only your own teacher attendance entries")
+	}
+
+	if req.Status != nil {
+		status := normalizeStatus(*req.Status)
+		if !isValidStatus(status) {
+			return nil, errors.New("invalid status, allowed: present, absent, late, excused")
+		}
+		record.Status = status
+	}
+
+	if req.Remarks != nil {
+		record.Remarks = *req.Remarks
+	}
+
+	if err := s.repo.UpdateTeacherAttendance(record); err != nil {
+		return nil, fmt.Errorf("failed to update teacher attendance: %w", err)
+	}
+
+	return record, nil
+}
+
+// GetAttendanceStats calculates attendance percentages for students.
+func (s *AttendanceService) GetAttendanceStats(
+	schoolID uuid.UUID,
+	query model.AttendanceStatsQuery,
+) (*model.AttendanceStatsResponse, error) {
+	startDate, endDate, err := s.parseDateRange(query.StartDate, query.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	counts, err := s.repo.GetAttendanceStats(schoolID, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch attendance stats: %w", err)
+	}
+
+	statsMap := make(map[string]*model.AttendanceStats)
+	for _, c := range counts {
+		sid := c.StudentID
+		if _, ok := statsMap[sid]; !ok {
+			statsMap[sid] = &model.AttendanceStats{StudentID: sid, ClassID: query.ClassID}
+		}
+		st := statsMap[sid]
+		switch c.Status {
+		case "present":
+			st.PresentDays = c.Count
+		case "absent":
+			st.AbsentDays = c.Count
+		case "late":
+			st.LateDays = c.Count
+		case "excused":
+			st.ExcusedDays = c.Count
+		}
+	}
+
+	var stats []model.AttendanceStats
+	for _, st := range statsMap {
+		st.TotalDays = st.PresentDays + st.AbsentDays + st.LateDays + st.ExcusedDays
+		if st.TotalDays > 0 {
+			st.AttendanceRate = float64(st.PresentDays+st.LateDays+st.ExcusedDays) / float64(st.TotalDays) * 100
+		}
+		stats = append(stats, *st)
+	}
+
+	return &model.AttendanceStatsResponse{
+		Stats:     stats,
+		StartDate: startDate.Format("2006-01-02"),
+		EndDate:   endDate.Format("2006-01-02"),
+	}, nil
+}
+
+// GetTeacherAttendanceStats calculates attendance percentages for teachers.
+func (s *AttendanceService) GetTeacherAttendanceStats(
+	schoolID, currentUserID uuid.UUID,
+	roleName string,
+	perms []string,
+	query model.TeacherAttendanceStatsQuery,
+) (*model.TeacherAttendanceStatsResponse, error) {
+	if roleName != "super_admin" && !hasPerm(perms, "view_teacher_attendance") && !hasPerm(perms, "mark_teacher_attendance") {
+		if !hasPerm(perms, "mark_own_teacher_attendance") {
+			return nil, apierrors.Forbidden("cannot view teacher attendance stats")
+		}
+		query.TeacherUserID = currentUserID.String()
+	}
+
+	startDate, endDate, err := s.parseDateRange(query.StartDate, query.EndDate)
+	if err != nil {
+		return nil, err
+	}
+
+	counts, err := s.repo.GetTeacherAttendanceStats(schoolID, query, startDate, endDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch teacher attendance stats: %w", err)
+	}
+
+	statsMap := make(map[string]*model.TeacherAttendanceStats)
+	for _, c := range counts {
+		tid := c.TeacherUserID
+		if _, ok := statsMap[tid]; !ok {
+			statsMap[tid] = &model.TeacherAttendanceStats{TeacherUserID: tid}
+		}
+		st := statsMap[tid]
+		switch c.Status {
+		case "present":
+			st.PresentDays = c.Count
+		case "absent":
+			st.AbsentDays = c.Count
+		case "late":
+			st.LateDays = c.Count
+		case "excused":
+			st.ExcusedDays = c.Count
+		}
+	}
+
+	var stats []model.TeacherAttendanceStats
+	for _, st := range statsMap {
+		st.TotalDays = st.PresentDays + st.AbsentDays + st.LateDays + st.ExcusedDays
+		if st.TotalDays > 0 {
+			st.AttendanceRate = float64(st.PresentDays+st.LateDays+st.ExcusedDays) / float64(st.TotalDays) * 100
+		}
+		stats = append(stats, *st)
+	}
+
+	return &model.TeacherAttendanceStatsResponse{
+		Stats:     stats,
+		StartDate: startDate.Format("2006-01-02"),
+		EndDate:   endDate.Format("2006-01-02"),
+	}, nil
+}
+
+// parseDateRange parses start/end date strings; defaults to current month if empty.
+func (s *AttendanceService) parseDateRange(startStr, endStr string) (time.Time, time.Time, error) {
+	now := time.Now()
+	var startDate, endDate time.Time
+	var err error
+
+	if strings.TrimSpace(startStr) != "" {
+		startDate, err = time.Parse("2006-01-02", startStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid start_date format, use YYYY-MM-DD")
+		}
+	} else {
+		startDate = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	}
+
+	if strings.TrimSpace(endStr) != "" {
+		endDate, err = time.Parse("2006-01-02", endStr)
+		if err != nil {
+			return time.Time{}, time.Time{}, errors.New("invalid end_date format, use YYYY-MM-DD")
+		}
+	} else {
+		endDate = now
+	}
+
+	if endDate.Before(startDate) {
+		return time.Time{}, time.Time{}, errors.New("end_date cannot be before start_date")
+	}
+
+	return startDate, endDate, nil
 }

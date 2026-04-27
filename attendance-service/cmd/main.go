@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/avaneeshravat/school-management/attendance-service/internal/config"
 	"github.com/avaneeshravat/school-management/attendance-service/internal/handler"
@@ -36,13 +38,34 @@ func main() {
 	}
 	log.Println("connected to Attendance DB")
 
-	if err := db.AutoMigrate(&model.Attendance{}); err != nil {
+	if err := db.AutoMigrate(&model.Attendance{}, &model.TeacherAttendance{}); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
 	log.Println("attendance database migrated")
 
+	if err := db.Exec(`
+CREATE UNIQUE INDEX IF NOT EXISTS ux_teacher_attendance_school_teacher_date
+ON teacher_attendances (school_id, teacher_user_id, date);
+`).Error; err != nil {
+		log.Printf("warn: teacher attendance unique index: %v", err)
+	}
+	if err := db.Exec(`
+CREATE UNIQUE INDEX IF NOT EXISTS ux_student_attendance_scope
+ON attendances (
+	school_id,
+	student_id,
+	class_id,
+	date,
+	COALESCE(section_id, '00000000-0000-0000-0000-000000000000'::uuid),
+	COALESCE(subject_id, '00000000-0000-0000-0000-000000000000'::uuid)
+);
+`).Error; err != nil {
+		log.Printf("warn: student attendance unique index: %v", err)
+	}
+
 	repo := repository.NewAttendanceRepository(db)
-	svc := service.NewAttendanceService(repo)
+	httpClient := &http.Client{Timeout: 8 * time.Second}
+	svc := service.NewAttendanceService(repo, cfg, httpClient)
 	h := handler.NewAttendanceHandler(svc)
 
 	r := gin.Default()
@@ -58,7 +81,14 @@ func main() {
 		protected.POST("/attendance", middleware.RequirePermission("mark_attendance"), h.CreateAttendance)
 		protected.POST("/attendance/bulk", middleware.RequirePermission("mark_attendance"), h.BulkCreateAttendance)
 		protected.GET("/attendance", middleware.RequirePermission("view_attendance"), h.GetAttendance)
+		protected.GET("/attendance/stats", middleware.RequirePermission("view_attendance"), h.GetAttendanceStats)
 		protected.PATCH("/attendance/:id", middleware.RequirePermission("mark_attendance"), h.UpdateAttendance)
+
+		protected.POST("/teacher-attendance", middleware.RequireAnyPermission("mark_teacher_attendance", "mark_own_teacher_attendance"), h.CreateTeacherAttendance)
+		protected.POST("/teacher-attendance/bulk", middleware.RequirePermission("mark_teacher_attendance"), h.BulkCreateTeacherAttendance)
+		protected.GET("/teacher-attendance", middleware.RequireAnyPermission("view_teacher_attendance", "mark_teacher_attendance", "mark_own_teacher_attendance"), h.GetTeacherAttendance)
+		protected.GET("/teacher-attendance/stats", middleware.RequireAnyPermission("view_teacher_attendance", "mark_teacher_attendance", "mark_own_teacher_attendance"), h.GetTeacherAttendanceStats)
+		protected.PATCH("/teacher-attendance/:id", middleware.RequireAnyPermission("mark_teacher_attendance", "mark_own_teacher_attendance"), h.UpdateTeacherAttendance)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

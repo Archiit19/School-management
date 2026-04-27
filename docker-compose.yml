@@ -159,6 +159,7 @@ services:
       DB_NAME: auth_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8081
     depends_on:
       auth-db:
@@ -256,10 +257,14 @@ services:
       DB_PASSWORD: attendance_pass
       DB_NAME: attendance_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
+      AUTH_SERVICE_URL: http://auth-service:8081
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8085
     depends_on:
       attendance-db:
         condition: service_healthy
+      auth-service:
+        condition: service_started
 
   # ──────────────────────────────────────
   # Exam Service

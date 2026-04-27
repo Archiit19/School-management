@@ -91,6 +91,43 @@ func RequirePermission(required string) gin.HandlerFunc {
 	}
 }
 
+// RequireAnyPermission allows the request if the user has at least one of the given permissions.
+// super_admin bypasses all permission checks.
+func RequireAnyPermission(anyOf ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleName, _ := c.Get("role_name")
+		if roleName == "super_admin" {
+			c.Next()
+			return
+		}
+
+		perms, exists := c.Get("permissions")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "no permissions found"})
+			return
+		}
+
+		permList, ok := perms.([]string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid permissions data"})
+			return
+		}
+
+		for _, required := range anyOf {
+			for _, p := range permList {
+				if p == required {
+					c.Next()
+					return
+				}
+			}
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "permission denied, requires one of: " + strings.Join(anyOf, ", "),
+		})
+	}
+}
+
 func parsePermissions(claims jwt.MapClaims) []string {
 	raw, ok := claims["permissions"]
 	if !ok || raw == nil {

@@ -12,6 +12,23 @@ function getToken() {
   return localStorage.getItem("token") || "";
 }
 
+export class ApiError extends Error {
+  constructor(message, status, data) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.data = data;
+  }
+}
+
+function mapStatusToMessage(status, fallback) {
+  if (fallback) return fallback;
+  if (status === 403) return "Forbidden: you do not have permission for this action.";
+  if (status === 409) return "Conflict: the action conflicts with existing data.";
+  if (status === 503) return "Service unavailable: please try again in a moment.";
+  return `Request failed (${status})`;
+}
+
 async function request(service, path, { method = "GET", body, query } = {}) {
   const base = SERVICES[service];
   if (!base) throw new Error(`Unknown service: ${service}`);
@@ -39,8 +56,8 @@ async function request(service, path, { method = "GET", body, query } = {}) {
   const data = await res.json().catch(() => null);
 
   if (!res.ok) {
-    const msg = data?.error || `Request failed (${res.status})`;
-    throw new Error(msg);
+    const msg = mapStatusToMessage(res.status, data?.error);
+    throw new ApiError(msg, res.status, data);
   }
 
   return data;
@@ -100,6 +117,15 @@ export const attendanceApi = {
   bulkCreate: (body) => request("attendance", "/attendance/bulk", { method: "POST", body }),
   list: (query) => request("attendance", "/attendance", { query }),
   update: (id, body) => request("attendance", `/attendance/${id}`, { method: "PATCH", body }),
+  stats: (query) => request("attendance", "/attendance/stats", { query }),
+  createTeacher: (body) =>
+    request("attendance", "/teacher-attendance", { method: "POST", body }),
+  bulkCreateTeacher: (body) =>
+    request("attendance", "/teacher-attendance/bulk", { method: "POST", body }),
+  listTeacher: (query) => request("attendance", "/teacher-attendance", { query }),
+  updateTeacher: (id, body) =>
+    request("attendance", `/teacher-attendance/${id}`, { method: "PATCH", body }),
+  statsTeacher: (query) => request("attendance", "/teacher-attendance/stats", { query }),
   health: () => request("attendance", "/health"),
 };
 

@@ -8,7 +8,7 @@ const NAV = [
   { to: "/academic", icon: "book-open", label: "Academic Structure", perms: ["create_class", "create_section", "create_subject", "view_academic"] },
   { to: "/students", icon: "graduation-cap", label: "Students", perms: ["admit_student", "view_students"] },
   { to: "/teacher-assignments", icon: "user-check", label: "Teacher Assign", perms: ["assign_teacher"] },
-  { to: "/attendance", icon: "calendar-check", label: "Attendance", perms: ["mark_attendance", "view_attendance"] },
+  { to: "/attendance", icon: "calendar-check", label: "Attendance", perms: ["mark_attendance", "view_attendance", "mark_teacher_attendance", "view_teacher_attendance", "mark_own_teacher_attendance"] },
   { to: "/assignments", icon: "file-text", label: "Assignments", perms: ["create_assignment", "view_assignments", "submit_assignment"] },
   { to: "/exams", icon: "clipboard", label: "Exams & Results", perms: ["create_exam", "enter_marks", "publish_results", "view_results"] },
   { to: "/finance", icon: "dollar-sign", label: "Finance", perms: ["create_fee", "record_payment", "view_dues"] },
