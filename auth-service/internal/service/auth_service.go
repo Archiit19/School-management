@@ -224,6 +224,30 @@ func (s *AuthService) fetchRoleName(roleID uuid.UUID) string {
 	return result.Name
 }
 
+// fetchStudentRoleID resolves the student role id for a given school via user-service.
+func (s *AuthService) fetchStudentRoleID(schoolID uuid.UUID) (uuid.UUID, error) {
+	url := fmt.Sprintf(
+		"%s/api/v1/internal/roles/by-name?school_id=%s&name=student",
+		s.cfg.UserServiceURL,
+		schoolID.String(),
+	)
+	resp, err := http.Get(url)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("user-service unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return uuid.Nil, fmt.Errorf("user-service returned status %d looking up student role", resp.StatusCode)
+	}
+	var role struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&role); err != nil {
+		return uuid.Nil, fmt.Errorf("decode student role: %w", err)
+	}
+	return uuid.Parse(role.ID)
+}
+
 // fetchRolePermissions calls the User Service to get permission names for a role.
 func (s *AuthService) fetchRolePermissions(roleID uuid.UUID) []string {
 	if roleID == uuid.Nil {

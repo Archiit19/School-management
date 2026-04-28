@@ -25,7 +25,7 @@ func NewStudentHandler(svc *service.StudentService) *StudentHandler {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        body  body      model.CreateStudentRequest  true  "Student payload"
-// @Success      201   {object}  model.Student
+// @Success      201   {object}  model.CreateStudentResponse
 // @Failure      400   {object}  model.ErrorResponse
 // @Router       /students [post]
 func (h *StudentHandler) CreateStudent(c *gin.Context) {
@@ -38,13 +38,13 @@ func (h *StudentHandler) CreateStudent(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
-	student, err := h.svc.CreateStudent(req, schoolID, authHeader)
+	resp, err := h.svc.CreateStudent(req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, student)
+	c.JSON(http.StatusCreated, resp)
 }
 
 // GetStudents godoc

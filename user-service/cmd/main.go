@@ -95,6 +95,7 @@ func main() {
 		// Internal / public endpoints (called by auth-service, no JWT needed)
 		api.POST("/roles/internal", h.CreateRoleInternal)
 		api.POST("/internal/bootstrap-school", h.BootstrapSchoolInternal)
+		api.GET("/internal/roles/by-name", h.GetRoleByNameAndSchoolInternal)
 		api.GET("/roles/:id", h.GetRoleByID)
 		api.GET("/roles/:id/permissions", h.GetRolePermissions)
 	}

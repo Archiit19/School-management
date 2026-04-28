@@ -215,6 +215,48 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 	return user, nil
 }
 
+// ─── Create Student Login (internal: called by student-service on admit) ────
+
+func (s *UserManagementService) CreateStudentLogin(req model.CreateStudentLoginRequest) (*model.User, error) {
+	schoolID, err := uuid.Parse(req.SchoolID)
+	if err != nil {
+		return nil, errors.New("invalid school_id")
+	}
+	studentID, err := uuid.Parse(req.StudentID)
+	if err != nil {
+		return nil, errors.New("invalid student_id")
+	}
+
+	if _, err := s.repo.GetUserByEmail(req.Email); err == nil {
+		return nil, errors.New("user with this email already exists")
+	}
+
+	roleID, err := s.auth.fetchStudentRoleID(schoolID)
+	if err != nil {
+		return nil, fmt.Errorf("could not resolve student role for school: %w", err)
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	user := &model.User{
+		SchoolID:  schoolID,
+		Name:      req.Name,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		RoleID:    roleID,
+		StudentID: &studentID,
+		IsActive:  true,
+	}
+	if err := s.repo.CreateUser(user); err != nil {
+		return nil, fmt.Errorf("failed to create student login: %w", err)
+	}
+	user.RoleName = "student"
+	return user, nil
+}
+
 // ─── Delete User (hard delete) ──────────────────────────────────────
 
 func (s *UserManagementService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUserID uuid.UUID) error {

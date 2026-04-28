@@ -101,6 +101,29 @@ func (h *UserHandler) BootstrapSchoolInternal(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"super_admin_role_id": superID.String()})
 }
 
+// GetRoleByNameAndSchoolInternal looks up a role by school+name. Used by other services (e.g. auth-service)
+// to resolve template role ids without needing a JWT.
+func (h *UserHandler) GetRoleByNameAndSchoolInternal(c *gin.Context) {
+	schoolStr := c.Query("school_id")
+	name := c.Query("name")
+	if schoolStr == "" || name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "school_id and name query params are required"})
+		return
+	}
+	schoolID, err := uuid.Parse(schoolStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
+		return
+	}
+
+	role, err := h.svc.GetRoleByNameAndSchool(name, schoolID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
+		return
+	}
+	c.JSON(http.StatusOK, role)
+}
+
 // GetRoleByID godoc
 // @Summary      Get role by ID
 // @Description  Retrieve a single role by its UUID.

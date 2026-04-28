@@ -6,28 +6,30 @@ import (
 )
 
 type Config struct {
-	DBHost             string
-	DBPort             string
-	DBUser             string
-	DBPassword         string
-	DBName             string
-	JWTSecret          string
-	Port               string
-	AuthServiceURL     string
-	AcademicServiceURL string
+	DBHost               string
+	DBPort               string
+	DBUser               string
+	DBPassword           string
+	DBName               string
+	JWTSecret            string
+	Port                 string
+	AuthServiceURL       string
+	AcademicServiceURL   string
+	InternalServiceToken string
 }
 
 func Load() *Config {
 	return &Config{
-		DBHost:             getEnv("DB_HOST", "localhost"),
-		DBPort:             getEnv("DB_PORT", "5436"),
-		DBUser:             getEnv("DB_USER", "student_user"),
-		DBPassword:         getEnv("DB_PASSWORD", "student_pass"),
-		DBName:             getEnv("DB_NAME", "student_db"),
-		JWTSecret:          getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		Port:               getEnv("PORT", "8084"),
-		AuthServiceURL:     getEnv("AUTH_SERVICE_URL", "http://auth-service:8081"),
-		AcademicServiceURL: getEnv("ACADEMIC_SERVICE_URL", "http://academic-service:8083"),
+		DBHost:               getEnv("DB_HOST", "localhost"),
+		DBPort:               getEnv("DB_PORT", "5436"),
+		DBUser:               getEnv("DB_USER", "student_user"),
+		DBPassword:           getEnv("DB_PASSWORD", "student_pass"),
+		DBName:               getEnv("DB_NAME", "student_db"),
+		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
+		Port:                 getEnv("PORT", "8084"),
+		AuthServiceURL:       getEnv("AUTH_SERVICE_URL", "http://auth-service:8081"),
+		AcademicServiceURL:   getEnv("ACADEMIC_SERVICE_URL", "http://academic-service:8083"),
+		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
 

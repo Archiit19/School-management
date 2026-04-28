@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +38,7 @@ func (s *StudentService) CreateStudent(
 	req model.CreateStudentRequest,
 	schoolID uuid.UUID,
 	authHeader string,
-) (*model.Student, error) {
+) (*model.CreateStudentResponse, error) {
 	classID, err := uuid.Parse(req.ClassID)
 	if err != nil {
 		return nil, errors.New("invalid class_id")
@@ -69,6 +70,11 @@ func (s *StudentService) CreateStudent(
 		parentUUID = &parsedParentID
 	}
 
+	wantLogin, err := validateLoginFields(req)
+	if err != nil {
+		return nil, err
+	}
+
 	student := &model.Student{
 		SchoolID:     schoolID,
 		FirstName:    req.FirstName,
@@ -83,7 +89,72 @@ func (s *StudentService) CreateStudent(
 		return nil, fmt.Errorf("failed to create student: %w", err)
 	}
 
-	return student, nil
+	resp := &model.CreateStudentResponse{Student: *student}
+
+	if wantLogin {
+		if err := s.provisionStudentLogin(student, req.LoginEmail, req.LoginPassword); err != nil {
+			// Roll back admission so the admin can retry cleanly.
+			_ = s.repo.DeleteStudent(student.ID)
+			return nil, fmt.Errorf("admission rolled back: %w", err)
+		}
+		resp.LoginCreated = true
+		resp.LoginEmail = req.LoginEmail
+	}
+
+	return resp, nil
+}
+
+func validateLoginFields(req model.CreateStudentRequest) (bool, error) {
+	hasEmail := strings.TrimSpace(req.LoginEmail) != ""
+	hasPwd := strings.TrimSpace(req.LoginPassword) != ""
+	if hasEmail != hasPwd {
+		return false, errors.New("login_email and login_password must be provided together")
+	}
+	return hasEmail && hasPwd, nil
+}
+
+// provisionStudentLogin asks auth-service to create a pupil auth user linked to this student.
+func (s *StudentService) provisionStudentLogin(student *model.Student, email, password string) error {
+	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
+		return errors.New("login provisioning is not configured (set INTERNAL_SERVICE_TOKEN)")
+	}
+
+	body, err := json.Marshal(map[string]string{
+		"school_id":  student.SchoolID.String(),
+		"student_id": student.ID.String(),
+		"name":       strings.TrimSpace(student.FirstName + " " + student.LastName),
+		"email":      email,
+		"password":   password,
+	})
+	if err != nil {
+		return fmt.Errorf("encode login request: %w", err)
+	}
+
+	url := fmt.Sprintf("%s/internal/users/from-student", s.cfg.AuthServiceURL)
+	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("build login request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("auth-service unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusCreated {
+		return nil
+	}
+	respBody, _ := io.ReadAll(resp.Body)
+	var errResp struct {
+		Error string `json:"error"`
+	}
+	if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
+		return fmt.Errorf("auth-service rejected login (status %d): %s", resp.StatusCode, errResp.Error)
+	}
+	return fmt.Errorf("auth-service rejected login (status %d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 }
 
 func (s *StudentService) GetStudents(

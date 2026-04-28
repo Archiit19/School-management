@@ -111,3 +111,12 @@ type ErrorResponse struct {
 type MessageResponse struct {
 	Message string `json:"message" example:"operation successful"`
 }
+
+// CreateStudentLoginRequest is used by student-service when admitting a pupil with a login.
+type CreateStudentLoginRequest struct {
+	SchoolID  string `json:"school_id" binding:"required,uuid"`
+	StudentID string `json:"student_id" binding:"required,uuid"`
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+}

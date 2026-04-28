@@ -25,6 +25,18 @@ type CreateStudentRequest struct {
 	ParentUserID string `json:"parent_user_id" binding:"omitempty,uuid"`
 	ClassID      string `json:"class_id" binding:"required,uuid"`
 	SectionID    string `json:"section_id" binding:"omitempty,uuid"`
+	// Optional login provisioning. If both are present, a pupil auth user is created
+	// in auth-service and linked back to this student.
+	LoginEmail    string `json:"login_email" binding:"omitempty,email"`
+	LoginPassword string `json:"login_password" binding:"omitempty,min=6"`
+}
+
+// CreateStudentResponse mirrors the admitted student plus a flag indicating whether
+// a pupil login was provisioned at admission time.
+type CreateStudentResponse struct {
+	Student      Student `json:"student"`
+	LoginCreated bool    `json:"login_created"`
+	LoginEmail   string  `json:"login_email,omitempty"`
 }
 
 type UpdateStudentRequest struct {

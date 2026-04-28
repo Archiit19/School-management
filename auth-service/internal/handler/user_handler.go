@@ -17,6 +17,23 @@ func NewUserHandler(svc *service.UserManagementService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
+// CreateStudentLoginInternal is called by student-service after admitting a pupil to provision a login.
+// Protected by INTERNAL_SERVICE_TOKEN.
+func (h *UserHandler) CreateStudentLoginInternal(c *gin.Context) {
+	var req model.CreateStudentLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user, err := h.svc.CreateStudentLogin(req)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, user)
+}
+
 // CreateUser godoc
 // @Summary      Create a new user
 // @Description  Admin creates a new user (teacher, staff, parent). Requires super_admin role.

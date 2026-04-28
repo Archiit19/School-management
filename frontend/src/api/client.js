@@ -102,6 +102,9 @@ export const academicApi = {
   createAssignment: (body) => request("academic", "/assignments", { method: "POST", body }),
   getAssignments: (query) => request("academic", "/assignments", { query }),
   createSubmission: (body) => request("academic", "/submissions", { method: "POST", body }),
+  getMyAssignments: () => request("academic", "/assignments/me"),
+  getMySubmissions: () => request("academic", "/submissions/me"),
+  submitMine: (body) => request("academic", "/submissions/me", { method: "POST", body }),
   health: () => request("academic", "/health"),
 };
 
@@ -109,6 +112,7 @@ export const studentApi = {
   create: (body) => request("students", "/students", { method: "POST", body }),
   list: (query) => request("students", "/students", { query }),
   update: (id, body) => request("students", `/students/${id}`, { method: "PATCH", body }),
+  getMe: () => request("students", "/students/me"),
   health: () => request("students", "/health"),
 };
 
@@ -126,6 +130,8 @@ export const attendanceApi = {
   updateTeacher: (id, body) =>
     request("attendance", `/teacher-attendance/${id}`, { method: "PATCH", body }),
   statsTeacher: (query) => request("attendance", "/teacher-attendance/stats", { query }),
+  getMine: (query) => request("attendance", "/attendance/me", { query }),
+  myStats: (query) => request("attendance", "/attendance/me/stats", { query }),
   health: () => request("attendance", "/health"),
 };
 
@@ -134,6 +140,7 @@ export const examApi = {
   enterMarks: (body) => request("exams", "/marks", { method: "POST", body }),
   publish: (body) => request("exams", "/results/publish", { method: "POST", body }),
   getResults: (query) => request("exams", "/results", { query }),
+  getMyResults: (query) => request("exams", "/results/me", { query }),
   health: () => request("exams", "/health"),
 };
 
@@ -141,5 +148,6 @@ export const financeApi = {
   createFee: (body) => request("finance", "/fees", { method: "POST", body }),
   recordPayment: (body) => request("finance", "/payments", { method: "POST", body }),
   getDues: (query) => request("finance", "/dues", { query }),
+  getMyDues: () => request("finance", "/dues/me"),
   health: () => request("finance", "/health"),
 };
