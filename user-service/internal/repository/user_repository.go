@@ -32,6 +32,13 @@ func (r *UserRepository) GetRolesBySchoolID(schoolID uuid.UUID) ([]model.Role, e
 	return roles, err
 }
 
+// ListDistinctSchoolIDsFromRoles returns every school_id that has at least one role (for backfill sync).
+func (r *UserRepository) ListDistinctSchoolIDsFromRoles() ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := r.db.Model(&model.Role{}).Distinct("school_id").Pluck("school_id", &ids).Error
+	return ids, err
+}
+
 func (r *UserRepository) GetRoleByNameAndSchool(name string, schoolID uuid.UUID) (*model.Role, error) {
 	var role model.Role
 	err := r.db.Where("name = ? AND school_id = ?", name, schoolID).First(&role).Error
@@ -65,6 +72,22 @@ func (r *UserRepository) GetPermissionByName(name string) (*model.Permission, er
 // ─── Role-Permission Mapping ────────────────────────────────────────
 
 func (r *UserRepository) AssignPermissionToRole(rp *model.RolePermission) error {
+	return r.db.Create(rp).Error
+}
+
+// AssignPermissionToRoleIfMissing inserts the mapping only if it does not already exist.
+func (r *UserRepository) AssignPermissionToRoleIfMissing(roleID, permissionID uuid.UUID) error {
+	var n int64
+	r.db.Model(&model.RolePermission{}).
+		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
+		Count(&n)
+	if n > 0 {
+		return nil
+	}
+	rp := &model.RolePermission{
+		RoleID:       roleID,
+		PermissionID: permissionID,
+	}
 	return r.db.Create(rp).Error
 }
 

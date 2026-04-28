@@ -68,18 +68,18 @@ type RegisterSchoolResponse struct {
 
 // CreateUserRequest is the payload for creating a new user (admin only).
 type CreateUserRequest struct {
-	Name     string `json:"name" binding:"required" example:"Jane Smith"`
-	Email    string `json:"email" binding:"required,email" example:"jane@springfield.edu"`
-	Password string `json:"password" binding:"required,min=6" example:"teacher123"`
-	RoleID   string `json:"role_id" binding:"required,uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
+	Name      string `json:"name" binding:"required" example:"Jane Smith"`
+	Email     string `json:"email" binding:"required,email" example:"jane@springfield.edu"`
+	Password  string `json:"password" binding:"required,min=6" example:"teacher123"`
+	RoleID    string `json:"role_id" binding:"required,uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
 }
 
 // UpdateUserRequest is the payload for partially updating a user.
 type UpdateUserRequest struct {
-	Name     *string `json:"name" example:"Jane Doe"`
-	Email    *string `json:"email" example:"jane.doe@springfield.edu"`
-	RoleID   *string `json:"role_id" example:"550e8400-e29b-41d4-a716-446655440002"`
-	IsActive *bool   `json:"is_active" example:"false"`
+	Name      *string `json:"name" example:"Jane Doe"`
+	Email     *string `json:"email" example:"jane.doe@springfield.edu"`
+	RoleID    *string `json:"role_id" example:"550e8400-e29b-41d4-a716-446655440002"`
+	IsActive  *bool   `json:"is_active" example:"false"`
 }
 
 // UserListQuery holds query parameters for listing users.

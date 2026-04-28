@@ -55,7 +55,11 @@ export default function UsersPage() {
     <>
       <div className="page-header">
         <h1>User Management</h1>
-        <p>Create and manage staff, teachers, and parents. Requires super_admin role.</p>
+        <p>
+          Create and manage staff, teachers, and parents. Pupils are enrolled under{" "}
+          <strong>Students</strong> (admit students), not here — the Student role is not offered below.
+          Requires permission to manage users.
+        </p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -81,7 +85,11 @@ export default function UsersPage() {
               <label>Role</label>
               <select name="role_id" required value={form.role_id} onChange={field}>
                 <option value="">Select role...</option>
-                {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                {roles
+                  .filter((r) => r.name && r.name.toLowerCase() !== "student")
+                  .map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
               </select>
             </div>
           </div>

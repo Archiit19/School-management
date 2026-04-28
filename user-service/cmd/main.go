@@ -8,6 +8,7 @@ import (
 	"github.com/avaneeshravat/school-management/user-service/internal/handler"
 	"github.com/avaneeshravat/school-management/user-service/internal/middleware"
 	"github.com/avaneeshravat/school-management/user-service/internal/model"
+	"github.com/avaneeshravat/school-management/user-service/internal/rbacdata"
 	"github.com/avaneeshravat/school-management/user-service/internal/repository"
 	"github.com/avaneeshravat/school-management/user-service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -32,43 +33,12 @@ import (
 // @name Authorization
 // @description Enter your JWT token with the `Bearer ` prefix, e.g. `Bearer eyJhbGci...`
 
-var predefinedPermissions = []struct {
-	Name        string
-	Description string
-}{
-	{"create_user", "Create new users (staff, teacher, parent)"},
-	{"view_users", "View the users list"},
-	{"update_user", "Update user details"},
-	{"delete_user", "Delete users"},
-	{"create_role", "Create new roles"},
-	{"manage_permissions", "Assign or revoke role permissions"},
-	{"create_class", "Create classes"},
-	{"create_section", "Create sections"},
-	{"create_subject", "Create subjects"},
-	{"view_academic", "View academic structure (classes, sections, subjects)"},
-	{"admit_student", "Admit new students"},
-	{"view_students", "View the students list"},
-	{"update_student", "Update student details"},
-	{"assign_teacher", "Assign teachers to class + subject"},
-	{"mark_attendance", "Mark daily attendance"},
-	{"view_attendance", "View attendance records"},
-	{"mark_own_teacher_attendance", "Mark your own daily attendance as staff"},
-	{"mark_teacher_attendance", "Mark any teacher or staff attendance"},
-	{"view_teacher_attendance", "View teacher and staff attendance records"},
-	{"create_assignment", "Create homework / assignments"},
-	{"view_assignments", "View assignments"},
-	{"submit_assignment", "Submit student work for assignments"},
-	{"create_exam", "Create exams"},
-	{"enter_marks", "Enter or update exam marks"},
-	{"publish_results", "Publish exam results"},
-	{"view_results", "View exam results"},
-	{"create_fee", "Create fee structures"},
-	{"record_payment", "Record fee payments"},
-	{"view_dues", "View outstanding dues"},
-}
-
-func seedPermissions(db *gorm.DB) {
-	for _, p := range predefinedPermissions {
+func seedPermissionsFromJSON(db *gorm.DB) {
+	list, err := rbacdata.LoadPredefinedPermissions()
+	if err != nil {
+		log.Fatalf("failed to load predefined_permissions.json: %v", err)
+	}
+	for _, p := range list {
 		db.Where("name = ?", p.Name).FirstOrCreate(&model.Permission{
 			Name:        p.Name,
 			Description: p.Description,
@@ -93,14 +63,21 @@ func main() {
 	}
 	log.Println("✅ Database migrated")
 
-	// Seed predefined permissions
-	seedPermissions(db)
-	log.Println("✅ Predefined permissions seeded")
+	// Seed predefined permissions from internal/rbacdata/predefined_permissions.json
+	seedPermissionsFromJSON(db)
+	log.Println("✅ Predefined permissions seeded from JSON")
 
 	// Wire dependencies
 	repo := repository.NewUserRepository(db)
 	svc := service.NewUserService(repo)
 	h := handler.NewUserHandler(svc)
+
+	// Ensure template roles exist for schools already in DB (creates missing roles + syncs permission links).
+	if err := svc.SyncTemplateRolesForAllSchools(); err != nil {
+		log.Printf("⚠️ template role sync (existing schools): %v", err)
+	} else {
+		log.Println("✅ Template roles synced for existing schools")
+	}
 
 	// Setup Gin router
 	r := gin.Default()
@@ -117,6 +94,7 @@ func main() {
 	{
 		// Internal / public endpoints (called by auth-service, no JWT needed)
 		api.POST("/roles/internal", h.CreateRoleInternal)
+		api.POST("/internal/bootstrap-school", h.BootstrapSchoolInternal)
 		api.GET("/roles/:id", h.GetRoleByID)
 		api.GET("/roles/:id/permissions", h.GetRolePermissions)
 	}

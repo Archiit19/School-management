@@ -77,6 +77,30 @@ func (h *UserHandler) CreateRoleInternal(c *gin.Context) {
 	c.JSON(http.StatusCreated, role)
 }
 
+// BootstrapSchoolInternal creates template roles and permissions for a school (see role_templates.json).
+// Called by auth-service when a new school registers. Returns the super_admin role id for the first admin user.
+func (h *UserHandler) BootstrapSchoolInternal(c *gin.Context) {
+	var req struct {
+		SchoolID string `json:"school_id" binding:"required,uuid"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	schoolID, err := uuid.Parse(req.SchoolID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
+		return
+	}
+
+	superID, err := h.svc.BootstrapSchoolRoles(schoolID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"super_admin_role_id": superID.String()})
+}
+
 // GetRoleByID godoc
 // @Summary      Get role by ID
 // @Description  Retrieve a single role by its UUID.
