@@ -19,17 +19,18 @@ type School struct {
 
 // User represents an authenticated user in the system.
 type User struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440001"`
-	SchoolID  uuid.UUID `json:"school_id" gorm:"type:uuid;not null;index" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Name      string    `json:"name" gorm:"not null" example:"John Doe"`
-	Email     string    `json:"email" gorm:"uniqueIndex;not null" example:"john@springfield.edu"`
-	Password  string    `json:"-" gorm:"not null"`
-	RoleID    uuid.UUID `json:"role_id" gorm:"type:uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
-	RoleName    string   `json:"role_name" gorm:"-" example:"super_admin"`
-	Permissions []string `json:"permissions,omitempty" gorm:"-"`
-	IsActive  bool      `json:"is_active" gorm:"default:true" example:"true"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440001"`
+	SchoolID    uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;index" example:"550e8400-e29b-41d4-a716-446655440000"`
+	Name        string     `json:"name" gorm:"not null" example:"John Doe"`
+	Email       string     `json:"email" gorm:"uniqueIndex;not null" example:"john@springfield.edu"`
+	Password    string     `json:"-" gorm:"not null"`
+	RoleID      uuid.UUID  `json:"role_id" gorm:"type:uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
+	StudentID   *uuid.UUID `json:"student_id,omitempty" gorm:"type:uuid;index" example:"550e8400-e29b-41d4-a716-446655440099"`
+	RoleName    string     `json:"role_name" gorm:"-" example:"super_admin"`
+	Permissions []string   `json:"permissions,omitempty" gorm:"-"`
+	IsActive    bool       `json:"is_active" gorm:"default:true" example:"true"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // ─── Request / Response DTOs ────────────────────────────────────────
@@ -68,18 +69,20 @@ type RegisterSchoolResponse struct {
 
 // CreateUserRequest is the payload for creating a new user (admin only).
 type CreateUserRequest struct {
-	Name     string `json:"name" binding:"required" example:"Jane Smith"`
-	Email    string `json:"email" binding:"required,email" example:"jane@springfield.edu"`
-	Password string `json:"password" binding:"required,min=6" example:"teacher123"`
-	RoleID   string `json:"role_id" binding:"required,uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
+	Name      string `json:"name" binding:"required" example:"Jane Smith"`
+	Email     string `json:"email" binding:"required,email" example:"jane@springfield.edu"`
+	Password  string `json:"password" binding:"required,min=6" example:"teacher123"`
+	RoleID    string `json:"role_id" binding:"required,uuid" example:"550e8400-e29b-41d4-a716-446655440002"`
+	StudentID string `json:"student_id,omitempty" binding:"omitempty,uuid" example:"550e8400-e29b-41d4-a716-446655440099"`
 }
 
 // UpdateUserRequest is the payload for partially updating a user.
 type UpdateUserRequest struct {
-	Name     *string `json:"name" example:"Jane Doe"`
-	Email    *string `json:"email" example:"jane.doe@springfield.edu"`
-	RoleID   *string `json:"role_id" example:"550e8400-e29b-41d4-a716-446655440002"`
-	IsActive *bool   `json:"is_active" example:"false"`
+	Name      *string `json:"name" example:"Jane Doe"`
+	Email     *string `json:"email" example:"jane.doe@springfield.edu"`
+	RoleID    *string `json:"role_id" example:"550e8400-e29b-41d4-a716-446655440002"`
+	StudentID *string `json:"student_id" example:"550e8400-e29b-41d4-a716-446655440099"`
+	IsActive  *bool   `json:"is_active" example:"false"`
 }
 
 // UserListQuery holds query parameters for listing users.
@@ -107,4 +110,13 @@ type ErrorResponse struct {
 // MessageResponse represents a generic success message.
 type MessageResponse struct {
 	Message string `json:"message" example:"operation successful"`
+}
+
+// CreateStudentLoginRequest is used by student-service when admitting a pupil with a login.
+type CreateStudentLoginRequest struct {
+	SchoolID  string `json:"school_id" binding:"required,uuid"`
+	StudentID string `json:"student_id" binding:"required,uuid"`
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
 }

@@ -80,6 +80,8 @@ ON attendances (
 	{
 		protected.POST("/attendance", middleware.RequirePermission("mark_attendance"), h.CreateAttendance)
 		protected.POST("/attendance/bulk", middleware.RequirePermission("mark_attendance"), h.BulkCreateAttendance)
+		protected.GET("/attendance/me", middleware.RequirePermission("view_own_attendance"), h.GetMyAttendance)
+		protected.GET("/attendance/me/stats", middleware.RequirePermission("view_own_attendance"), h.GetMyAttendanceStats)
 		protected.GET("/attendance", middleware.RequirePermission("view_attendance"), h.GetAttendance)
 		protected.GET("/attendance/stats", middleware.RequirePermission("view_attendance"), h.GetAttendanceStats)
 		protected.PATCH("/attendance/:id", middleware.RequirePermission("mark_attendance"), h.UpdateAttendance)

@@ -62,3 +62,9 @@ func (r *StudentRepository) GetStudentByIDAndSchoolID(id, schoolID uuid.UUID) (*
 func (r *StudentRepository) UpdateStudent(student *model.Student) error {
 	return r.db.Save(student).Error
 }
+
+// DeleteStudent removes a student row by id. Used to roll back admission if
+// downstream provisioning (e.g. login creation) fails.
+func (r *StudentRepository) DeleteStudent(id uuid.UUID) error {
+	return r.db.Delete(&model.Student{}, "id = ?", id).Error
+}

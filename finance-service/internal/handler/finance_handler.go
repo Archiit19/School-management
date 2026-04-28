@@ -104,3 +104,39 @@ func (h *FinanceHandler) GetDues(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, dues)
 }
+
+// GetMyDues godoc
+// @Summary      My dues (pupil portal)
+// @Description  Outstanding dues for the JWT student_id only — student_id query param is ignored.
+// @Tags         Finance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        class_id    query     string  false  "Class ID"
+// @Param        section_id  query     string  false  "Section ID"
+// @Success      200         {array}   model.DueItem
+// @Failure      400         {object}  model.ErrorResponse
+// @Failure      403         {object}  model.ErrorResponse
+// @Router       /dues/me [get]
+func (h *FinanceHandler) GetMyDues(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	var query model.DueQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	query.StudentID = studentID.String()
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	dues, err := h.svc.GetDues(schoolID, query)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, dues)
+}

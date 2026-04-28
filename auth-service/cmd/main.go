@@ -97,6 +97,7 @@ func main() {
 	internal.Use(middleware.RequireInternalToken(cfg.InternalServiceToken))
 	{
 		internal.GET("/users/:id", userHandler.GetUserInternal)
+		internal.POST("/users/from-student", userHandler.CreateStudentLoginInternal)
 	}
 
 	// Start server

@@ -59,6 +59,11 @@ func (s *UserService) GetRolesBySchoolID(schoolID uuid.UUID) ([]model.Role, erro
 	return s.repo.GetRolesBySchoolID(schoolID)
 }
 
+// GetRoleByNameAndSchool resolves a role for a given (name, school) pair, used by internal helpers.
+func (s *UserService) GetRoleByNameAndSchool(name string, schoolID uuid.UUID) (*model.Role, error) {
+	return s.repo.GetRoleByNameAndSchool(name, schoolID)
+}
+
 // ─── Permissions ────────────────────────────────────────────────────
 
 func (s *UserService) CreatePermission(req model.CreatePermissionRequest) (*model.Permission, error) {

@@ -52,10 +52,10 @@ func (s *AuthService) RegisterSchool(req model.RegisterSchoolRequest) (*model.Re
 		return nil, fmt.Errorf("failed to create school: %w", err)
 	}
 
-	// 4. Call User Service to create "super_admin" role for this school
-	roleID, err := s.createDefaultRole(school.ID)
+	// 4. Bootstrap template roles + permissions for this school (includes super_admin)
+	roleID, err := s.bootstrapSchoolRoles(school.ID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create default role via user-service: %w", err)
+		return nil, fmt.Errorf("failed to bootstrap school roles via user-service: %w", err)
 	}
 
 	// 5. Hash password
@@ -156,24 +156,26 @@ func (s *AuthService) generateToken(user *model.User, roleName string, permissio
 		"exp":         time.Now().Add(24 * time.Hour).Unix(),
 		"iat":         time.Now().Unix(),
 	}
+	if user.StudentID != nil {
+		claims["student_id"] = user.StudentID.String()
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.cfg.JWTSecret))
 }
 
-// ─── Inter-Service: Create Default Role ─────────────────────────────
+// ─── Inter-Service: Bootstrap school RBAC ────────────────────────────
 
-// createDefaultRole calls the User Service to create a "super_admin" role
-// for the newly registered school and returns the role ID.
-func (s *AuthService) createDefaultRole(schoolID uuid.UUID) (uuid.UUID, error) {
+// bootstrapSchoolRoles applies role_templates.json for this school via user-service and returns super_admin role id.
+func (s *AuthService) bootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error) {
 	payload := map[string]string{
-		"name":        "super_admin",
-		"description": "Super Administrator with full access",
-		"school_id":   schoolID.String(),
+		"school_id": schoolID.String(),
 	}
-
-	body, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/api/v1/roles/internal", s.cfg.UserServiceURL)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	url := fmt.Sprintf("%s/api/v1/internal/bootstrap-school", s.cfg.UserServiceURL)
 
 	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
 	if err != nil {
@@ -181,18 +183,18 @@ func (s *AuthService) createDefaultRole(schoolID uuid.UUID) (uuid.UUID, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		return uuid.Nil, fmt.Errorf("user-service returned status %d", resp.StatusCode)
+	if resp.StatusCode != http.StatusOK {
+		return uuid.Nil, fmt.Errorf("user-service bootstrap returned status %d", resp.StatusCode)
 	}
 
 	var result struct {
-		ID string `json:"id"`
+		SuperAdminRoleID string `json:"super_admin_role_id"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return uuid.Nil, fmt.Errorf("failed to decode user-service response: %w", err)
+		return uuid.Nil, fmt.Errorf("failed to decode user-service bootstrap response: %w", err)
 	}
 
-	return uuid.Parse(result.ID)
+	return uuid.Parse(result.SuperAdminRoleID)
 }
 
 // fetchRoleName calls the User Service to get the role name by ID.
@@ -220,6 +222,30 @@ func (s *AuthService) fetchRoleName(roleID uuid.UUID) string {
 	}
 
 	return result.Name
+}
+
+// fetchStudentRoleID resolves the student role id for a given school via user-service.
+func (s *AuthService) fetchStudentRoleID(schoolID uuid.UUID) (uuid.UUID, error) {
+	url := fmt.Sprintf(
+		"%s/api/v1/internal/roles/by-name?school_id=%s&name=student",
+		s.cfg.UserServiceURL,
+		schoolID.String(),
+	)
+	resp, err := http.Get(url)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("user-service unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return uuid.Nil, fmt.Errorf("user-service returned status %d looking up student role", resp.StatusCode)
+	}
+	var role struct {
+		ID string `json:"id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&role); err != nil {
+		return uuid.Nil, fmt.Errorf("decode student role: %w", err)
+	}
+	return uuid.Parse(role.ID)
 }
 
 // fetchRolePermissions calls the User Service to get permission names for a role.

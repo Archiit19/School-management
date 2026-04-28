@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/avaneeshravat/school-management/auth-service/internal/config"
 	"github.com/avaneeshravat/school-management/auth-service/internal/model"
@@ -42,6 +43,21 @@ func (s *UserManagementService) CreateUser(req model.CreateUserRequest, schoolID
 		return nil, errors.New("role not found — make sure the role_id is valid")
 	}
 
+	// 2b. student role requires student_id; non-student roles must not send one
+	var studentUUID *uuid.UUID
+	if strings.EqualFold(roleName, "student") {
+		if strings.TrimSpace(req.StudentID) == "" {
+			return nil, errors.New("pupil login accounts require student_id (UUID of an admitted student)")
+		}
+		sid, err := uuid.Parse(req.StudentID)
+		if err != nil {
+			return nil, errors.New("invalid student_id")
+		}
+		studentUUID = &sid
+	} else if strings.TrimSpace(req.StudentID) != "" {
+		return nil, errors.New("student_id is only allowed when role is student")
+	}
+
 	// 3. Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -50,12 +66,13 @@ func (s *UserManagementService) CreateUser(req model.CreateUserRequest, schoolID
 
 	// 4. Create user
 	user := &model.User{
-		SchoolID: schoolID,
-		Name:     req.Name,
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		RoleID:   roleID,
-		IsActive: true,
+		SchoolID:  schoolID,
+		Name:      req.Name,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		RoleID:    roleID,
+		StudentID: studentUUID,
+		IsActive:  true,
 	}
 
 	if err := s.repo.CreateUser(user); err != nil {
@@ -160,7 +177,29 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 		if roleName == "" {
 			return nil, errors.New("role not found — make sure the role_id is valid")
 		}
+		// switching to student requires a student_id (existing or in this update)
+		if strings.EqualFold(roleName, "student") {
+			hasNew := req.StudentID != nil && strings.TrimSpace(*req.StudentID) != ""
+			if user.StudentID == nil && !hasNew {
+				return nil, errors.New("student role requires student_id — set student_id to an admitted pupil UUID")
+			}
+		} else if req.StudentID != nil && strings.TrimSpace(*req.StudentID) != "" {
+			return nil, errors.New("student_id is only valid for the student role")
+		}
 		user.RoleID = roleID
+	}
+
+	if req.StudentID != nil {
+		v := strings.TrimSpace(*req.StudentID)
+		if v == "" {
+			user.StudentID = nil
+		} else {
+			sid, err := uuid.Parse(v)
+			if err != nil {
+				return nil, errors.New("invalid student_id")
+			}
+			user.StudentID = &sid
+		}
 	}
 
 	if req.IsActive != nil {
@@ -173,6 +212,48 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 	}
 
 	user.RoleName = s.auth.fetchRoleName(user.RoleID)
+	return user, nil
+}
+
+// ─── Create Student Login (internal: called by student-service on admit) ────
+
+func (s *UserManagementService) CreateStudentLogin(req model.CreateStudentLoginRequest) (*model.User, error) {
+	schoolID, err := uuid.Parse(req.SchoolID)
+	if err != nil {
+		return nil, errors.New("invalid school_id")
+	}
+	studentID, err := uuid.Parse(req.StudentID)
+	if err != nil {
+		return nil, errors.New("invalid student_id")
+	}
+
+	if _, err := s.repo.GetUserByEmail(req.Email); err == nil {
+		return nil, errors.New("user with this email already exists")
+	}
+
+	roleID, err := s.auth.fetchStudentRoleID(schoolID)
+	if err != nil {
+		return nil, fmt.Errorf("could not resolve student role for school: %w", err)
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	user := &model.User{
+		SchoolID:  schoolID,
+		Name:      req.Name,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		RoleID:    roleID,
+		StudentID: &studentID,
+		IsActive:  true,
+	}
+	if err := s.repo.CreateUser(user); err != nil {
+		return nil, fmt.Errorf("failed to create student login: %w", err)
+	}
+	user.RoleName = "student"
 	return user, nil
 }
 

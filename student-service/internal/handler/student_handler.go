@@ -25,7 +25,7 @@ func NewStudentHandler(svc *service.StudentService) *StudentHandler {
 // @Produce      json
 // @Security     BearerAuth
 // @Param        body  body      model.CreateStudentRequest  true  "Student payload"
-// @Success      201   {object}  model.Student
+// @Success      201   {object}  model.CreateStudentResponse
 // @Failure      400   {object}  model.ErrorResponse
 // @Router       /students [post]
 func (h *StudentHandler) CreateStudent(c *gin.Context) {
@@ -38,13 +38,13 @@ func (h *StudentHandler) CreateStudent(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
-	student, err := h.svc.CreateStudent(req, schoolID, authHeader)
+	resp, err := h.svc.CreateStudent(req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusCreated, student)
+	c.JSON(http.StatusCreated, resp)
 }
 
 // GetStudents godoc
@@ -79,6 +79,33 @@ func (h *StudentHandler) GetStudents(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+// GetMyStudentRecord godoc
+// @Summary      My student record (pupil portal)
+// @Description  Returns the student row linked to the JWT student_id claim. Pupils only.
+// @Tags         Students
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  model.Student
+// @Failure      403  {object}  model.ErrorResponse
+// @Failure      404  {object}  model.ErrorResponse
+// @Router       /students/me [get]
+func (h *StudentHandler) GetMyStudentRecord(c *gin.Context) {
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	student, err := h.svc.GetStudentMe(schoolID, studentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, student)
 }
 
 // UpdateStudent godoc

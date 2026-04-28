@@ -239,6 +239,95 @@ func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+// GetMyAssignments godoc
+// @Summary      My class's assignments (pupil portal)
+// @Description  Lists assignments for the class linked to the JWT student_id.
+// @Tags         Assignments
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.Assignment
+// @Failure      400  {object}  model.ErrorResponse
+// @Failure      403  {object}  model.ErrorResponse
+// @Router       /assignments/me [get]
+func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	authHeader := c.GetHeader("Authorization")
+
+	assignments, err := h.svc.GetMyAssignments(schoolID, studentID, authHeader)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, assignments)
+}
+
+// GetMySubmissions godoc
+// @Summary      My submissions (pupil portal)
+// @Description  Lists submissions where student_id matches JWT.
+// @Tags         Assignments
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.Submission
+// @Failure      403  {object}  model.ErrorResponse
+// @Router       /submissions/me [get]
+func (h *AcademicHandler) GetMySubmissions(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+
+	subs, err := h.svc.GetMySubmissions(schoolID, studentID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, subs)
+}
+
+// CreateMySubmission godoc
+// @Summary      Submit my assignment (pupil portal)
+// @Description  Pupil submits work; student_id is taken from JWT (no student_id in body).
+// @Tags         Assignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        body  body      model.CreateMySubmissionRequest  true  "Submission payload"
+// @Success      201   {object}  model.Submission
+// @Failure      400   {object}  model.ErrorResponse
+// @Failure      403   {object}  model.ErrorResponse
+// @Router       /submissions/me [post]
+func (h *AcademicHandler) CreateMySubmission(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	var req model.CreateMySubmissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	submission, err := h.svc.CreateOwnSubmission(req, schoolID, studentID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, submission)
+}
+
 // CreateSubmission godoc
 // @Summary      Create submission
 // @Description  Submit student work for an assignment.

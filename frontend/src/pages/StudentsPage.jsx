@@ -10,7 +10,15 @@ export default function StudentsPage() {
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [form, setForm] = useState({ first_name: "", last_name: "", class_id: "", section_id: "", parent_user_id: "" });
+  const [form, setForm] = useState({
+    first_name: "",
+    last_name: "",
+    class_id: "",
+    section_id: "",
+    parent_user_id: "",
+    login_email: "",
+    login_password: "",
+  });
 
   const load = useCallback(async () => {
     try {
@@ -36,9 +44,18 @@ export default function StudentsPage() {
       const payload = { ...form };
       if (!payload.section_id) delete payload.section_id;
       if (!payload.parent_user_id) delete payload.parent_user_id;
-      await studentApi.create(payload);
-      msg("Student admitted.");
-      setForm({ first_name: "", last_name: "", class_id: "", section_id: "", parent_user_id: "" });
+      const hasEmail = payload.login_email?.trim();
+      const hasPwd = payload.login_password?.trim();
+      if (!!hasEmail !== !!hasPwd) {
+        throw new Error("Provide both login email and password, or leave both blank.");
+      }
+      if (!hasEmail) {
+        delete payload.login_email;
+        delete payload.login_password;
+      }
+      const res = await studentApi.create(payload);
+      msg(res?.login_created ? `Student admitted with login (${res.login_email}).` : "Student admitted.");
+      setForm({ first_name: "", last_name: "", class_id: "", section_id: "", parent_user_id: "", login_email: "", login_password: "" });
       load();
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
@@ -74,6 +91,20 @@ export default function StudentsPage() {
               </select>
             </div>
             <div className="form-group"><label>Parent User ID (optional)</label><input name="parent_user_id" value={form.parent_user_id} onChange={field} placeholder="UUID of parent user" /></div>
+          </div>
+          <div className="card-title" style={{ marginTop: 16 }}>Pupil Login (optional)</div>
+          <p className="text-sm text-muted" style={{ marginTop: -8, marginBottom: 8 }}>
+            Provide both fields to give the pupil a login at admission. Leave blank to admit without a login.
+          </p>
+          <div className="grid-2">
+            <div className="form-group">
+              <label>Login Email</label>
+              <input type="email" name="login_email" value={form.login_email} onChange={field} placeholder="pupil@school.edu" autoComplete="off" />
+            </div>
+            <div className="form-group">
+              <label>Initial Password</label>
+              <input type="password" name="login_password" value={form.login_password} onChange={field} placeholder="min 6 characters" autoComplete="new-password" />
+            </div>
           </div>
           <div className="btn-row"><button className="btn btn-primary" disabled={busy}>{busy ? "Admitting..." : "Admit Student"}</button></div>
         </form>

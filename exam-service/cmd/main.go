@@ -57,6 +57,7 @@ func main() {
 		protected.POST("/exams", middleware.RequirePermission("create_exam"), h.CreateExam)
 		protected.POST("/marks", middleware.RequirePermission("enter_marks"), h.EnterMarks)
 		protected.POST("/results/publish", middleware.RequirePermission("publish_results"), h.PublishResults)
+		protected.GET("/results/me", middleware.RequirePermission("view_own_results"), h.GetMyResults)
 		protected.GET("/results", middleware.RequirePermission("view_results"), h.GetResults)
 	}
 

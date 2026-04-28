@@ -59,6 +59,7 @@ func main() {
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
 		protected.POST("/students", middleware.RequirePermission("admit_student"), h.CreateStudent)
+		protected.GET("/students/me", middleware.RequirePermission("view_own_profile"), h.GetMyStudentRecord)
 		protected.GET("/students", middleware.RequirePermission("view_students"), h.GetStudents)
 		protected.PATCH("/students/:id", middleware.RequirePermission("update_student"), h.UpdateStudent)
 	}

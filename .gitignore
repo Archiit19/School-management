@@ -16,6 +16,9 @@ yarn-error.log*
 .env
 .env.*
 
+# Local secrets (copy from CREDENTIALS.local.example.md)
+CREDENTIALS.local.md
+
 # IDE / OS
 .DS_Store
 .vscode/

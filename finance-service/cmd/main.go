@@ -56,6 +56,7 @@ func main() {
 	{
 		protected.POST("/fees", middleware.RequirePermission("create_fee"), h.CreateFee)
 		protected.POST("/payments", middleware.RequirePermission("record_payment"), h.RecordPayment)
+		protected.GET("/dues/me", middleware.RequirePermission("view_own_dues"), h.GetMyDues)
 		protected.GET("/dues", middleware.RequirePermission("view_dues"), h.GetDues)
 	}
 

@@ -207,6 +207,7 @@ services:
       DB_NAME: academic_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       AUTH_SERVICE_URL: http://auth-service:8081
+      STUDENT_SERVICE_URL: http://student-service:8084
       PORT: 8083
     depends_on:
       academic-db:
@@ -231,6 +232,7 @@ services:
       JWT_SECRET: super-secret-jwt-key-change-in-production
       AUTH_SERVICE_URL: http://auth-service:8081
       ACADEMIC_SERVICE_URL: http://academic-service:8083
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8084
     depends_on:
       student-db:

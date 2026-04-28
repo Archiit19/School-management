@@ -124,6 +124,83 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// GetMyAttendance godoc
+// @Summary      My attendance (pupil portal)
+// @Description  Lists attendance for the JWT student_id only — student_id query param is ignored / overridden.
+// @Tags         Attendance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        page       query     int     false  "Page"
+// @Param        limit      query     int     false  "Limit"
+// @Param        date       query     string  false  "Date (YYYY-MM-DD)"
+// @Param        class_id   query     string  false  "Class ID"
+// @Param        section_id query     string  false  "Section ID"
+// @Param        subject_id query     string  false  "Subject ID"
+// @Param        status     query     string  false  "Attendance status"
+// @Success      200        {object}  model.AttendanceListResponse
+// @Failure      400        {object}  model.ErrorResponse
+// @Failure      403        {object}  model.ErrorResponse
+// @Router       /attendance/me [get]
+func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	var query model.AttendanceQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	query.StudentID = studentID.String()
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	resp, err := h.svc.GetAttendance(schoolID, query)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// GetMyAttendanceStats godoc
+// @Summary      My attendance stats (pupil portal)
+// @Description  Calculates attendance percentages for the JWT student_id only.
+// @Tags         Attendance
+// @Produce      json
+// @Security     BearerAuth
+// @Param        start_date query     string  false  "Start date (YYYY-MM-DD)"
+// @Param        end_date   query     string  false  "End date (YYYY-MM-DD)"
+// @Success      200        {object}  model.AttendanceStatsResponse
+// @Failure      400        {object}  model.ErrorResponse
+// @Failure      403        {object}  model.ErrorResponse
+// @Router       /attendance/me/stats [get]
+func (h *AttendanceHandler) GetMyAttendanceStats(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	var query model.AttendanceStatsQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	query.StudentID = studentID.String()
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	resp, err := h.svc.GetAttendanceStats(schoolID, query)
+	if err != nil {
+		writeErr(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // UpdateAttendance godoc
 // @Summary      Edit attendance
 // @Description  Update attendance status or remarks for a record.
