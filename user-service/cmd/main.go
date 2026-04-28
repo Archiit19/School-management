@@ -65,6 +65,8 @@ var predefinedPermissions = []struct {
 	{"create_fee", "Create fee structures"},
 	{"record_payment", "Record fee payments"},
 	{"view_dues", "View outstanding dues"},
+	{"manage_transport", "Manage vehicles, routes, stops, and student transport assignments"},
+	{"view_transport", "View transport information (routes, stops, vehicles)"},
 }
 
 func seedPermissions(db *gorm.DB) {

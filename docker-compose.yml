@@ -142,6 +142,26 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # PostgreSQL for Transport Service
+  # ──────────────────────────────────────
+  transport-db:
+    image: postgres:16-alpine
+    container_name: transport-db
+    environment:
+      POSTGRES_USER: transport_user
+      POSTGRES_PASSWORD: transport_pass
+      POSTGRES_DB: transport_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - transport_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U transport_user -d transport_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -310,6 +330,28 @@ services:
       finance-db:
         condition: service_healthy
 
+  # ──────────────────────────────────────
+  # Transport Service
+  # ──────────────────────────────────────
+  transport-service:
+    build:
+      context: ./transport-service
+      dockerfile: Dockerfile
+    container_name: transport-service
+    ports:
+      - "8088:8088"
+    environment:
+      DB_HOST: transport-db
+      DB_PORT: 5432
+      DB_USER: transport_user
+      DB_PASSWORD: transport_pass
+      DB_NAME: transport_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      PORT: 8088
+    depends_on:
+      transport-db:
+        condition: service_healthy
+
 volumes:
   auth_db_data:
   user_db_data:
@@ -318,3 +360,4 @@ volumes:
   attendance_db_data:
   exam_db_data:
   finance_db_data:
+  transport_db_data:
