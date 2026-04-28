@@ -12,6 +12,7 @@ const NAV = [
   { to: "/assignments", icon: "file-text", label: "Assignments", perms: ["create_assignment", "view_assignments", "submit_assignment"] },
   { to: "/exams", icon: "clipboard", label: "Exams & Results", perms: ["create_exam", "enter_marks", "publish_results", "view_results"] },
   { to: "/finance", icon: "dollar-sign", label: "Finance", perms: ["create_fee", "record_payment", "view_dues"] },
+  { to: "/transport", icon: "truck", label: "Transport", perms: ["manage_transport", "view_transport"] },
 ];
 
 function Icon({ name }) {

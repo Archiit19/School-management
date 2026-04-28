@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { authApi, rolesApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
+import { authApi, rolesApi, academicApi, studentApi, attendanceApi, examApi, financeApi, transportApi } from "../api/client";
 
 const SERVICES = [
   { name: "Auth", fn: authApi.health, port: 8081 },
@@ -10,6 +10,7 @@ const SERVICES = [
   { name: "Attendance", fn: attendanceApi.health, port: 8085 },
   { name: "Exam", fn: examApi.health, port: 8086 },
   { name: "Finance", fn: financeApi.health, port: 8087 },
+  { name: "Transport", fn: transportApi.health, port: 8088 },
 ];
 
 export default function DashboardPage() {

@@ -6,6 +6,7 @@ const SERVICES = {
   attendance: "/api/attendance",
   exams: "/api/exams",
   finance: "/api/finance",
+  transport: "/api/transport",
 };
 
 function getToken() {
@@ -142,4 +143,32 @@ export const financeApi = {
   recordPayment: (body) => request("finance", "/payments", { method: "POST", body }),
   getDues: (query) => request("finance", "/dues", { query }),
   health: () => request("finance", "/health"),
+};
+
+export const transportApi = {
+  // Vehicles
+  createVehicle: (body) => request("transport", "/vehicles", { method: "POST", body }),
+  getVehicles: (query) => request("transport", "/vehicles", { query }),
+  getVehicle: (id) => request("transport", `/vehicles/${id}`),
+  updateVehicle: (id, body) => request("transport", `/vehicles/${id}`, { method: "PATCH", body }),
+  deleteVehicle: (id) => request("transport", `/vehicles/${id}`, { method: "DELETE" }),
+  // Routes
+  createRoute: (body) => request("transport", "/routes", { method: "POST", body }),
+  getRoutes: (query) => request("transport", "/routes", { query }),
+  getRoute: (id) => request("transport", `/routes/${id}`),
+  updateRoute: (id, body) => request("transport", `/routes/${id}`, { method: "PATCH", body }),
+  deleteRoute: (id) => request("transport", `/routes/${id}`, { method: "DELETE" }),
+  // Stops
+  createStop: (body) => request("transport", "/stops", { method: "POST", body }),
+  getStops: (query) => request("transport", "/stops", { query }),
+  getStop: (id) => request("transport", `/stops/${id}`),
+  updateStop: (id, body) => request("transport", `/stops/${id}`, { method: "PATCH", body }),
+  deleteStop: (id) => request("transport", `/stops/${id}`, { method: "DELETE" }),
+  // Student Transport
+  assignStudent: (body) => request("transport", "/student-transport", { method: "POST", body }),
+  getStudentTransports: (query) => request("transport", "/student-transport", { query }),
+  getStudentTransport: (id) => request("transport", `/student-transport/${id}`),
+  updateStudentTransport: (id, body) => request("transport", `/student-transport/${id}`, { method: "PATCH", body }),
+  deleteStudentTransport: (id) => request("transport", `/student-transport/${id}`, { method: "DELETE" }),
+  health: () => request("transport", "/health"),
 };

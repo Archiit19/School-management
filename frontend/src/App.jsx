@@ -12,6 +12,7 @@ import AttendancePage from "./pages/AttendancePage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import ExamsPage from "./pages/ExamsPage";
 import FinancePage from "./pages/FinancePage";
+import TransportPage from "./pages/TransportPage";
 
 function ProtectedRoute({ children }) {
   const { token, loading } = useAuth();
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="assignments" element={<RequirePerm any={["create_assignment", "view_assignments", "submit_assignment"]}><AssignmentsPage /></RequirePerm>} />
             <Route path="exams" element={<RequirePerm any={["create_exam", "enter_marks", "publish_results", "view_results"]}><ExamsPage /></RequirePerm>} />
             <Route path="finance" element={<RequirePerm any={["create_fee", "record_payment", "view_dues"]}><FinancePage /></RequirePerm>} />
+            <Route path="transport" element={<RequirePerm any={["manage_transport", "view_transport"]}><TransportPage /></RequirePerm>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

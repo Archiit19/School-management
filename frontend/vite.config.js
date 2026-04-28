@@ -41,6 +41,11 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/finance/, ""),
       },
+      "/api/transport": {
+        target: "http://localhost:8088",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/api\/transport/, ""),
+      },
     },
   },
 });
