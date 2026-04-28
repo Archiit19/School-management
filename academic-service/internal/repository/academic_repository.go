@@ -173,3 +173,14 @@ func (r *AcademicRepository) GetSubmissionByComposite(
 func (r *AcademicRepository) CreateSubmission(submission *model.Submission) error {
 	return r.db.Create(submission).Error
 }
+
+func (r *AcademicRepository) GetSubmissionsForStudent(
+	schoolID, studentID uuid.UUID,
+) ([]model.Submission, error) {
+	var submissions []model.Submission
+	err := r.db.
+		Where("school_id = ? AND student_id = ?", schoolID, studentID).
+		Order("created_at desc").
+		Find(&submissions).Error
+	return submissions, err
+}

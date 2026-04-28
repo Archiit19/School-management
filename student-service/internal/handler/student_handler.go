@@ -81,6 +81,33 @@ func (h *StudentHandler) GetStudents(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// GetMyStudentRecord godoc
+// @Summary      My student record (pupil portal)
+// @Description  Returns the student row linked to the JWT student_id claim. Pupils only.
+// @Tags         Students
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  model.Student
+// @Failure      403  {object}  model.ErrorResponse
+// @Failure      404  {object}  model.ErrorResponse
+// @Router       /students/me [get]
+func (h *StudentHandler) GetMyStudentRecord(c *gin.Context) {
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	student, err := h.svc.GetStudentMe(schoolID, studentID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, student)
+}
+
 // UpdateStudent godoc
 // @Summary      Update student
 // @Description  Update student details, class/section assignment, and parent link.

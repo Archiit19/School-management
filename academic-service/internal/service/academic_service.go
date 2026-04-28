@@ -299,6 +299,86 @@ func (s *AcademicService) GetAssignments(
 	return assignments, nil
 }
 
+// GetMyAssignments resolves the pupil's class via student-service then lists assignments for that class only.
+func (s *AcademicService) GetMyAssignments(
+	schoolID, studentID uuid.UUID,
+	authHeader string,
+) ([]model.Assignment, error) {
+	if strings.TrimSpace(authHeader) == "" {
+		return nil, errors.New("missing authorization header")
+	}
+	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to resolve student profile from student-service")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
+	}
+
+	var st struct {
+		ID      uuid.UUID `json:"id"`
+		ClassID uuid.UUID `json:"class_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		return nil, errors.New("failed to decode student profile response")
+	}
+	if st.ID != studentID {
+		return nil, errors.New("student profile mismatch with authenticated session")
+	}
+
+	return s.GetAssignments(schoolID, model.AssignmentQuery{ClassID: st.ClassID.String()})
+}
+
+func (s *AcademicService) GetMySubmissions(schoolID, studentID uuid.UUID) ([]model.Submission, error) {
+	subs, err := s.repo.GetSubmissionsForStudent(schoolID, studentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch submissions: %w", err)
+	}
+	return subs, nil
+}
+
+// CreateOwnSubmission lets a pupil submit; student_id and submitted_by are forced from JWT.
+func (s *AcademicService) CreateOwnSubmission(
+	req model.CreateMySubmissionRequest,
+	schoolID, studentID uuid.UUID,
+) (*model.Submission, error) {
+	assignmentID, err := uuid.Parse(req.AssignmentID)
+	if err != nil {
+		return nil, errors.New("invalid assignment_id")
+	}
+
+	if _, err := s.repo.GetAssignmentByIDAndSchool(assignmentID, schoolID); err != nil {
+		return nil, errors.New("assignment not found")
+	}
+
+	if _, err := s.repo.GetSubmissionByComposite(schoolID, assignmentID, studentID); err == nil {
+		return nil, errors.New("submission already exists for this assignment")
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate submission uniqueness: %w", err)
+	}
+
+	submission := &model.Submission{
+		SchoolID:     schoolID,
+		AssignmentID: assignmentID,
+		StudentID:    studentID,
+		SubmittedBy:  studentID,
+		Content:      req.Content,
+		MaterialURL:  req.MaterialURL,
+	}
+	if err := s.repo.CreateSubmission(submission); err != nil {
+		return nil, fmt.Errorf("failed to create submission: %w", err)
+	}
+	return submission, nil
+}
+
 func (s *AcademicService) CreateSubmission(
 	req model.CreateSubmissionRequest,
 	schoolID, submittedBy uuid.UUID,

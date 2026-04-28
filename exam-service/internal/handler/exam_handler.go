@@ -134,3 +134,39 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, results)
 }
+
+// GetMyResults godoc
+// @Summary      My exam results (pupil portal)
+// @Description  Returns published results for the JWT student_id only — student_id query param is ignored.
+// @Tags         Results
+// @Produce      json
+// @Security     BearerAuth
+// @Param        exam_id   query     string  false  "Exam ID"
+// @Param        class_id  query     string  false  "Class ID"
+// @Success      200       {array}   model.ResultItem
+// @Failure      400       {object}  model.ErrorResponse
+// @Failure      403       {object}  model.ErrorResponse
+// @Router       /results/me [get]
+func (h *ExamHandler) GetMyResults(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+
+	var query model.ResultQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	query.StudentID = studentID.String()
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	results, err := h.svc.GetResults(schoolID, query, "student")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, results)
+}

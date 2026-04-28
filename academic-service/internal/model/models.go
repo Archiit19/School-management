@@ -128,6 +128,13 @@ type CreateSubmissionRequest struct {
 	MaterialURL  string `json:"material_url"`
 }
 
+// CreateMySubmissionRequest is the pupil-portal payload — student_id is forced from JWT.
+type CreateMySubmissionRequest struct {
+	AssignmentID string `json:"assignment_id" binding:"required,uuid"`
+	Content      string `json:"content"`
+	MaterialURL  string `json:"material_url"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error" example:"something went wrong"`
 }

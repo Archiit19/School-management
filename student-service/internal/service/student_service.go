@@ -110,6 +110,20 @@ func (s *StudentService) GetStudents(
 	}, nil
 }
 
+func (s *StudentService) GetStudentMe(schoolID, studentID uuid.UUID) (*model.Student, error) {
+	student, err := s.repo.GetStudentByIDAndSchoolID(studentID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("student not found")
+		}
+		return nil, fmt.Errorf("failed to fetch student: %w", err)
+	}
+	if !student.IsActive {
+		return nil, errors.New("student account inactive")
+	}
+	return student, nil
+}
+
 func (s *StudentService) UpdateStudent(
 	id uuid.UUID,
 	req model.UpdateStudentRequest,

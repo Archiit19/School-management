@@ -48,5 +48,18 @@
       "mark_own_teacher_attendance",
       "view_teacher_attendance"
     ]
+  },
+  {
+    "name": "student",
+    "description": "Pupil portal — only own data; requires auth user linked via student_id",
+    "permissions": [
+      "view_own_profile",
+      "view_own_attendance",
+      "view_own_results",
+      "view_own_assignments",
+      "view_own_submissions",
+      "submit_own_assignment",
+      "view_own_dues"
+    ]
   }
 ]

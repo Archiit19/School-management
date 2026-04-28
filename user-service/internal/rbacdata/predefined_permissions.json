@@ -27,5 +27,12 @@
   {"name": "view_results", "description": "View exam results"},
   {"name": "create_fee", "description": "Create fee structures"},
   {"name": "record_payment", "description": "Record fee payments"},
-  {"name": "view_dues", "description": "View outstanding dues"}
+  {"name": "view_dues", "description": "View outstanding dues"},
+  {"name": "view_own_profile", "description": "Pupil reads their own admission profile"},
+  {"name": "view_own_attendance", "description": "Pupil reads their own attendance only"},
+  {"name": "view_own_results", "description": "Pupil reads their own published exam results only"},
+  {"name": "view_own_assignments", "description": "Pupil reads assignments for their own class only"},
+  {"name": "view_own_submissions", "description": "Pupil reads their own submissions only"},
+  {"name": "submit_own_assignment", "description": "Pupil submits work for themselves (student_id from JWT)"},
+  {"name": "view_own_dues", "description": "Pupil reads their own outstanding dues only"}
 ]

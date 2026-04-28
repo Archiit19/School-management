@@ -156,6 +156,9 @@ func (s *AuthService) generateToken(user *model.User, roleName string, permissio
 		"exp":         time.Now().Add(24 * time.Hour).Unix(),
 		"iat":         time.Now().Unix(),
 	}
+	if user.StudentID != nil {
+		claims["student_id"] = user.StudentID.String()
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.cfg.JWTSecret))
