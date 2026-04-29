@@ -159,6 +159,7 @@ services:
       DB_NAME: auth_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
+      STUDENT_SERVICE_URL: http://student-service:8084
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8081
     depends_on:

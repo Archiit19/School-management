@@ -24,6 +24,26 @@ func (r *ExamRepository) GetExamByIDAndSchool(examID, schoolID uuid.UUID) (*mode
 	return &exam, err
 }
 
+func (r *ExamRepository) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]model.Exam, error) {
+	var exams []model.Exam
+	q := r.db.Where("school_id = ?", schoolID)
+
+	if query.ClassID != "" {
+		q = q.Where("class_id = ?", query.ClassID)
+	}
+	if query.SubjectID != "" {
+		q = q.Where("subject_id = ?", query.SubjectID)
+	}
+	if query.Published == "true" {
+		q = q.Where("is_published = ?", true)
+	} else if query.Published == "false" {
+		q = q.Where("is_published = ?", false)
+	}
+
+	err := q.Order("exam_date desc, created_at desc").Find(&exams).Error
+	return exams, err
+}
+
 func (r *ExamRepository) UpdateExam(exam *model.Exam) error {
 	return r.db.Save(exam).Error
 }
@@ -40,6 +60,18 @@ func (r *ExamRepository) CreateMark(mark *model.Mark) error {
 
 func (r *ExamRepository) UpdateMark(mark *model.Mark) error {
 	return r.db.Save(mark).Error
+}
+
+func (r *ExamRepository) GetExamsForStudent(schoolID, classID uuid.UUID, sectionID *uuid.UUID) ([]model.Exam, error) {
+	var exams []model.Exam
+	q := r.db.Where("school_id = ? AND class_id = ?", schoolID, classID)
+
+	if sectionID != nil {
+		q = q.Where("(section_id IS NULL OR section_id = ?)", *sectionID)
+	}
+
+	err := q.Order("exam_date desc, created_at desc").Find(&exams).Error
+	return exams, err
 }
 
 func (r *ExamRepository) GetResults(

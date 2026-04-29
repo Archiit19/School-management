@@ -59,6 +59,12 @@ type ResultQuery struct {
 	ClassID   string `form:"class_id"`
 }
 
+type ExamQuery struct {
+	ClassID   string `form:"class_id"`
+	SubjectID string `form:"subject_id"`
+	Published string `form:"published"`
+}
+
 type ResultItem struct {
 	ExamID        uuid.UUID `json:"exam_id"`
 	ExamTitle     string    `json:"exam_title"`

@@ -32,7 +32,13 @@ export default function StudentsPage() {
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
-  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
+  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+
+  const classMap = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
+  const sectionMap = Object.fromEntries(flatSections.map((s) => [s.id, s.name]));
+
+  const formSections = form.class_id ? flatSections.filter((s) => s.class_id === form.class_id) : [];
+  const querySections = query.class_id ? flatSections.filter((s) => s.class_id === query.class_id) : flatSections;
 
   function field(e) { setForm((p) => ({ ...p, [e.target.name]: e.target.value })); }
 
@@ -78,16 +84,16 @@ export default function StudentsPage() {
             <div className="form-group"><label>Last Name</label><input name="last_name" required value={form.last_name} onChange={field} placeholder="Doe" /></div>
             <div className="form-group">
               <label>Class</label>
-              <select name="class_id" required value={form.class_id} onChange={field}>
+              <select name="class_id" required value={form.class_id} onChange={(e) => setForm((p) => ({ ...p, class_id: e.target.value, section_id: "" }))}>
                 <option value="">Select class...</option>
                 {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label>Section (optional)</label>
-              <select name="section_id" value={form.section_id} onChange={field}>
+              <select name="section_id" value={form.section_id} onChange={field} disabled={!form.class_id}>
                 <option value="">Any</option>
-                {flatSections.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
+                {formSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="form-group"><label>Parent User ID (optional)</label><input name="parent_user_id" value={form.parent_user_id} onChange={field} placeholder="UUID of parent user" /></div>
@@ -116,29 +122,29 @@ export default function StudentsPage() {
           <div className="form-group"><label>Search</label><input placeholder="Name..." value={query.search} onChange={(e) => setQuery((q) => ({ ...q, search: e.target.value, page: 1 }))} /></div>
           <div className="form-group">
             <label>Class</label>
-            <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, page: 1 }))}>
+            <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, section_id: "", page: 1 }))}>
               <option value="">All</option>
               {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="form-group">
             <label>Section</label>
-            <select value={query.section_id} onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value, page: 1 }))}>
+            <select value={query.section_id} onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value, page: 1 }))} disabled={!query.class_id}>
               <option value="">All</option>
-              {flatSections.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
+              {querySections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Class ID</th><th>Section ID</th><th>Active</th><th>Student ID</th></tr></thead>
+            <thead><tr><th>Name</th><th>Class</th><th>Section</th><th>Active</th><th>Student ID</th></tr></thead>
             <tbody>
               {students.length === 0 && <tr><td colSpan={5} className="empty">No students found.</td></tr>}
               {students.map((s) => (
                 <tr key={s.id}>
                   <td>{s.first_name} {s.last_name}</td>
-                  <td><span className="mono truncate">{s.class_id}</span></td>
-                  <td><span className="mono truncate">{s.section_id || "—"}</span></td>
+                  <td>{classMap[s.class_id] || s.class_id}</td>
+                  <td>{s.section_id ? (sectionMap[s.section_id] || s.section_id) : "—"}</td>
                   <td><span className={`status ${s.is_active ? "status-active" : "status-inactive"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
                   <td><span className="mono truncate">{s.id}</span></td>
                 </tr>

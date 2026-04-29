@@ -143,6 +143,28 @@ func (s *ExamService) PublishResults(
 	return exam, nil
 }
 
+func (s *ExamService) GetExams(
+	schoolID uuid.UUID,
+	query model.ExamQuery,
+) ([]model.Exam, error) {
+	exams, err := s.repo.GetExams(schoolID, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch exams: %w", err)
+	}
+	return exams, nil
+}
+
+func (s *ExamService) GetMyExams(
+	schoolID, classID uuid.UUID,
+	sectionID *uuid.UUID,
+) ([]model.Exam, error) {
+	exams, err := s.repo.GetExamsForStudent(schoolID, classID, sectionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch exams: %w", err)
+	}
+	return exams, nil
+}
+
 func (s *ExamService) GetResults(
 	schoolID uuid.UUID,
 	query model.ResultQuery,

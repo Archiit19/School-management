@@ -158,10 +158,37 @@ func (s *AuthService) generateToken(user *model.User, roleName string, permissio
 	}
 	if user.StudentID != nil {
 		claims["student_id"] = user.StudentID.String()
+		if student := s.fetchStudentDetails(*user.StudentID); student != nil {
+			claims["class_id"] = student.ClassID
+			if student.SectionID != "" {
+				claims["section_id"] = student.SectionID
+			}
+		}
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString([]byte(s.cfg.JWTSecret))
+}
+
+type studentInfo struct {
+	ClassID   string `json:"class_id"`
+	SectionID string `json:"section_id"`
+}
+
+func (s *AuthService) fetchStudentDetails(studentID uuid.UUID) *studentInfo {
+	url := fmt.Sprintf("%s/internal/students/%s", s.cfg.StudentServiceURL, studentID.String())
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var student studentInfo
+	if err := json.NewDecoder(resp.Body).Decode(&student); err != nil {
+		return nil
+	}
+	return &student
 }
 
 // ─── Inter-Service: Bootstrap school RBAC ────────────────────────────

@@ -69,7 +69,7 @@ WHERE p.name IN (
   'mark_attendance', 'view_attendance',
   'view_students', 'update_student',
   'create_assignment', 'view_assignments', 'submit_assignment',
-  'create_exam', 'enter_marks', 'publish_results', 'view_results'
+  'create_exam', 'view_exams', 'enter_marks', 'publish_results', 'view_results'
 )
 AND NOT EXISTS (
   SELECT 1 FROM role_permissions rp

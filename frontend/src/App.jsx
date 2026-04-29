@@ -57,12 +57,12 @@ export default function App() {
             <Route path="teacher-assignments" element={<RequirePerm any={["assign_teacher"]}><TeacherAssignmentsPage /></RequirePerm>} />
             <Route path="attendance" element={<RequirePerm any={["mark_attendance", "view_attendance", "mark_teacher_attendance", "view_teacher_attendance", "mark_own_teacher_attendance"]}><AttendancePage /></RequirePerm>} />
             <Route path="assignments" element={<RequirePerm any={["create_assignment", "view_assignments", "submit_assignment"]}><AssignmentsPage /></RequirePerm>} />
-            <Route path="exams" element={<RequirePerm any={["create_exam", "enter_marks", "publish_results", "view_results"]}><ExamsPage /></RequirePerm>} />
+            <Route path="exams" element={<RequirePerm any={["create_exam", "view_exams", "enter_marks", "publish_results", "view_results"]}><ExamsPage /></RequirePerm>} />
             <Route path="finance" element={<RequirePerm any={["create_fee", "record_payment", "view_dues"]}><FinancePage /></RequirePerm>} />
             <Route
               path="me"
               element={
-                <RequirePerm any={["view_own_profile", "view_own_attendance", "view_own_results", "view_own_assignments", "view_own_dues"]}>
+                <RequirePerm any={["view_own_profile", "view_own_attendance", "view_own_exams", "view_own_results", "view_own_assignments", "view_own_dues"]}>
                   <MyPortalPage />
                 </RequirePerm>
               }
