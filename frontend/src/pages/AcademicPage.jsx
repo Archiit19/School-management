@@ -39,7 +39,9 @@ export default function AcademicPage() {
   }
 
   const flatClasses = classes.map((c) => c.class || c);
-  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
+  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+
+  const subjectFormSections = subjectForm.class_id ? flatSections.filter((s) => s.class_id === subjectForm.class_id) : [];
 
   return (
     <>
@@ -133,16 +135,16 @@ export default function AcademicPage() {
             <div className="grid-4">
               <div className="form-group">
                 <label>Class</label>
-                <select required value={subjectForm.class_id} onChange={(e) => setSubjectForm((p) => ({ ...p, class_id: e.target.value }))}>
+                <select required value={subjectForm.class_id} onChange={(e) => setSubjectForm((p) => ({ ...p, class_id: e.target.value, section_id: "" }))}>
                   <option value="">Select class...</option>
                   {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>Section (optional)</label>
-                <select value={subjectForm.section_id} onChange={(e) => setSubjectForm((p) => ({ ...p, section_id: e.target.value }))}>
+                <select value={subjectForm.section_id} onChange={(e) => setSubjectForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!subjectForm.class_id}>
                   <option value="">Any section</option>
-                  {flatSections.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
+                  {subjectFormSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>Subject Name</label><input required value={subjectForm.name} onChange={(e) => setSubjectForm((p) => ({ ...p, name: e.target.value }))} placeholder="Mathematics" /></div>

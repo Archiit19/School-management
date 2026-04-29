@@ -195,6 +195,17 @@ func (s *StudentService) GetStudentMe(schoolID, studentID uuid.UUID) (*model.Stu
 	return student, nil
 }
 
+func (s *StudentService) GetStudentByID(studentID uuid.UUID) (*model.Student, error) {
+	student, err := s.repo.GetStudentByID(studentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("student not found")
+		}
+		return nil, fmt.Errorf("failed to fetch student: %w", err)
+	}
+	return student, nil
+}
+
 func (s *StudentService) UpdateStudent(
 	id uuid.UUID,
 	req model.UpdateStudentRequest,

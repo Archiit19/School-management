@@ -108,6 +108,31 @@ func (h *StudentHandler) GetMyStudentRecord(c *gin.Context) {
 	c.JSON(http.StatusOK, student)
 }
 
+// GetStudentByIDInternal godoc
+// @Summary      Get student by ID (internal)
+// @Description  Internal endpoint for service-to-service calls. Returns student details by ID.
+// @Tags         Internal
+// @Produce      json
+// @Param        id  path  string  true  "Student ID"
+// @Success      200  {object}  model.Student
+// @Failure      400  {object}  model.ErrorResponse
+// @Failure      404  {object}  model.ErrorResponse
+// @Router       /internal/students/{id} [get]
+func (h *StudentHandler) GetStudentByIDInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid student id"})
+		return
+	}
+
+	student, err := h.svc.GetStudentByID(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, student)
+}
+
 // UpdateStudent godoc
 // @Summary      Update student
 // @Description  Update student details, class/section assignment, and parent link.

@@ -11,6 +11,7 @@ import {
 const TABS = [
   { id: "profile", label: "Profile", perm: "view_own_profile" },
   { id: "attendance", label: "Attendance", perm: "view_own_attendance" },
+  { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "results", label: "Results", perm: "view_own_results" },
   { id: "assignments", label: "Assignments", perm: "view_own_assignments" },
   { id: "dues", label: "Dues", perm: "view_own_dues" },
@@ -56,6 +57,7 @@ export default function MyPortalPage() {
 
       {tab === "profile" && <ProfileTab />}
       {tab === "attendance" && <AttendanceTab />}
+      {tab === "exams" && <ExamsTab />}
       {tab === "results" && <ResultsTab />}
       {tab === "assignments" && <AssignmentsTab />}
       {tab === "dues" && <DuesTab />}
@@ -65,11 +67,18 @@ export default function MyPortalPage() {
 
 function ProfileTab() {
   const [me, setMe] = useState(null);
+  const [classes, setClasses] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     studentApi.getMe().then(setMe).catch((e) => setError(e.message));
+    academicApi.getClasses().then(setClasses).catch(() => {});
   }, []);
+
+  const flatClasses = classes.map((c) => c.class || c);
+  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
+  const classMap = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
+  const sectionMap = Object.fromEntries(flatSections.map((s) => [s.id, s.name]));
 
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!me) return <div className="empty">Loading...</div>;
@@ -97,12 +106,12 @@ function ProfileTab() {
           <input readOnly className="mono" value={me.id || ""} />
         </div>
         <div className="form-group">
-          <label>Class ID</label>
-          <input readOnly className="mono" value={me.class_id || ""} />
+          <label>Class</label>
+          <input readOnly value={classMap[me.class_id] || me.class_id || ""} />
         </div>
         <div className="form-group">
-          <label>Section ID</label>
-          <input readOnly className="mono" value={me.section_id || "—"} />
+          <label>Section</label>
+          <input readOnly value={me.section_id ? (sectionMap[me.section_id] || me.section_id) : "—"} />
         </div>
         <div className="form-group">
           <label>Admitted</label>
@@ -183,6 +192,71 @@ function AttendanceTab() {
                   <td>{fmtDate(a.date)}</td>
                   <td><span className={`status ${a.status === "present" ? "status-active" : a.status === "absent" ? "status-inactive" : ""}`}>{a.status}</span></td>
                   <td>{a.remarks || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ExamsTab() {
+  const [exams, setExams] = useState([]);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    examApi.getMyExams().then((e) => setExams(e || [])).catch((e) => setError(e.message));
+  }, []);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = exams.filter((e) => !e.is_published && e.exam_date?.slice(0, 10) >= today);
+  const completed = exams.filter((e) => e.is_published || e.exam_date?.slice(0, 10) < today);
+
+  return (
+    <>
+      {error && <div className="alert alert-error">{error}</div>}
+
+      <div className="card">
+        <div className="card-title">
+          Upcoming Exams <span className="badge badge-get">GET /exams/me</span>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Exam</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
+            <tbody>
+              {upcoming.length === 0 && <tr><td colSpan={4} className="empty">No upcoming exams.</td></tr>}
+              {upcoming.map((e) => (
+                <tr key={e.id}>
+                  <td><strong>{e.title}</strong></td>
+                  <td>{fmtDate(e.exam_date)}</td>
+                  <td>{e.total_marks}</td>
+                  <td><span className="status" style={{ background: "#fef3c7", color: "#92400e" }}>Upcoming</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-title">Completed Exams</div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Exam</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
+            <tbody>
+              {completed.length === 0 && <tr><td colSpan={4} className="empty">No completed exams.</td></tr>}
+              {completed.map((e) => (
+                <tr key={e.id}>
+                  <td><strong>{e.title}</strong></td>
+                  <td>{fmtDate(e.exam_date)}</td>
+                  <td>{e.total_marks}</td>
+                  <td>
+                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
+                      {e.is_published ? "Results Published" : "Awaiting Results"}
+                    </span>
+                  </td>
                 </tr>
               ))}
             </tbody>

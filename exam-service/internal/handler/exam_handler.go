@@ -17,6 +17,34 @@ func NewExamHandler(svc *service.ExamService) *ExamHandler {
 	return &ExamHandler{svc: svc}
 }
 
+// GetExams godoc
+// @Summary      List exams
+// @Description  Get all exams for the school with optional filters.
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Param        class_id    query     string  false  "Filter by Class ID"
+// @Param        subject_id  query     string  false  "Filter by Subject ID"
+// @Param        published   query     string  false  "Filter by published status (true/false)"
+// @Success      200         {array}   model.Exam
+// @Failure      400         {object}  model.ErrorResponse
+// @Router       /exams [get]
+func (h *ExamHandler) GetExams(c *gin.Context) {
+	var query model.ExamQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	exams, err := h.svc.GetExams(schoolID, query)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exams)
+}
+
 // CreateExam godoc
 // @Summary      Create exam
 // @Description  Create a new exam for class/subject.
@@ -133,6 +161,39 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, results)
+}
+
+// GetMyExams godoc
+// @Summary      My exams (pupil portal)
+// @Description  Returns all exams for the student's class (upcoming and completed).
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200       {array}   model.Exam
+// @Failure      400       {object}  model.ErrorResponse
+// @Failure      403       {object}  model.ErrorResponse
+// @Router       /exams/me [get]
+func (h *ExamHandler) GetMyExams(c *gin.Context) {
+	classIDVal, ok := c.Get("class_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	classID := classIDVal.(uuid.UUID)
+
+	var sectionID *uuid.UUID
+	if secVal, ok := c.Get("section_id"); ok {
+		sec := secVal.(uuid.UUID)
+		sectionID = &sec
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	exams, err := h.svc.GetMyExams(schoolID, classID, sectionID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exams)
 }
 
 // GetMyResults godoc

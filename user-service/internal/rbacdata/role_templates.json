@@ -17,6 +17,7 @@
       "view_assignments",
       "submit_assignment",
       "create_exam",
+      "view_exams",
       "enter_marks",
       "publish_results",
       "view_results",
@@ -55,6 +56,7 @@
     "permissions": [
       "view_own_profile",
       "view_own_attendance",
+      "view_own_exams",
       "view_own_results",
       "view_own_assignments",
       "view_own_submissions",
