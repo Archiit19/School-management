@@ -59,6 +59,16 @@ type ResultQuery struct {
 	ClassID   string `form:"class_id"`
 }
 
+// ExamQuery filters the GET /exams listing. `upcoming=true` returns only exams
+// whose exam_date is today or later. `published` (optional) filters by status.
+type ExamQuery struct {
+	ClassID   string `form:"class_id" binding:"omitempty,uuid"`
+	SectionID string `form:"section_id" binding:"omitempty,uuid"`
+	SubjectID string `form:"subject_id" binding:"omitempty,uuid"`
+	Upcoming  bool   `form:"upcoming"`
+	Published *bool  `form:"published"`
+}
+
 type ResultItem struct {
 	ExamID        uuid.UUID `json:"exam_id"`
 	ExamTitle     string    `json:"exam_title"`

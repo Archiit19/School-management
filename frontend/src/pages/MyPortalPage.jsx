@@ -10,6 +10,7 @@ import {
 
 const TABS = [
   { id: "profile", label: "Profile", perm: "view_own_profile" },
+  { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "attendance", label: "Attendance", perm: "view_own_attendance" },
   { id: "results", label: "Results", perm: "view_own_results" },
   { id: "assignments", label: "Assignments", perm: "view_own_assignments" },
@@ -55,10 +56,76 @@ export default function MyPortalPage() {
       </div>
 
       {tab === "profile" && <ProfileTab />}
+      {tab === "exams" && <ExamsTab />}
       {tab === "attendance" && <AttendanceTab />}
       {tab === "results" && <ResultsTab />}
       {tab === "assignments" && <AssignmentsTab />}
       {tab === "dues" && <DuesTab />}
+    </>
+  );
+}
+
+function ExamsTab() {
+  const [exams, setExams] = useState([]);
+  const [upcoming, setUpcoming] = useState(true);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setError(""); setLoading(true);
+    try {
+      const data = await examApi.getMyExams({ upcoming });
+      setExams(data || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [upcoming]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="card">
+        <div className="card-title">
+          Exam Schedule <span className="badge badge-get">GET /exams/me</span>
+        </div>
+        <div className="form-group" style={{ maxWidth: 280, marginBottom: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={upcoming}
+              onChange={(e) => setUpcoming(e.target.checked)}
+            />
+            Show only upcoming exams
+          </label>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Title</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
+            <tbody>
+              {loading && <tr><td colSpan={4} className="empty">Loading...</td></tr>}
+              {!loading && exams.length === 0 && (
+                <tr><td colSpan={4} className="empty">{upcoming ? "No upcoming exams scheduled." : "No exams found."}</td></tr>
+              )}
+              {!loading && exams.map((e) => (
+                <tr key={e.id}>
+                  <td><strong>{e.title}</strong></td>
+                  <td>{fmtDate(e.exam_date)}</td>
+                  <td>{e.total_marks}</td>
+                  <td>
+                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
+                      {e.is_published ? "Results Published" : "Scheduled"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </>
   );
 }

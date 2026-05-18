@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"time"
+
 	"github.com/avaneeshravat/school-management/exam-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -26,6 +28,37 @@ func (r *ExamRepository) GetExamByIDAndSchool(examID, schoolID uuid.UUID) (*mode
 
 func (r *ExamRepository) UpdateExam(exam *model.Exam) error {
 	return r.db.Save(exam).Error
+}
+
+// GetExams lists exams for a school with optional filters.
+// When `upcoming` is true, only exams scheduled for today or later are returned.
+// Results are ordered by exam_date ascending so callers see the next exam first.
+func (r *ExamRepository) GetExams(
+	schoolID uuid.UUID,
+	query model.ExamQuery,
+) ([]model.Exam, error) {
+	exams := make([]model.Exam, 0)
+	q := r.db.Model(&model.Exam{}).Where("school_id = ?", schoolID)
+
+	if query.ClassID != "" {
+		q = q.Where("class_id = ?", query.ClassID)
+	}
+	if query.SectionID != "" {
+		q = q.Where("section_id = ?", query.SectionID)
+	}
+	if query.SubjectID != "" {
+		q = q.Where("subject_id = ?", query.SubjectID)
+	}
+	if query.Upcoming {
+		today := time.Now().UTC().Truncate(24 * time.Hour)
+		q = q.Where("exam_date >= ?", today)
+	}
+	if query.Published != nil {
+		q = q.Where("is_published = ?", *query.Published)
+	}
+
+	err := q.Order("exam_date asc, created_at asc").Find(&exams).Error
+	return exams, err
 }
 
 func (r *ExamRepository) GetMarkByExamAndStudent(examID, studentID uuid.UUID) (*model.Mark, error) {

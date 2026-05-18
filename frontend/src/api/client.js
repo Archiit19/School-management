@@ -137,6 +137,8 @@ export const attendanceApi = {
 
 export const examApi = {
   createExam: (body) => request("exams", "/exams", { method: "POST", body }),
+  getExams: (query) => request("exams", "/exams", { query }),
+  getMyExams: (query) => request("exams", "/exams/me", { query }),
   enterMarks: (body) => request("exams", "/marks", { method: "POST", body }),
   publish: (body) => request("exams", "/results/publish", { method: "POST", body }),
   getResults: (query) => request("exams", "/results", { query }),

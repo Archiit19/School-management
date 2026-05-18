@@ -1,11 +1,14 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
+	"github.com/avaneeshravat/school-management/exam-service/internal/config"
 	"github.com/avaneeshravat/school-management/exam-service/internal/model"
 	"github.com/avaneeshravat/school-management/exam-service/internal/repository"
 	"github.com/google/uuid"
@@ -13,11 +16,17 @@ import (
 )
 
 type ExamService struct {
-	repo *repository.ExamRepository
+	repo       *repository.ExamRepository
+	cfg        *config.Config
+	httpClient *http.Client
 }
 
-func NewExamService(repo *repository.ExamRepository) *ExamService {
-	return &ExamService{repo: repo}
+func NewExamService(
+	repo *repository.ExamRepository,
+	cfg *config.Config,
+	httpClient *http.Client,
+) *ExamService {
+	return &ExamService{repo: repo, cfg: cfg, httpClient: httpClient}
 }
 
 func (s *ExamService) CreateExam(
@@ -141,6 +150,74 @@ func (s *ExamService) PublishResults(
 		return nil, fmt.Errorf("failed to publish results: %w", err)
 	}
 	return exam, nil
+}
+
+// GetExams lists exams for a school. When upcoming=true, only exams from today
+// onwards are returned.
+func (s *ExamService) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]model.Exam, error) {
+	exams, err := s.repo.GetExams(schoolID, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch exams: %w", err)
+	}
+	return exams, nil
+}
+
+// GetMyExams returns exams scheduled for the pupil's own class only.
+// It resolves the pupil's class_id and section_id by calling student-service /students/me
+// with the pupil's JWT, so spoofing another student is impossible.
+func (s *ExamService) GetMyExams(
+	schoolID, studentID uuid.UUID,
+	authHeader string,
+	upcoming bool,
+) ([]model.Exam, error) {
+	if strings.TrimSpace(authHeader) == "" {
+		return nil, errors.New("missing authorization header")
+	}
+	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to resolve student profile from student-service")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
+	}
+
+	var st struct {
+		ID        uuid.UUID  `json:"id"`
+		ClassID   uuid.UUID  `json:"class_id"`
+		SectionID *uuid.UUID `json:"section_id,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		return nil, errors.New("failed to decode student profile response")
+	}
+	if st.ID != studentID {
+		return nil, errors.New("student profile mismatch")
+	}
+
+	query := model.ExamQuery{
+		ClassID:  st.ClassID.String(),
+		Upcoming: upcoming,
+	}
+	exams, err := s.repo.GetExams(schoolID, query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch exams: %w", err)
+	}
+
+	// Keep only exams that target the student's section (or are class-wide).
+	filtered := make([]model.Exam, 0, len(exams))
+	for _, e := range exams {
+		if e.SectionID == nil || st.SectionID == nil || *e.SectionID == *st.SectionID {
+			filtered = append(filtered, e)
+		}
+	}
+	return filtered, nil
 }
 
 func (s *ExamService) GetResults(

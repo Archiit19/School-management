@@ -25,6 +25,8 @@
   {"name": "enter_marks", "description": "Enter or update exam marks"},
   {"name": "publish_results", "description": "Publish exam results"},
   {"name": "view_results", "description": "View exam results"},
+  {"name": "view_exams", "description": "View exam schedule for the school (admin/teacher)"},
+  {"name": "view_own_exams", "description": "Pupil reads exam schedule for their own class only"},
   {"name": "create_fee", "description": "Create fee structures"},
   {"name": "record_payment", "description": "Record fee payments"},
   {"name": "view_dues", "description": "View outstanding dues"},

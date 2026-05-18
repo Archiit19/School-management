@@ -3,79 +3,181 @@
 ## Prerequisites
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/) (running)
-- [curl](https://curl.se/) (for testing APIs)
+- [Node.js](https://nodejs.org/) 18+ (for the web UI)
+- [curl](https://curl.se/) (optional, for API testing)
 
 ---
 
-## 🚀 Start All Services
+## Access on the web (quick start)
+
+Run these from the project root (`school-management/`).
+
+### 1. Start all backend services
 
 ```bash
 docker compose up --build -d
 ```
 
-This starts **4 containers**:
-
-| Container        | Purpose                  | Port  |
-| ---------------- | ------------------------ | ----- |
-| `auth-db`        | PostgreSQL (Auth)        | 5433  |
-| `user-db`        | PostgreSQL (User)        | 5434  |
-| `auth-service`   | Auth & User Mgmt API     | 8081  |
-| `user-service`   | Roles & Permissions API  | 8082  |
-
-### Verify everything is running
+Wait until containers are healthy (about 30–60 seconds on first build):
 
 ```bash
 docker compose ps
-curl http://localhost:8081/health
-curl http://localhost:8082/health
+```
+
+### 2. Install frontend dependencies (first time only)
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 3. Start the web UI
+
+```bash
+cd frontend
+npm run dev
+```
+
+Vite prints the local URL, usually:
+
+| What | URL |
+|------|-----|
+| **Web app (login & UI)** | http://localhost:5173 |
+| Alternate if 5173 is busy | http://localhost:5174 |
+
+Open that URL in your browser. You should see the **login page**.
+
+### 4. Log in
+
+Use an account that already exists for your school, for example (see `CREDENTIALS.local.md` if you have one):
+
+| Role | Example email | Example password |
+|------|----------------|------------------|
+| Admin | `school1admin@school1.com` | `123456` |
+| Teacher | `school1teacher1@gmail.com` | `teacher1` |
+| Student | email set at admission (e.g. `student1@school.com`) | password set in “Pupil Login” on admit |
+
+**Student login:** the pupil must have been admitted with **Login Email** and **Initial Password** on the Students page. The email must match exactly what was saved.
+
+After login:
+
+- **Admin / teacher / staff** — sidebar shows Dashboard, Users, Academic, Students, Attendance, etc. (depends on role permissions).
+- **Student** — sidebar shows **Dashboard** and **My Portal** (`/me`) for profile, attendance, results, assignments, and dues.
+
+### 5. Stop when done
+
+```bash
+# Stop backend (from project root)
+docker compose down
+
+# Stop frontend: Ctrl+C in the terminal running npm run dev
 ```
 
 ---
 
-## 🛑 Stop / Reset
+## What runs where
+
+### Backend (Docker)
+
+| Container | Purpose | Host port |
+|-----------|---------|-----------|
+| `auth-db` | PostgreSQL (auth) | 5433 |
+| `user-db` | PostgreSQL (roles) | 5434 |
+| `academic-db` | PostgreSQL (academic) | 5435 |
+| `student-db` | PostgreSQL (students) | 5436 |
+| `attendance-db` | PostgreSQL (attendance) | 5437 |
+| `exam-db` | PostgreSQL (exams) | 5438 |
+| `finance-db` | PostgreSQL (finance) | 5439 |
+| `auth-service` | Login, users, JWT | **8081** |
+| `user-service` | Roles & permissions | **8082** |
+| `academic-service` | Classes, assignments | **8083** |
+| `student-service` | Student admission | **8084** |
+| `attendance-service` | Attendance | **8085** |
+| `exam-service` | Exams & results | **8086** |
+| `finance-service` | Fees & dues | **8087** |
+
+The frontend does **not** run in Docker. It proxies API calls to these ports (see `frontend/vite.config.js`).
+
+### Frontend → backend mapping (browser)
+
+The UI calls paths like `/api/auth/...`; Vite forwards them to localhost:
+
+| Browser path prefix | Backend |
+|---------------------|---------|
+| `/api/auth` | http://localhost:8081 |
+| `/api/users` | http://localhost:8082 |
+| `/api/academic` | http://localhost:8083 |
+| `/api/students` | http://localhost:8084 |
+| `/api/attendance` | http://localhost:8085 |
+| `/api/exams` | http://localhost:8086 |
+| `/api/finance` | http://localhost:8087 |
+
+**Login flow in the UI:** `POST /api/auth/auth/login` → then `GET /api/auth/auth/me` (see `frontend/src/api/client.js` and `frontend/src/context/AuthContext.jsx`).
+
+---
+
+## Verify backend is up
+
+```bash
+curl http://localhost:8081/health
+curl http://localhost:8082/health
+curl http://localhost:8083/health
+curl http://localhost:8084/health
+curl http://localhost:8085/health
+curl http://localhost:8086/health
+curl http://localhost:8087/health
+```
+
+Each should return a JSON status like `{"status":"...-service is running"}`.
+
+---
+
+## Swagger UI (API docs in browser)
+
+With Docker running, open:
+
+| Service | Swagger URL |
+|---------|-------------|
+| Auth | http://localhost:8081/swagger/index.html |
+| User | http://localhost:8082/swagger/index.html |
+| Academic | http://localhost:8083/swagger/index.html |
+| Student | http://localhost:8084/swagger/index.html |
+| Attendance | http://localhost:8085/swagger/index.html |
+| Exam | http://localhost:8086/swagger/index.html |
+| Finance | http://localhost:8087/swagger/index.html |
+
+---
+
+## Rebuild after code changes
+
+```bash
+# Rebuild all services
+docker compose up --build -d
+
+# Rebuild one service only (example)
+docker compose up --build auth-service -d
+```
+
+Frontend picks up changes automatically while `npm run dev` is running (hot reload). Restart dev server if you change `vite.config.js`.
+
+---
+
+## Stop / reset
 
 ```bash
 # Stop containers (data preserved)
 docker compose down
 
-# Stop AND wipe all data (fresh start)
+# Stop AND wipe all database data (fresh start)
 docker compose down -v
 ```
 
 ---
 
-## 📋 API Reference
+## First-time school (no account yet)
 
-### Auth Service (`localhost:8081`)
-
-| Method   | Endpoint                | Auth         | Description                        |
-| -------- | ----------------------- | ------------ | ---------------------------------- |
-| `POST`   | `/auth/register-school` | Public       | Register school + super admin      |
-| `POST`   | `/auth/login`           | Public       | Login → JWT token                  |
-| `GET`    | `/auth/me`              | Bearer token | Get current user profile           |
-| `POST`   | `/users`                | Admin only   | Create user (teacher/staff/parent) |
-| `GET`    | `/users`                | Admin only   | List users (filter + paginate)     |
-| `GET`    | `/users/:id`            | Admin only   | Get single user                    |
-| `PATCH`  | `/users/:id`            | Admin only   | Update user                        |
-| `DELETE` | `/users/:id`            | Admin only   | Delete user                        |
-
-### User Service (`localhost:8082`)
-
-| Method | Endpoint                           | Auth         | Description                   |
-| ------ | ---------------------------------- | ------------ | ----------------------------- |
-| `POST` | `/api/v1/roles`                    | Bearer token | Create role                   |
-| `GET`  | `/api/v1/roles`                    | Bearer token | List roles for your school    |
-| `GET`  | `/api/v1/roles/:id`               | Public       | Get role by ID                |
-| `POST` | `/api/v1/permissions`              | Bearer token | Create permission             |
-| `GET`  | `/api/v1/permissions`              | Bearer token | List all permissions          |
-| `POST` | `/api/v1/roles/assign-permission`  | Bearer token | Assign permission to a role   |
-| `GET`  | `/api/v1/roles/:id/permissions`    | Bearer token | Get permissions for a role    |
-
----
-
-## 🧪 Test the Full Flow (Copy-Paste Ready)
-
-### 1. Register a School
+If you have no school in the database, register via API (or implement register in UI later):
 
 ```bash
 curl -s -X POST http://localhost:8081/auth/register-school \
@@ -91,163 +193,65 @@ curl -s -X POST http://localhost:8081/auth/register-school \
   }'
 ```
 
-### 2. Login (save the token)
+Then log in on the web app with `john@springfield.edu` / `secret123`.
 
-```bash
-TOKEN=$(curl -s -X POST http://localhost:8081/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"john@springfield.edu","password":"secret123"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])")
-
-echo $TOKEN
-```
-
-> All commands below use `$TOKEN`. Run step 2 first in the same terminal.
-
-### 3. Get My Profile
-
-```bash
-curl -s http://localhost:8081/auth/me \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 4. Create a Role
-
-```bash
-curl -s -X POST http://localhost:8082/api/v1/roles \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"teacher","description":"Teacher role"}'
-```
-
-> Copy the role `id` from the response for step 5.
-
-### 5. Create a User (Teacher)
-
-```bash
-curl -s -X POST http://localhost:8081/users \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Jane Smith",
-    "email": "jane@springfield.edu",
-    "password": "teacher123",
-    "role_id": "<ROLE_ID_FROM_STEP_4>"
-  }'
-```
-
-### 6. List All Users
-
-```bash
-curl -s http://localhost:8081/users \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-**Filter options:**
-
-```bash
-# Only active users
-curl -s "http://localhost:8081/users?is_active=true" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Search by name or email
-curl -s "http://localhost:8081/users?search=jane" \
-  -H "Authorization: Bearer $TOKEN"
-
-# Filter by role + pagination
-curl -s "http://localhost:8081/users?role_id=<ROLE_ID>&page=1&limit=10" \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 7. Update a User
-
-```bash
-curl -s -X PATCH http://localhost:8081/users/<USER_ID> \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Jane Doe", "is_active": false}'
-```
-
-### 8. Delete a User
-
-```bash
-curl -s -X DELETE http://localhost:8081/users/<USER_ID> \
-  -H "Authorization: Bearer $TOKEN"
-```
-
-### 9. Create a Permission & Assign to Role
-
-```bash
-# Create permission
-curl -s -X POST http://localhost:8082/api/v1/permissions \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"name":"manage_students","description":"Can manage student records"}'
-
-# Assign to role
-curl -s -X POST http://localhost:8082/api/v1/roles/assign-permission \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"role_id":"<ROLE_ID>","permission_id":"<PERMISSION_ID>"}'
-
-# View role permissions
-curl -s http://localhost:8082/api/v1/roles/<ROLE_ID>/permissions \
-  -H "Authorization: Bearer $TOKEN"
-```
+Template roles (`super_admin`, `teacher`, `parent`, `staff`, `student`) are created automatically for the new school.
 
 ---
 
-## 🔧 Useful Commands
+## Admit a student with login (web)
+
+1. Log in as **admin**.
+2. Open **Academic Structure** — create at least one class.
+3. Open **Students** → **Admit Student**.
+4. Fill name, class, and under **Pupil Login (optional)** enter **Login Email** and **Initial Password** (both required to create a login).
+5. Pupil logs out; logs in with that email and password → opens **My Portal**.
+
+---
+
+## Useful commands
 
 ```bash
-# View logs for a specific service
-docker compose logs auth-service -f
-docker compose logs user-service -f
-
-# View all logs
+# View logs
 docker compose logs -f
+docker compose logs auth-service -f
+docker compose logs student-service -f
 
-# Restart a single service
+# Restart one service
 docker compose restart auth-service
 
-# Rebuild a single service
-docker compose up --build auth-service -d
-
-# Connect to a database directly
+# Connect to a database
 docker exec -it auth-db psql -U auth_user -d auth_db
-docker exec -it user-db psql -U user_user -d user_db
+docker exec -it student-db psql -U student_user -d student_db
 ```
 
 ---
 
-## 📂 Project Structure
+## More documentation
+
+- **Flows & all APIs:** `FLOWS_AND_APIS.md`
+- **Local credentials (if present):** `CREDENTIALS.local.md` (not committed; create your own)
+
+---
+
+## Project structure (overview)
 
 ```
 school-management/
-├── docker-compose.yml
-├── SETUP.md
-├── auth-service/               → Port 8081
-│   ├── Dockerfile
-│   ├── cmd/main.go
-│   └── internal/
-│       ├── config/config.go
-│       ├── model/models.go
-│       ├── repository/auth_repository.go
-│       ├── service/
-│       │   ├── auth_service.go
-│       │   └── user_management_service.go
-│       ├── handler/
-│       │   ├── auth_handler.go
-│       │   └── user_handler.go
-│       └── middleware/auth_middleware.go
-└── user-service/               → Port 8082
-    ├── Dockerfile
-    ├── cmd/main.go
-    └── internal/
-        ├── config/config.go
-        ├── model/models.go
-        ├── repository/user_repository.go
-        ├── service/user_service.go
-        ├── handler/user_handler.go
-        └── middleware/auth_middleware.go
+├── docker-compose.yml      # All backends + databases
+├── SETUP.md                # This file
+├── FLOWS_AND_APIS.md
+├── frontend/               # React + Vite (npm run dev → :5173)
+│   ├── src/
+│   │   ├── api/client.js   # API client + proxy paths
+│   │   ├── pages/          # Dashboard, Students, MyPortal, …
+│   │   └── components/Layout.jsx
+│   └── vite.config.js
+├── auth-service/           # :8081
+├── user-service/           # :8082
+├── academic-service/       # :8083
+├── student-service/        # :8084
+├── attendance-service/     # :8085
+├── exam-service/           # :8086
+└── finance-service/        # :8087
 ```

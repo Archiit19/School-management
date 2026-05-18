@@ -135,6 +135,69 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 	c.JSON(http.StatusOK, results)
 }
 
+// GetExams godoc
+// @Summary      List exams
+// @Description  List exams for the school. Supports filtering by class, section, subject, upcoming and published.
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Param        class_id    query     string  false  "Class ID (UUID)"
+// @Param        section_id  query     string  false  "Section ID (UUID)"
+// @Param        subject_id  query     string  false  "Subject ID (UUID)"
+// @Param        upcoming    query     bool    false  "Only exams scheduled for today or later"
+// @Param        published   query     bool    false  "Filter by publish status"
+// @Success      200         {array}   model.Exam
+// @Failure      400         {object}  model.ErrorResponse
+// @Router       /exams [get]
+func (h *ExamHandler) GetExams(c *gin.Context) {
+	var query model.ExamQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+
+	exams, err := h.svc.GetExams(schoolID, query)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exams)
+}
+
+// GetMyExams godoc
+// @Summary      My class's exam schedule (pupil portal)
+// @Description  Lists exams scheduled for the class linked to the JWT student_id.
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Param        upcoming  query     bool  false  "Only exams scheduled for today or later (defaults to true)"
+// @Success      200       {array}   model.Exam
+// @Failure      403       {object}  model.ErrorResponse
+// @Router       /exams/me [get]
+func (h *ExamHandler) GetMyExams(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	authHeader := c.GetHeader("Authorization")
+
+	upcoming := true
+	if v := c.Query("upcoming"); v == "false" || v == "0" {
+		upcoming = false
+	}
+
+	exams, err := h.svc.GetMyExams(schoolID, studentID, authHeader, upcoming)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exams)
+}
+
 // GetMyResults godoc
 // @Summary      My exam results (pupil portal)
 // @Description  Returns published results for the JWT student_id only — student_id query param is ignored.

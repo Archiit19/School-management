@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
+	"time"
 
 	"github.com/avaneeshravat/school-management/exam-service/internal/config"
 	"github.com/avaneeshravat/school-management/exam-service/internal/handler"
@@ -42,7 +44,8 @@ func main() {
 	log.Println("exam database migrated")
 
 	repo := repository.NewExamRepository(db)
-	svc := service.NewExamService(repo)
+	httpClient := &http.Client{Timeout: 8 * time.Second}
+	svc := service.NewExamService(repo, cfg, httpClient)
 	h := handler.NewExamHandler(svc)
 
 	r := gin.Default()
@@ -55,6 +58,8 @@ func main() {
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
 		protected.POST("/exams", middleware.RequirePermission("create_exam"), h.CreateExam)
+		protected.GET("/exams/me", middleware.RequirePermission("view_own_exams"), h.GetMyExams)
+		protected.GET("/exams", middleware.RequirePermission("view_exams"), h.GetExams)
 		protected.POST("/marks", middleware.RequirePermission("enter_marks"), h.EnterMarks)
 		protected.POST("/results/publish", middleware.RequirePermission("publish_results"), h.PublishResults)
 		protected.GET("/results/me", middleware.RequirePermission("view_own_results"), h.GetMyResults)
