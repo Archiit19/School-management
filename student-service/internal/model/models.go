@@ -7,24 +7,28 @@ import (
 )
 
 type Student struct {
-	ID           uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	SchoolID     uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;index"`
-	FirstName    string     `json:"first_name" gorm:"not null"`
-	LastName     string     `json:"last_name" gorm:"not null"`
-	ParentUserID *uuid.UUID `json:"parent_user_id,omitempty" gorm:"type:uuid;index"`
-	ClassID      uuid.UUID  `json:"class_id" gorm:"type:uuid;not null;index"`
-	SectionID    *uuid.UUID `json:"section_id,omitempty" gorm:"type:uuid;index"`
-	IsActive     bool       `json:"is_active" gorm:"default:true"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
+	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	SchoolID      uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;index"`
+	FirstName     string     `json:"first_name" gorm:"not null"`
+	LastName      string     `json:"last_name" gorm:"not null"`
+	ParentName    string     `json:"parent_name"`
+	ContactNumber string     `json:"contact_number"`
+	ParentUserID  *uuid.UUID `json:"parent_user_id,omitempty" gorm:"type:uuid;index"`
+	ClassID       uuid.UUID  `json:"class_id" gorm:"type:uuid;not null;index"`
+	SectionID     *uuid.UUID `json:"section_id,omitempty" gorm:"type:uuid;index"`
+	IsActive      bool       `json:"is_active" gorm:"default:true"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
 }
 
 type CreateStudentRequest struct {
-	FirstName    string `json:"first_name" binding:"required"`
-	LastName     string `json:"last_name" binding:"required"`
-	ParentUserID string `json:"parent_user_id" binding:"omitempty,uuid"`
-	ClassID      string `json:"class_id" binding:"required,uuid"`
-	SectionID    string `json:"section_id" binding:"omitempty,uuid"`
+	FirstName     string `json:"first_name" binding:"required"`
+	LastName      string `json:"last_name" binding:"required"`
+	ParentName    string `json:"parent_name"`
+	ContactNumber string `json:"contact_number"`
+	ParentUserID  string `json:"parent_user_id" binding:"omitempty,uuid"`
+	ClassID       string `json:"class_id" binding:"required,uuid"`
+	SectionID     string `json:"section_id" binding:"omitempty,uuid"`
 	// Optional login provisioning. If both are present, a pupil auth user is created
 	// in auth-service and linked back to this student.
 	LoginEmail    string `json:"login_email" binding:"omitempty,email"`
@@ -40,12 +44,14 @@ type CreateStudentResponse struct {
 }
 
 type UpdateStudentRequest struct {
-	FirstName    *string `json:"first_name"`
-	LastName     *string `json:"last_name"`
-	ParentUserID *string `json:"parent_user_id"`
-	ClassID      *string `json:"class_id"`
-	SectionID    *string `json:"section_id"`
-	IsActive     *bool   `json:"is_active"`
+	FirstName     *string `json:"first_name"`
+	LastName      *string `json:"last_name"`
+	ParentName    *string `json:"parent_name"`
+	ContactNumber *string `json:"contact_number"`
+	ParentUserID  *string `json:"parent_user_id"`
+	ClassID       *string `json:"class_id"`
+	SectionID     *string `json:"section_id"`
+	IsActive      *bool   `json:"is_active"`
 }
 
 type StudentListQuery struct {

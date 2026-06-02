@@ -140,6 +140,11 @@ func (s *AuthService) GetMe(userID uuid.UUID) (*model.User, error) {
 	roleName := s.fetchRoleName(user.RoleID)
 	user.RoleName = roleName
 
+	// Enrich with school details so the UI doesn't need a separate call.
+	if school, err := s.repo.GetSchoolByID(user.SchoolID); err == nil {
+		user.School = school
+	}
+
 	return user, nil
 }
 

@@ -26,6 +26,12 @@ func (r *AuthRepository) GetSchoolByEmail(email string) (*model.School, error) {
 	return &school, err
 }
 
+func (r *AuthRepository) GetSchoolByID(id uuid.UUID) (*model.School, error) {
+	var school model.School
+	err := r.db.Where("id = ?", id).First(&school).Error
+	return &school, err
+}
+
 // ─── User ───────────────────────────────────────────────────────────
 
 func (r *AuthRepository) CreateUser(user *model.User) error {

@@ -105,6 +105,7 @@ export const academicApi = {
   getMyAssignments: () => request("academic", "/assignments/me"),
   getMySubmissions: () => request("academic", "/submissions/me"),
   submitMine: (body) => request("academic", "/submissions/me", { method: "POST", body }),
+  getMyAcademic: () => request("academic", "/academic/me"),
   health: () => request("academic", "/health"),
 };
 

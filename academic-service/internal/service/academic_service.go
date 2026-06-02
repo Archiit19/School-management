@@ -337,6 +337,129 @@ func (s *AcademicService) GetMyAssignments(
 	return s.GetAssignments(schoolID, model.AssignmentQuery{ClassID: st.ClassID.String()})
 }
 
+// GetMyAcademicProfile returns the pupil's class, section, subjects, and the
+// teachers assigned to that class. Class/section are resolved by calling
+// student-service /students/me with the pupil's JWT; teacher names are resolved
+// via auth-service's internal /internal/users/:id endpoint.
+func (s *AcademicService) GetMyAcademicProfile(
+	schoolID, studentID uuid.UUID,
+	authHeader string,
+) (*model.MyAcademicProfile, error) {
+	if strings.TrimSpace(authHeader) == "" {
+		return nil, errors.New("missing authorization header")
+	}
+
+	// 1. Resolve the pupil's class_id + section_id via student-service.
+	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", authHeader)
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, errors.New("failed to resolve student profile from student-service")
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
+	}
+	var st struct {
+		ID        uuid.UUID  `json:"id"`
+		ClassID   uuid.UUID  `json:"class_id"`
+		SectionID *uuid.UUID `json:"section_id,omitempty"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		return nil, errors.New("failed to decode student profile response")
+	}
+	if st.ID != studentID {
+		return nil, errors.New("student profile mismatch with authenticated session")
+	}
+
+	profile := &model.MyAcademicProfile{
+		Subjects: []model.Subject{},
+		Teachers: []model.ClassTeacher{},
+	}
+
+	// 2. Class
+	if class, err := s.repo.GetClassByIDAndSchool(st.ClassID, schoolID); err == nil {
+		profile.Class = class
+	}
+
+	// 3. Section (optional)
+	if st.SectionID != nil {
+		if sec, err := s.repo.GetSectionByIDAndSchool(*st.SectionID, schoolID); err == nil {
+			profile.Section = sec
+		}
+	}
+
+	// 4. Subjects for the class
+	if subjects, err := s.repo.GetSubjectsByClassID(st.ClassID); err == nil {
+		profile.Subjects = subjects
+	}
+
+	// 5. Teacher assignments for the class, then enrich names via auth-service.
+	tas, err := s.repo.GetTeacherAssignments(schoolID, model.TeacherAssignmentQuery{
+		ClassID: st.ClassID.String(),
+	})
+	if err != nil {
+		return profile, nil // partial response is still useful
+	}
+
+	subjectName := make(map[uuid.UUID]string, len(profile.Subjects))
+	for _, sub := range profile.Subjects {
+		subjectName[sub.ID] = sub.Name
+	}
+
+	for _, ta := range tas {
+		ct := model.ClassTeacher{
+			TeacherUserID: ta.TeacherUserID,
+			SubjectID:     ta.SubjectID,
+			SubjectName:   subjectName[ta.SubjectID],
+		}
+		if name, email, err := s.resolveUser(ta.TeacherUserID); err == nil {
+			ct.TeacherName = name
+			ct.TeacherEmail = email
+		}
+		profile.Teachers = append(profile.Teachers, ct)
+	}
+	return profile, nil
+}
+
+// resolveUser fetches a user's name and email via auth-service's internal endpoint.
+// Returns empty strings (no error) when the call is not configured or fails — the
+// caller treats missing names as "Unknown teacher" but still surfaces the subject.
+func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) {
+	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
+		return "", "", errors.New("internal service token not configured")
+	}
+	url := fmt.Sprintf("%s/internal/users/%s",
+		strings.TrimRight(s.cfg.AuthServiceURL, "/"),
+		userID.String(),
+	)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("auth-service /internal/users returned %d", resp.StatusCode)
+	}
+	var u struct {
+		Name  string `json:"name"`
+		Email string `json:"email"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
+		return "", "", err
+	}
+	return u.Name, u.Email, nil
+}
+
 func (s *AcademicService) GetMySubmissions(schoolID, studentID uuid.UUID) ([]model.Submission, error) {
 	subs, err := s.repo.GetSubmissionsForStudent(schoolID, studentID)
 	if err != nil {
