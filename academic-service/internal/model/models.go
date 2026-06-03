@@ -138,3 +138,21 @@ type CreateMySubmissionRequest struct {
 type ErrorResponse struct {
 	Error string `json:"error" example:"something went wrong"`
 }
+
+// MyAcademicProfile is the consolidated academic context for the authenticated pupil:
+// their class + section, the subjects taught in that class, and the teachers assigned.
+type MyAcademicProfile struct {
+	Class    *Class           `json:"class,omitempty"`
+	Section  *Section         `json:"section,omitempty"`
+	Subjects []Subject        `json:"subjects"`
+	Teachers []ClassTeacher   `json:"teachers"`
+}
+
+// ClassTeacher is one teacher assigned to one subject in the pupil's class.
+type ClassTeacher struct {
+	TeacherUserID uuid.UUID `json:"teacher_user_id"`
+	TeacherName   string    `json:"teacher_name"`
+	TeacherEmail  string    `json:"teacher_email,omitempty"`
+	SubjectID     uuid.UUID `json:"subject_id"`
+	SubjectName   string    `json:"subject_name"`
+}

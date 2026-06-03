@@ -156,10 +156,12 @@ func (h *UserHandler) GetUserInternal(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":         user.ID,
-		"school_id":  user.SchoolID,
-		"is_active":  user.IsActive,
-		"role_name":  user.RoleName,
+		"id":        user.ID,
+		"school_id": user.SchoolID,
+		"name":      user.Name,
+		"email":     user.Email,
+		"is_active": user.IsActive,
+		"role_name": user.RoleName,
 	})
 }
 

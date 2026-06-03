@@ -10,6 +10,7 @@ import {
 
 const TABS = [
   { id: "profile", label: "Profile", perm: "view_own_profile" },
+  { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "attendance", label: "Attendance", perm: "view_own_attendance" },
   { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "results", label: "Results", perm: "view_own_results" },
@@ -56,6 +57,7 @@ export default function MyPortalPage() {
       </div>
 
       {tab === "profile" && <ProfileTab />}
+      {tab === "exams" && <ExamsTab />}
       {tab === "attendance" && <AttendanceTab />}
       {tab === "exams" && <ExamsTab />}
       {tab === "results" && <ResultsTab />}
@@ -65,14 +67,82 @@ export default function MyPortalPage() {
   );
 }
 
+function ExamsTab() {
+  const [exams, setExams] = useState([]);
+  const [upcoming, setUpcoming] = useState(true);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setError(""); setLoading(true);
+    try {
+      const data = await examApi.getMyExams({ upcoming });
+      setExams(data || []);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, [upcoming]);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <>
+      {error && <div className="alert alert-error">{error}</div>}
+      <div className="card">
+        <div className="card-title">
+          Exam Schedule <span className="badge badge-get">GET /exams/me</span>
+        </div>
+        <div className="form-group" style={{ maxWidth: 280, marginBottom: 16 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <input
+              type="checkbox"
+              checked={upcoming}
+              onChange={(e) => setUpcoming(e.target.checked)}
+            />
+            Show only upcoming exams
+          </label>
+        </div>
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Title</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
+            <tbody>
+              {loading && <tr><td colSpan={4} className="empty">Loading...</td></tr>}
+              {!loading && exams.length === 0 && (
+                <tr><td colSpan={4} className="empty">{upcoming ? "No upcoming exams scheduled." : "No exams found."}</td></tr>
+              )}
+              {!loading && exams.map((e) => (
+                <tr key={e.id}>
+                  <td><strong>{e.title}</strong></td>
+                  <td>{fmtDate(e.exam_date)}</td>
+                  <td>{e.total_marks}</td>
+                  <td>
+                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
+                      {e.is_published ? "Results Published" : "Scheduled"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ProfileTab() {
+  const { user } = useAuth();
   const [me, setMe] = useState(null);
-  const [classes, setClasses] = useState([]);
+  const [academic, setAcademic] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     studentApi.getMe().then(setMe).catch((e) => setError(e.message));
-    academicApi.getClasses().then(setClasses).catch(() => {});
+    academicApi.getMyAcademic().then(setAcademic).catch(() => {
+      // Non-fatal: profile still useful without class details.
+    });
   }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
@@ -83,42 +153,128 @@ function ProfileTab() {
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!me) return <div className="empty">Loading...</div>;
 
+  const fullName = `${me.first_name || ""} ${me.last_name || ""}`.trim();
+  const school = user?.school || {};
+  const className = academic?.class?.name || "";
+  const sectionName = academic?.section?.name || "";
+
   return (
-    <div className="card">
-      <div className="card-title">
-        Student Record <span className="badge badge-get">GET /students/me</span>
+    <>
+      <div className="card">
+        <div className="card-title">
+          Student Details <span className="badge badge-get">GET /students/me</span>
+        </div>
+        <div className="grid-3">
+          <div className="form-group">
+            <label>Student Name</label>
+            <input readOnly value={fullName} />
+          </div>
+          <div className="form-group">
+            <label>Class</label>
+            <input readOnly value={className || (me.class_id ? "(loading…)" : "—")} />
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <input readOnly value={sectionName || (me.section_id ? "(loading…)" : "—")} />
+          </div>
+          <div className="form-group">
+            <label>Parent / Guardian Name</label>
+            <input readOnly value={me.parent_name || "—"} />
+          </div>
+          <div className="form-group">
+            <label>Contact Number</label>
+            <input readOnly value={me.contact_number || "—"} />
+          </div>
+          <div className="form-group">
+            <label>Status</label>
+            <input readOnly value={me.is_active ? "Active" : "Inactive"} />
+          </div>
+          <div className="form-group">
+            <label>Admitted</label>
+            <input readOnly value={fmtDate(me.created_at)} />
+          </div>
+          <div className="form-group">
+            <label>Student ID</label>
+            <input readOnly className="mono" value={me.id || ""} />
+          </div>
+          <div className="form-group">
+            <label>School ID</label>
+            <input readOnly className="mono" value={me.school_id || ""} />
+          </div>
+        </div>
       </div>
-      <div className="grid-3">
-        <div className="form-group">
-          <label>First Name</label>
-          <input readOnly value={me.first_name || ""} />
+
+      <div className="card">
+        <div className="card-title">
+          School <span className="badge badge-get">GET /auth/me</span>
         </div>
-        <div className="form-group">
-          <label>Last Name</label>
-          <input readOnly value={me.last_name || ""} />
-        </div>
-        <div className="form-group">
-          <label>Status</label>
-          <input readOnly value={me.is_active ? "Active" : "Inactive"} />
-        </div>
-        <div className="form-group">
-          <label>Student ID</label>
-          <input readOnly className="mono" value={me.id || ""} />
-        </div>
-        <div className="form-group">
-          <label>Class</label>
-          <input readOnly value={classMap[me.class_id] || me.class_id || ""} />
-        </div>
-        <div className="form-group">
-          <label>Section</label>
-          <input readOnly value={me.section_id ? (sectionMap[me.section_id] || me.section_id) : "—"} />
-        </div>
-        <div className="form-group">
-          <label>Admitted</label>
-          <input readOnly value={fmtDate(me.created_at)} />
+        <div className="grid-3">
+          <div className="form-group">
+            <label>School Name</label>
+            <input readOnly value={school.name || "—"} />
+          </div>
+          <div className="form-group">
+            <label>School Email</label>
+            <input readOnly value={school.email || "—"} />
+          </div>
+          <div className="form-group">
+            <label>School Phone</label>
+            <input readOnly value={school.phone || "—"} />
+          </div>
         </div>
       </div>
-    </div>
+
+      <div className="card">
+        <div className="card-title">
+          Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
+        </div>
+        {!academic && <div className="empty">Loading class details…</div>}
+        {academic && (
+          <>
+            <div style={{ marginBottom: 12, fontWeight: 600 }}>Subjects</div>
+            {(!academic.subjects || academic.subjects.length === 0) && (
+              <div className="empty">No subjects configured for this class.</div>
+            )}
+            {academic.subjects && academic.subjects.length > 0 && (
+              <div className="table-wrap" style={{ marginBottom: 16 }}>
+                <table>
+                  <thead><tr><th>Subject</th><th>Code</th></tr></thead>
+                  <tbody>
+                    {academic.subjects.map((s) => (
+                      <tr key={s.id}>
+                        <td>{s.name}</td>
+                        <td>{s.code || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ marginBottom: 12, fontWeight: 600 }}>Class Teachers</div>
+            {(!academic.teachers || academic.teachers.length === 0) && (
+              <div className="empty">No teachers have been assigned to this class yet.</div>
+            )}
+            {academic.teachers && academic.teachers.length > 0 && (
+              <div className="table-wrap">
+                <table>
+                  <thead><tr><th>Teacher</th><th>Email</th><th>Subject</th></tr></thead>
+                  <tbody>
+                    {academic.teachers.map((t, i) => (
+                      <tr key={`${t.teacher_user_id}-${t.subject_id}-${i}`}>
+                        <td>{t.teacher_name || "—"}</td>
+                        <td>{t.teacher_email || "—"}</td>
+                        <td>{t.subject_name || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 

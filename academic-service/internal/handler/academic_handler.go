@@ -267,6 +267,34 @@ func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+// GetMyAcademicProfile godoc
+// @Summary      My class, section, subjects and teachers (pupil portal)
+// @Description  Consolidated academic context for the authenticated pupil.
+// @Tags         Academic
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {object}  model.MyAcademicProfile
+// @Failure      400  {object}  model.ErrorResponse
+// @Failure      403  {object}  model.ErrorResponse
+// @Router       /academic/me [get]
+func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
+	sidVal, ok := c.Get("student_id")
+	if !ok {
+		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+		return
+	}
+	studentID := sidVal.(uuid.UUID)
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	authHeader := c.GetHeader("Authorization")
+
+	profile, err := h.svc.GetMyAcademicProfile(schoolID, studentID, authHeader)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}
+
 // GetMySubmissions godoc
 // @Summary      My submissions (pupil portal)
 // @Description  Lists submissions where student_id matches JWT.

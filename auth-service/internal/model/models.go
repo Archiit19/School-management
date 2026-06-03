@@ -28,6 +28,7 @@ type User struct {
 	StudentID   *uuid.UUID `json:"student_id,omitempty" gorm:"type:uuid;index" example:"550e8400-e29b-41d4-a716-446655440099"`
 	RoleName    string     `json:"role_name" gorm:"-" example:"super_admin"`
 	Permissions []string   `json:"permissions,omitempty" gorm:"-"`
+	School      *School    `json:"school,omitempty" gorm:"-"`
 	IsActive    bool       `json:"is_active" gorm:"default:true" example:"true"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`

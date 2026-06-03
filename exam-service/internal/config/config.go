@@ -6,24 +6,26 @@ import (
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	JWTSecret  string
-	Port       string
+	DBHost            string
+	DBPort            string
+	DBUser            string
+	DBPassword        string
+	DBName            string
+	JWTSecret         string
+	Port              string
+	StudentServiceURL string
 }
 
 func Load() *Config {
 	return &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5438"),
-		DBUser:     getEnv("DB_USER", "exam_user"),
-		DBPassword: getEnv("DB_PASSWORD", "exam_pass"),
-		DBName:     getEnv("DB_NAME", "exam_db"),
-		JWTSecret:  getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		Port:       getEnv("PORT", "8086"),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBPort:            getEnv("DB_PORT", "5438"),
+		DBUser:            getEnv("DB_USER", "exam_user"),
+		DBPassword:        getEnv("DB_PASSWORD", "exam_pass"),
+		DBName:            getEnv("DB_NAME", "exam_db"),
+		JWTSecret:         getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
+		Port:              getEnv("PORT", "8086"),
+		StudentServiceURL: getEnv("STUDENT_SERVICE_URL", "http://student-service:8084"),
 	}
 }
 

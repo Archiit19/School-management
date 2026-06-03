@@ -105,6 +105,7 @@ export const academicApi = {
   getMyAssignments: () => request("academic", "/assignments/me"),
   getMySubmissions: () => request("academic", "/submissions/me"),
   submitMine: (body) => request("academic", "/submissions/me", { method: "POST", body }),
+  getMyAcademic: () => request("academic", "/academic/me"),
   health: () => request("academic", "/health"),
 };
 
@@ -139,6 +140,8 @@ export const examApi = {
   getExams: (query) => request("exams", "/exams", { query }),
   getMyExams: () => request("exams", "/exams/me"),
   createExam: (body) => request("exams", "/exams", { method: "POST", body }),
+  getExams: (query) => request("exams", "/exams", { query }),
+  getMyExams: (query) => request("exams", "/exams/me", { query }),
   enterMarks: (body) => request("exams", "/marks", { method: "POST", body }),
   publish: (body) => request("exams", "/results/publish", { method: "POST", body }),
   getResults: (query) => request("exams", "/results", { query }),

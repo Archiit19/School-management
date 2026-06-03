@@ -71,6 +71,7 @@ func main() {
 		protected.GET("/classes", middleware.RequirePermission("view_academic"), h.GetClasses)
 		protected.POST("/teacher-assignments", middleware.RequirePermission("assign_teacher"), h.CreateTeacherAssignment)
 		protected.GET("/teacher-assignments", middleware.RequirePermission("view_academic"), h.GetTeacherAssignments)
+		protected.GET("/academic/me", middleware.RequirePermission("view_own_profile"), h.GetMyAcademicProfile)
 		protected.POST("/assignments", middleware.RequirePermission("create_assignment"), h.CreateAssignment)
 		protected.GET("/assignments/me", middleware.RequirePermission("view_own_assignments"), h.GetMyAssignments)
 		protected.GET("/assignments", middleware.RequirePermission("view_assignments"), h.GetAssignments)

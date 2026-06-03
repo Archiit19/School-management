@@ -21,6 +21,7 @@
       "enter_marks",
       "publish_results",
       "view_results",
+      "view_exams",
       "assign_teacher",
       "mark_own_teacher_attendance",
       "mark_teacher_attendance",
@@ -61,7 +62,8 @@
       "view_own_assignments",
       "view_own_submissions",
       "submit_own_assignment",
-      "view_own_dues"
+      "view_own_dues",
+      "view_own_exams"
     ]
   }
 ]

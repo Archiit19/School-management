@@ -13,6 +13,8 @@ export default function StudentsPage() {
   const [form, setForm] = useState({
     first_name: "",
     last_name: "",
+    parent_name: "",
+    contact_number: "",
     class_id: "",
     section_id: "",
     parent_user_id: "",
@@ -50,6 +52,8 @@ export default function StudentsPage() {
       const payload = { ...form };
       if (!payload.section_id) delete payload.section_id;
       if (!payload.parent_user_id) delete payload.parent_user_id;
+      if (!payload.parent_name?.trim()) delete payload.parent_name;
+      if (!payload.contact_number?.trim()) delete payload.contact_number;
       const hasEmail = payload.login_email?.trim();
       const hasPwd = payload.login_password?.trim();
       if (!!hasEmail !== !!hasPwd) {
@@ -61,7 +65,7 @@ export default function StudentsPage() {
       }
       const res = await studentApi.create(payload);
       msg(res?.login_created ? `Student admitted with login (${res.login_email}).` : "Student admitted.");
-      setForm({ first_name: "", last_name: "", class_id: "", section_id: "", parent_user_id: "", login_email: "", login_password: "" });
+      setForm({ first_name: "", last_name: "", parent_name: "", contact_number: "", class_id: "", section_id: "", parent_user_id: "", login_email: "", login_password: "" });
       load();
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
@@ -96,6 +100,8 @@ export default function StudentsPage() {
                 {formSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
+            <div className="form-group"><label>Parent / Guardian Name</label><input name="parent_name" value={form.parent_name} onChange={field} placeholder="Jane Doe" /></div>
+            <div className="form-group"><label>Contact Number</label><input name="contact_number" value={form.contact_number} onChange={field} placeholder="+1 555-0100" /></div>
             <div className="form-group"><label>Parent User ID (optional)</label><input name="parent_user_id" value={form.parent_user_id} onChange={field} placeholder="UUID of parent user" /></div>
           </div>
           <div className="card-title" style={{ marginTop: 16 }}>Pupil Login (optional)</div>

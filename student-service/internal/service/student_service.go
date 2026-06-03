@@ -76,13 +76,15 @@ func (s *StudentService) CreateStudent(
 	}
 
 	student := &model.Student{
-		SchoolID:     schoolID,
-		FirstName:    req.FirstName,
-		LastName:     req.LastName,
-		ParentUserID: parentUUID,
-		ClassID:      classID,
-		SectionID:    sectionUUID,
-		IsActive:     true,
+		SchoolID:      schoolID,
+		FirstName:     req.FirstName,
+		LastName:      req.LastName,
+		ParentName:    strings.TrimSpace(req.ParentName),
+		ContactNumber: strings.TrimSpace(req.ContactNumber),
+		ParentUserID:  parentUUID,
+		ClassID:       classID,
+		SectionID:     sectionUUID,
+		IsActive:      true,
 	}
 
 	if err := s.repo.CreateStudent(student); err != nil {
@@ -225,6 +227,12 @@ func (s *StudentService) UpdateStudent(
 	}
 	if req.LastName != nil {
 		student.LastName = *req.LastName
+	}
+	if req.ParentName != nil {
+		student.ParentName = strings.TrimSpace(*req.ParentName)
+	}
+	if req.ContactNumber != nil {
+		student.ContactNumber = strings.TrimSpace(*req.ContactNumber)
 	}
 	if req.IsActive != nil {
 		student.IsActive = *req.IsActive

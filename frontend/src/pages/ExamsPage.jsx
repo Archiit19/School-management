@@ -3,11 +3,12 @@ import { examApi, academicApi } from "../api/client";
 
 export default function ExamsPage() {
   const [tab, setTab] = useState("exams");
-  const [exams, setExams] = useState([]);
   const [results, setResults] = useState([]);
+  const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
   const [examQuery, setExamQuery] = useState({ class_id: "", published: "" });
   const [query, setQuery] = useState({ exam_id: "", student_id: "", class_id: "" });
+  const [examFilter, setExamFilter] = useState({ class_id: "", section_id: "", upcoming: true });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,8 +27,17 @@ export default function ExamsPage() {
     catch (err) { setError(err.message); }
   }, [query]);
 
+  const loadExams = useCallback(async () => {
+    try {
+      const q = { ...examFilter };
+      if (!q.class_id) delete q.class_id;
+      if (!q.section_id) delete q.section_id;
+      setExams(await examApi.getExams(q));
+    } catch (err) { setError(err.message); }
+  }, [examFilter]);
+
+  useEffect(() => { load(); }, [load]);
   useEffect(() => { loadExams(); }, [loadExams]);
-  useEffect(() => { loadResults(); }, [loadResults]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
@@ -56,6 +66,10 @@ export default function ExamsPage() {
     } catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
+  const classNameById = new Map(classes.map((c) => { const cls = c.class || c; return [cls.id, cls.name]; }));
+  const sectionNameById = new Map(classes.flatMap((c) => (c.sections || []).map((s) => [s.id, s.name])));
+  const subjectNameById = new Map(classes.flatMap((c) => (c.subjects || []).map((s) => [s.id, s.name])));
+
   async function handleEnterMarks(e) {
     e.preventDefault(); setError(""); setBusy(true);
     try {
@@ -81,7 +95,8 @@ export default function ExamsPage() {
       {success && <div className="alert alert-success">{success}</div>}
 
       <div className="tabs">
-        <button className={`tab ${tab === "exams" ? "active" : ""}`} onClick={() => setTab("exams")}>View Exams</button>
+        <button className={`tab ${tab === "exams" ? "active" : ""}`} onClick={() => setTab("exams")}>Exams</button>
+        <button className={`tab ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Results</button>
         <button className={`tab ${tab === "exam" ? "active" : ""}`} onClick={() => setTab("exam")}>Create Exam</button>
         <button className={`tab ${tab === "marks" ? "active" : ""}`} onClick={() => setTab("marks")}>Enter Marks</button>
         <button className={`tab ${tab === "publish" ? "active" : ""}`} onClick={() => setTab("publish")}>Publish</button>
@@ -90,41 +105,46 @@ export default function ExamsPage() {
 
       {tab === "exams" && (
         <div className="card">
-          <div className="card-title">View Exams <span className="badge badge-get">GET /exams</span></div>
+          <div className="card-title">Exams <span className="badge badge-get">GET /exams</span></div>
           <div className="grid-3 mb-4">
             <div className="form-group">
               <label>Class</label>
-              <select value={examQuery.class_id} onChange={(e) => setExamQuery((q) => ({ ...q, class_id: e.target.value }))}>
-                <option value="">All</option>
+              <select value={examFilter.class_id} onChange={(e) => setExamFilter((q) => ({ ...q, class_id: e.target.value, section_id: "" }))}>
+                <option value="">All classes</option>
                 {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">
-              <label>Published</label>
-              <select value={examQuery.published} onChange={(e) => setExamQuery((q) => ({ ...q, published: e.target.value }))}>
-                <option value="">All</option>
-                <option value="true">Published</option>
-                <option value="false">Not Published</option>
+              <label>Section</label>
+              <select value={examFilter.section_id} onChange={(e) => setExamFilter((q) => ({ ...q, section_id: e.target.value }))}>
+                <option value="">Any section</option>
+                {flatSections
+                  .filter((s) => !examFilter.class_id || s.class_id === examFilter.class_id)
+                  .map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
               </select>
+            </div>
+            <div className="form-group">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input type="checkbox" checked={examFilter.upcoming} onChange={(e) => setExamFilter((q) => ({ ...q, upcoming: e.target.checked }))} />
+                Upcoming only
+              </label>
             </div>
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Title</th><th>Date</th><th>Total Marks</th><th>Status</th><th>Exam ID</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Title</th><th>Class</th><th>Section</th><th>Subject</th><th>Date</th><th>Total</th><th>Status</th><th>Exam ID</th></tr></thead>
               <tbody>
-                {(!exams || exams.length === 0) && <tr><td colSpan={6} className="empty">No exams found.</td></tr>}
-                {(exams || []).map((exam) => (
-                  <tr key={exam.id}>
-                    <td><strong>{exam.title}</strong></td>
-                    <td>{exam.exam_date?.split("T")[0]}</td>
-                    <td>{exam.total_marks}</td>
-                    <td><span className={`status ${exam.is_published ? "status-active" : "status-inactive"}`}>{exam.is_published ? "Published" : "Draft"}</span></td>
-                    <td><span className="mono truncate" style={{ maxWidth: 180, display: "inline-block" }}>{exam.id}</span></td>
-                    <td>
-                      <button className="btn btn-sm" onClick={() => copyToClipboard(exam.id)} title="Copy Exam ID">Copy ID</button>
-                      <button className="btn btn-sm" onClick={() => { setMarksForm((f) => ({ ...f, exam_id: exam.id })); setTab("marks"); }} title="Enter marks for this exam" style={{ marginLeft: 4 }}>Enter Marks</button>
-                      {!exam.is_published && <button className="btn btn-sm" onClick={() => { setPublishForm({ exam_id: exam.id }); setTab("publish"); }} title="Publish this exam" style={{ marginLeft: 4 }}>Publish</button>}
-                    </td>
+                {(!exams || exams.length === 0) && <tr><td colSpan={8} className="empty">No exams found.</td></tr>}
+                {(exams || []).map((e) => (
+                  <tr key={e.id}>
+                    <td><strong>{e.title}</strong></td>
+                    <td>{classNameById.get(e.class_id) || <span className="mono truncate">{e.class_id}</span>}</td>
+                    <td>{e.section_id ? (sectionNameById.get(e.section_id) || <span className="mono truncate">{e.section_id}</span>) : "—"}</td>
+                    <td>{e.subject_id ? (subjectNameById.get(e.subject_id) || <span className="mono truncate">{e.subject_id}</span>) : "—"}</td>
+                    <td>{e.exam_date?.split("T")[0]}</td>
+                    <td>{e.total_marks}</td>
+                    <td><span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>{e.is_published ? "Published" : "Draft"}</span></td>
+                    <td><span className="mono truncate">{e.id}</span></td>
                   </tr>
                 ))}
               </tbody>
