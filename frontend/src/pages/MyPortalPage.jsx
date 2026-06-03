@@ -134,22 +134,34 @@ function ProfileTab() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
   const [academic, setAcademic] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [academicLoading, setAcademicLoading] = useState(true);
   const [error, setError] = useState("");
+  const [academicError, setAcademicError] = useState("");
 
   useEffect(() => {
-    studentApi.getMe().then(setMe).catch((e) => setError(e.message));
-    academicApi.getMyAcademic().then(setAcademic).catch(() => {
-      // Non-fatal: profile still useful without class details.
-    });
+    setLoading(true);
+    setAcademicLoading(true);
+    
+    studentApi.getMe()
+      .then(setMe)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+    
+    academicApi.getMyAcademic()
+      .then(setAcademic)
+      .catch((e) => setAcademicError(e.message || "Failed to load academic details"))
+      .finally(() => setAcademicLoading(false));
   }, []);
 
+  if (loading) return <div className="empty">Loading student profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
-  if (!me) return <div className="empty">Loading...</div>;
+  if (!me) return <div className="alert alert-error">Could not load student profile.</div>;
 
   const fullName = `${me.first_name || ""} ${me.last_name || ""}`.trim();
   const school = user?.school || {};
-  const className = academic?.class?.name || "";
-  const sectionName = academic?.section?.name || "";
+  const className = academic?.class?.name || (academicLoading ? "(loading…)" : (me.class_id ? `Class ID: ${me.class_id.substring(0, 8)}...` : "—"));
+  const sectionName = academic?.section?.name || (academicLoading ? "(loading…)" : (me.section_id ? `Section ID: ${me.section_id.substring(0, 8)}...` : "—"));
 
   return (
     <>
@@ -164,11 +176,11 @@ function ProfileTab() {
           </div>
           <div className="form-group">
             <label>Class</label>
-            <input readOnly value={className || (me.class_id ? "(loading…)" : "—")} />
+            <input readOnly value={className} />
           </div>
           <div className="form-group">
             <label>Section</label>
-            <input readOnly value={sectionName || (me.section_id ? "(loading…)" : "—")} />
+            <input readOnly value={sectionName} />
           </div>
           <div className="form-group">
             <label>Parent / Guardian Name</label>
@@ -221,8 +233,11 @@ function ProfileTab() {
         <div className="card-title">
           Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
         </div>
-        {!academic && <div className="empty">Loading class details…</div>}
-        {academic && (
+        {academicLoading && <div className="empty">Loading class details…</div>}
+        {!academicLoading && academicError && (
+          <div className="alert alert-error" style={{ marginBottom: 16 }}>{academicError}</div>
+        )}
+        {!academicLoading && !academicError && academic && (
           <>
             <div style={{ marginBottom: 12, fontWeight: 600 }}>Subjects</div>
             {(!academic.subjects || academic.subjects.length === 0) && (
@@ -265,6 +280,9 @@ function ProfileTab() {
               </div>
             )}
           </>
+        )}
+        {!academicLoading && !academicError && !academic && (
+          <div className="empty">No academic profile available.</div>
         )}
       </div>
     </>

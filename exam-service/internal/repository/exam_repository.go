@@ -26,26 +26,6 @@ func (r *ExamRepository) GetExamByIDAndSchool(examID, schoolID uuid.UUID) (*mode
 	return &exam, err
 }
 
-func (r *ExamRepository) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]model.Exam, error) {
-	var exams []model.Exam
-	q := r.db.Where("school_id = ?", schoolID)
-
-	if query.ClassID != "" {
-		q = q.Where("class_id = ?", query.ClassID)
-	}
-	if query.SubjectID != "" {
-		q = q.Where("subject_id = ?", query.SubjectID)
-	}
-	if query.Published == "true" {
-		q = q.Where("is_published = ?", true)
-	} else if query.Published == "false" {
-		q = q.Where("is_published = ?", false)
-	}
-
-	err := q.Order("exam_date desc, created_at desc").Find(&exams).Error
-	return exams, err
-}
-
 func (r *ExamRepository) UpdateExam(exam *model.Exam) error {
 	return r.db.Save(exam).Error
 }
