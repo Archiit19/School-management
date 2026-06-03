@@ -59,6 +59,12 @@ func (r *StudentRepository) GetStudentByIDAndSchoolID(id, schoolID uuid.UUID) (*
 	return &student, err
 }
 
+func (r *StudentRepository) GetStudentByID(id uuid.UUID) (*model.Student, error) {
+	var student model.Student
+	err := r.db.Where("id = ?", id).First(&student).Error
+	return &student, err
+}
+
 func (r *StudentRepository) UpdateStudent(student *model.Student) error {
 	return r.db.Save(student).Error
 }

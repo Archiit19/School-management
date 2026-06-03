@@ -55,6 +55,8 @@ func main() {
 	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
+	r.GET("/internal/students/:id", h.GetStudentByIDInternal)
+
 	protected := r.Group("")
 	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{

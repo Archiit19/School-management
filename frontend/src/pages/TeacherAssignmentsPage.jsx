@@ -22,6 +22,9 @@ export default function TeacherAssignmentsPage() {
   const flatClasses = classes.map((c) => c.class || c);
   const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, className: (c.class || c).name })));
 
+  const classMap = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
+  const subjectMap = Object.fromEntries(flatSubjects.map((s) => [s.id, s.name]));
+
   function field(e) { setForm((p) => ({ ...p, [e.target.name]: e.target.value })); }
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
 
@@ -86,14 +89,14 @@ export default function TeacherAssignmentsPage() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Teacher User ID</th><th>Class ID</th><th>Subject ID</th><th>ID</th></tr></thead>
+            <thead><tr><th>Teacher User ID</th><th>Class</th><th>Subject</th><th>ID</th></tr></thead>
             <tbody>
               {assignments.length === 0 && <tr><td colSpan={4} className="empty">No assignments found.</td></tr>}
               {assignments.map((a) => (
                 <tr key={a.id}>
                   <td><span className="mono truncate">{a.teacher_user_id}</span></td>
-                  <td><span className="mono truncate">{a.class_id}</span></td>
-                  <td><span className="mono truncate">{a.subject_id}</span></td>
+                  <td>{classMap[a.class_id] || a.class_id}</td>
+                  <td>{subjectMap[a.subject_id] || a.subject_id}</td>
                   <td><span className="mono truncate">{a.id}</span></td>
                 </tr>
               ))}

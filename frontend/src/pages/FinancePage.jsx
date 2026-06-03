@@ -22,6 +22,10 @@ export default function FinancePage() {
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
+  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+
+  const querySections = query.class_id ? flatSections.filter((s) => s.class_id === query.class_id) : flatSections;
+  const feeSections = feeForm.class_id ? flatSections.filter((s) => s.class_id === feeForm.class_id) : flatSections;
 
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
 
@@ -71,12 +75,18 @@ export default function FinancePage() {
             <div className="form-group"><label>Student ID</label><input placeholder="UUID..." value={query.student_id} onChange={(e) => setQuery((q) => ({ ...q, student_id: e.target.value }))} /></div>
             <div className="form-group">
               <label>Class</label>
-              <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value }))}>
+              <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, section_id: "" }))}>
                 <option value="">All</option>
                 {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
-            <div className="form-group"><label>Section ID</label><input placeholder="UUID..." value={query.section_id} onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value }))} /></div>
+            <div className="form-group">
+              <label>Section</label>
+              <select value={query.section_id} onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value }))} disabled={!query.class_id}>
+                <option value="">All</option>
+                {querySections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
           </div>
           <div className="table-wrap">
             <table>
@@ -117,12 +127,18 @@ export default function FinancePage() {
               <div className="form-group"><label>Description</label><input value={feeForm.description} onChange={(e) => setFeeForm((p) => ({ ...p, description: e.target.value }))} placeholder="Details" /></div>
               <div className="form-group">
                 <label>Class (opt)</label>
-                <select value={feeForm.class_id} onChange={(e) => setFeeForm((p) => ({ ...p, class_id: e.target.value }))}>
+                <select value={feeForm.class_id} onChange={(e) => setFeeForm((p) => ({ ...p, class_id: e.target.value, section_id: "" }))}>
                   <option value="">Any</option>
                   {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <div className="form-group"><label>Section ID (opt)</label><input value={feeForm.section_id} onChange={(e) => setFeeForm((p) => ({ ...p, section_id: e.target.value }))} placeholder="UUID" /></div>
+              <div className="form-group">
+                <label>Section (opt)</label>
+                <select value={feeForm.section_id} onChange={(e) => setFeeForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!feeForm.class_id}>
+                  <option value="">Any</option>
+                  {feeSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
               <div className="form-group"><label>Student ID (opt)</label><input value={feeForm.student_id} onChange={(e) => setFeeForm((p) => ({ ...p, student_id: e.target.value }))} placeholder="UUID" /></div>
             </div>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Fee</button></div>

@@ -3,7 +3,7 @@ import { useAuth } from "../context/AuthContext";
 
 const NAV = [
   { to: "/", icon: "grid", label: "Dashboard", perms: [] },
-  { to: "/me", icon: "user-check", label: "My Portal", perms: ["view_own_profile", "view_own_attendance", "view_own_results", "view_own_assignments", "view_own_dues"] },
+  { to: "/me", icon: "user-check", label: "My Portal", perms: ["view_own_profile", "view_own_attendance", "view_own_exams", "view_own_results", "view_own_assignments", "view_own_dues"] },
   { to: "/users", icon: "users", label: "Users", perms: ["create_user", "view_users"] },
   { to: "/roles", icon: "shield", label: "Roles & Permissions", perms: ["create_role", "manage_permissions"] },
   { to: "/academic", icon: "book-open", label: "Academic Structure", perms: ["create_class", "create_section", "create_subject", "view_academic"] },
@@ -11,7 +11,7 @@ const NAV = [
   { to: "/teacher-assignments", icon: "user-check", label: "Teacher Assign", perms: ["assign_teacher"] },
   { to: "/attendance", icon: "calendar-check", label: "Attendance", perms: ["mark_attendance", "view_attendance", "mark_teacher_attendance", "view_teacher_attendance", "mark_own_teacher_attendance"] },
   { to: "/assignments", icon: "file-text", label: "Assignments", perms: ["create_assignment", "view_assignments", "submit_assignment"] },
-  { to: "/exams", icon: "clipboard", label: "Exams & Results", perms: ["create_exam", "enter_marks", "publish_results", "view_results"] },
+  { to: "/exams", icon: "clipboard", label: "Exams & Results", perms: ["create_exam", "view_exams", "enter_marks", "publish_results", "view_results"] },
   { to: "/finance", icon: "dollar-sign", label: "Finance", perms: ["create_fee", "record_payment", "view_dues"] },
 ];
 

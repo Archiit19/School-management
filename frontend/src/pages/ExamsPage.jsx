@@ -6,6 +6,7 @@ export default function ExamsPage() {
   const [results, setResults] = useState([]);
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
+  const [examQuery, setExamQuery] = useState({ class_id: "", published: "" });
   const [query, setQuery] = useState({ exam_id: "", student_id: "", class_id: "" });
   const [examFilter, setExamFilter] = useState({ class_id: "", section_id: "", upcoming: true });
   const [error, setError] = useState("");
@@ -16,7 +17,12 @@ export default function ExamsPage() {
   const [marksForm, setMarksForm] = useState({ exam_id: "", student_id: "", marks_obtained: "", remarks: "" });
   const [publishForm, setPublishForm] = useState({ exam_id: "" });
 
-  const load = useCallback(async () => {
+  const loadExams = useCallback(async () => {
+    try { setExams(await examApi.getExams(examQuery)); }
+    catch (err) { setError(err.message); }
+  }, [examQuery]);
+
+  const loadResults = useCallback(async () => {
     try { setResults(await examApi.getResults(query)); }
     catch (err) { setError(err.message); }
   }, [query]);
@@ -35,10 +41,17 @@ export default function ExamsPage() {
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
-  const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, className: (c.class || c).name })));
-  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
+  const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+
+  const examFormSections = examForm.class_id ? flatSections.filter((s) => s.class_id === examForm.class_id) : [];
+  const examFormSubjects = examForm.class_id ? flatSubjects.filter((s) => s.class_id === examForm.class_id) : flatSubjects;
 
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => msg("Copied to clipboard!")).catch(() => setError("Failed to copy"));
+  }
 
   async function handleCreateExam(e) {
     e.preventDefault(); setError(""); setBusy(true);
@@ -46,8 +59,8 @@ export default function ExamsPage() {
       const payload = { ...examForm, total_marks: parseFloat(examForm.total_marks) };
       if (!payload.section_id) delete payload.section_id;
       if (!payload.subject_id) delete payload.subject_id;
-      await examApi.createExam(payload);
-      msg("Exam created.");
+      const created = await examApi.createExam(payload);
+      msg(`Exam created! ID: ${created.id}`);
       setExamForm({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
       loadExams();
     } catch (err) { setError(err.message); } finally { setBusy(false); }
@@ -67,7 +80,7 @@ export default function ExamsPage() {
 
   async function handlePublish(e) {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await examApi.publish(publishForm); msg("Results published."); load(); }
+    try { await examApi.publish(publishForm); msg("Results published."); loadResults(); loadExams(); }
     catch (err) { setError(err.message); } finally { setBusy(false); }
   }
 
@@ -87,6 +100,7 @@ export default function ExamsPage() {
         <button className={`tab ${tab === "exam" ? "active" : ""}`} onClick={() => setTab("exam")}>Create Exam</button>
         <button className={`tab ${tab === "marks" ? "active" : ""}`} onClick={() => setTab("marks")}>Enter Marks</button>
         <button className={`tab ${tab === "publish" ? "active" : ""}`} onClick={() => setTab("publish")}>Publish</button>
+        <button className={`tab ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Results</button>
       </div>
 
       {tab === "exams" && (
@@ -183,25 +197,25 @@ export default function ExamsPage() {
               <div className="form-group"><label>Title</label><input required value={examForm.title} onChange={(e) => setExamForm((p) => ({ ...p, title: e.target.value }))} placeholder="Mid-term Math" /></div>
               <div className="form-group">
                 <label>Class</label>
-                <select required value={examForm.class_id} onChange={(e) => setExamForm((p) => ({ ...p, class_id: e.target.value }))}>
+                <select required value={examForm.class_id} onChange={(e) => setExamForm((p) => ({ ...p, class_id: e.target.value, section_id: "", subject_id: "" }))}>
                   <option value="">Select...</option>
                   {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
                 <label>Subject (optional)</label>
-                <select value={examForm.subject_id} onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))}>
+                <select value={examForm.subject_id} onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))} disabled={!examForm.class_id}>
                   <option value="">Any</option>
-                  {flatSubjects.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
+                  {examFormSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
             </div>
             <div className="grid-3">
               <div className="form-group">
                 <label>Section (optional)</label>
-                <select value={examForm.section_id} onChange={(e) => setExamForm((p) => ({ ...p, section_id: e.target.value }))}>
+                <select value={examForm.section_id} onChange={(e) => setExamForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!examForm.class_id}>
                   <option value="">Any</option>
-                  {flatSections.map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
+                  {examFormSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="form-group"><label>Exam Date</label><input type="date" required value={examForm.exam_date} onChange={(e) => setExamForm((p) => ({ ...p, exam_date: e.target.value }))} /></div>

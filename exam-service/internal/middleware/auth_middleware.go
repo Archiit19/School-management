@@ -57,6 +57,16 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 				c.Set("student_id", sid)
 			}
 		}
+		if cidStr, ok := claims["class_id"].(string); ok && cidStr != "" {
+			if cid, err := uuid.Parse(cidStr); err == nil {
+				c.Set("class_id", cid)
+			}
+		}
+		if secStr, ok := claims["section_id"].(string); ok && secStr != "" {
+			if sec, err := uuid.Parse(secStr); err == nil {
+				c.Set("section_id", sec)
+			}
+		}
 		c.Next()
 	}
 }
