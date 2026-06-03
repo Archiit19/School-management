@@ -74,3 +74,24 @@ func (r *StudentRepository) UpdateStudent(student *model.Student) error {
 func (r *StudentRepository) DeleteStudent(id uuid.UUID) error {
 	return r.db.Delete(&model.Student{}, "id = ?", id).Error
 }
+
+// CountStudentsForEnrollment returns the count of students enrolled in a specific
+// school, class, section (optional), and admission year. Used to generate the next enrollment number.
+func (r *StudentRepository) CountStudentsForEnrollment(
+	schoolID, classID uuid.UUID,
+	sectionID *uuid.UUID,
+	admissionYear int,
+) (int64, error) {
+	var count int64
+	q := r.db.Model(&model.Student{}).Where(
+		"school_id = ? AND class_id = ? AND admission_year = ?",
+		schoolID, classID, admissionYear,
+	)
+	if sectionID != nil {
+		q = q.Where("section_id = ?", *sectionID)
+	} else {
+		q = q.Where("section_id IS NULL")
+	}
+	err := q.Count(&count).Error
+	return count, err
+}

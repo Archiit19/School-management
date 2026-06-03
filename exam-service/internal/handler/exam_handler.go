@@ -17,34 +17,6 @@ func NewExamHandler(svc *service.ExamService) *ExamHandler {
 	return &ExamHandler{svc: svc}
 }
 
-// GetExams godoc
-// @Summary      List exams
-// @Description  Get all exams for the school with optional filters.
-// @Tags         Exams
-// @Produce      json
-// @Security     BearerAuth
-// @Param        class_id    query     string  false  "Filter by Class ID"
-// @Param        subject_id  query     string  false  "Filter by Subject ID"
-// @Param        published   query     string  false  "Filter by published status (true/false)"
-// @Success      200         {array}   model.Exam
-// @Failure      400         {object}  model.ErrorResponse
-// @Router       /exams [get]
-func (h *ExamHandler) GetExams(c *gin.Context) {
-	var query model.ExamQuery
-	if err := c.ShouldBindQuery(&query); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	schoolID := c.MustGet("school_id").(uuid.UUID)
-	exams, err := h.svc.GetExams(schoolID, query)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, exams)
-}
-
 // CreateExam godoc
 // @Summary      Create exam
 // @Description  Create a new exam for class/subject.

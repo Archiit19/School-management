@@ -22,6 +22,17 @@ export default function StudentsPage() {
     login_password: "",
   });
 
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [editForm, setEditForm] = useState({
+    first_name: "",
+    last_name: "",
+    parent_name: "",
+    contact_number: "",
+    class_id: "",
+    section_id: "",
+    is_active: true,
+  });
+
   const load = useCallback(async () => {
     try {
       const res = await studentApi.list(query);
@@ -45,6 +56,40 @@ export default function StudentsPage() {
   function field(e) { setForm((p) => ({ ...p, [e.target.name]: e.target.value })); }
 
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
+
+  function startEdit(student) {
+    setEditingStudent(student);
+    setEditForm({
+      first_name: student.first_name || "",
+      last_name: student.last_name || "",
+      parent_name: student.parent_name || "",
+      contact_number: student.contact_number || "",
+      class_id: student.class_id || "",
+      section_id: student.section_id || "",
+      is_active: student.is_active !== false,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingStudent(null);
+    setEditForm({ first_name: "", last_name: "", parent_name: "", contact_number: "", class_id: "", section_id: "", is_active: true });
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault(); setError(""); setBusy(true);
+    try {
+      const payload = { ...editForm };
+      if (!payload.section_id) payload.section_id = null;
+      if (!payload.parent_name?.trim()) payload.parent_name = "";
+      if (!payload.contact_number?.trim()) payload.contact_number = "";
+      await studentApi.update(editingStudent.id, payload);
+      msg("Student updated.");
+      cancelEdit();
+      load();
+    } catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  const editSections = editForm.class_id ? flatSections.filter((s) => s.class_id === editForm.class_id) : [];
 
   async function handleCreate(e) {
     e.preventDefault(); setError(""); setBusy(true);
@@ -143,16 +188,17 @@ export default function StudentsPage() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Name</th><th>Class</th><th>Section</th><th>Active</th><th>Student ID</th></tr></thead>
+            <thead><tr><th>Student Code</th><th>Name</th><th>Class</th><th>Section</th><th>Active</th><th>Actions</th></tr></thead>
             <tbody>
-              {students.length === 0 && <tr><td colSpan={5} className="empty">No students found.</td></tr>}
+              {students.length === 0 && <tr><td colSpan={6} className="empty">No students found.</td></tr>}
               {students.map((s) => (
                 <tr key={s.id}>
+                  <td><strong className="mono">{s.student_code || "—"}</strong></td>
                   <td>{s.first_name} {s.last_name}</td>
                   <td>{classMap[s.class_id] || s.class_id}</td>
                   <td>{s.section_id ? (sectionMap[s.section_id] || s.section_id) : "—"}</td>
                   <td><span className={`status ${s.is_active ? "status-active" : "status-inactive"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
-                  <td><span className="mono truncate">{s.id}</span></td>
+                  <td><button className="btn btn-ghost btn-sm" onClick={() => startEdit(s)}>Edit</button></td>
                 </tr>
               ))}
             </tbody>
@@ -166,6 +212,62 @@ export default function StudentsPage() {
           </div>
         )}
       </div>
+
+      {editingStudent && (
+        <div className="modal-overlay" onClick={cancelEdit}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Student {editingStudent.student_code && <span className="text-muted">({editingStudent.student_code})</span>}</h3>
+              <button className="modal-close" onClick={cancelEdit}>&times;</button>
+            </div>
+            <form onSubmit={handleUpdate}>
+              <div className="grid-2">
+                <div className="form-group">
+                  <label>First Name</label>
+                  <input name="first_name" required value={editForm.first_name} onChange={(e) => setEditForm((p) => ({ ...p, first_name: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Last Name</label>
+                  <input name="last_name" required value={editForm.last_name} onChange={(e) => setEditForm((p) => ({ ...p, last_name: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Class</label>
+                  <select required value={editForm.class_id} onChange={(e) => setEditForm((p) => ({ ...p, class_id: e.target.value, section_id: "" }))}>
+                    <option value="">Select class...</option>
+                    {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Section</label>
+                  <select value={editForm.section_id} onChange={(e) => setEditForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!editForm.class_id}>
+                    <option value="">None</option>
+                    {editSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Parent / Guardian Name</label>
+                  <input value={editForm.parent_name} onChange={(e) => setEditForm((p) => ({ ...p, parent_name: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Contact Number</label>
+                  <input value={editForm.contact_number} onChange={(e) => setEditForm((p) => ({ ...p, contact_number: e.target.value }))} />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={editForm.is_active ? "active" : "inactive"} onChange={(e) => setEditForm((p) => ({ ...p, is_active: e.target.value === "active" }))}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div className="btn-row" style={{ marginTop: 16 }}>
+                <button type="button" className="btn btn-ghost" onClick={cancelEdit}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving..." : "Save Changes"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

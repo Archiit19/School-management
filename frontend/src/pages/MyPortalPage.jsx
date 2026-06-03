@@ -12,7 +12,6 @@ const TABS = [
   { id: "profile", label: "Profile", perm: "view_own_profile" },
   { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "attendance", label: "Attendance", perm: "view_own_attendance" },
-  { id: "exams", label: "Exams", perm: "view_own_exams" },
   { id: "results", label: "Results", perm: "view_own_results" },
   { id: "assignments", label: "Assignments", perm: "view_own_assignments" },
   { id: "dues", label: "Dues", perm: "view_own_dues" },
@@ -59,7 +58,6 @@ export default function MyPortalPage() {
       {tab === "profile" && <ProfileTab />}
       {tab === "exams" && <ExamsTab />}
       {tab === "attendance" && <AttendanceTab />}
-      {tab === "exams" && <ExamsTab />}
       {tab === "results" && <ResultsTab />}
       {tab === "assignments" && <AssignmentsTab />}
       {tab === "dues" && <DuesTab />}
@@ -136,27 +134,34 @@ function ProfileTab() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
   const [academic, setAcademic] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [academicLoading, setAcademicLoading] = useState(true);
   const [error, setError] = useState("");
+  const [academicError, setAcademicError] = useState("");
 
   useEffect(() => {
-    studentApi.getMe().then(setMe).catch((e) => setError(e.message));
-    academicApi.getMyAcademic().then(setAcademic).catch(() => {
-      // Non-fatal: profile still useful without class details.
-    });
+    setLoading(true);
+    setAcademicLoading(true);
+    
+    studentApi.getMe()
+      .then(setMe)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+    
+    academicApi.getMyAcademic()
+      .then(setAcademic)
+      .catch((e) => setAcademicError(e.message || "Failed to load academic details"))
+      .finally(() => setAcademicLoading(false));
   }, []);
 
-  const flatClasses = classes.map((c) => c.class || c);
-  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
-  const classMap = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
-  const sectionMap = Object.fromEntries(flatSections.map((s) => [s.id, s.name]));
-
+  if (loading) return <div className="empty">Loading student profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
-  if (!me) return <div className="empty">Loading...</div>;
+  if (!me) return <div className="alert alert-error">Could not load student profile.</div>;
 
   const fullName = `${me.first_name || ""} ${me.last_name || ""}`.trim();
   const school = user?.school || {};
-  const className = academic?.class?.name || "";
-  const sectionName = academic?.section?.name || "";
+  const className = academic?.class?.name || (academicLoading ? "(loading…)" : (me.class_id ? `Class ID: ${me.class_id.substring(0, 8)}...` : "—"));
+  const sectionName = academic?.section?.name || (academicLoading ? "(loading…)" : (me.section_id ? `Section ID: ${me.section_id.substring(0, 8)}...` : "—"));
 
   return (
     <>
@@ -171,11 +176,11 @@ function ProfileTab() {
           </div>
           <div className="form-group">
             <label>Class</label>
-            <input readOnly value={className || (me.class_id ? "(loading…)" : "—")} />
+            <input readOnly value={className} />
           </div>
           <div className="form-group">
             <label>Section</label>
-            <input readOnly value={sectionName || (me.section_id ? "(loading…)" : "—")} />
+            <input readOnly value={sectionName} />
           </div>
           <div className="form-group">
             <label>Parent / Guardian Name</label>
@@ -194,8 +199,8 @@ function ProfileTab() {
             <input readOnly value={fmtDate(me.created_at)} />
           </div>
           <div className="form-group">
-            <label>Student ID</label>
-            <input readOnly className="mono" value={me.id || ""} />
+            <label>Student Code</label>
+            <input readOnly className="mono" value={me.student_code || "—"} style={{ fontWeight: 600 }} />
           </div>
           <div className="form-group">
             <label>School ID</label>
@@ -228,8 +233,11 @@ function ProfileTab() {
         <div className="card-title">
           Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
         </div>
-        {!academic && <div className="empty">Loading class details…</div>}
-        {academic && (
+        {academicLoading && <div className="empty">Loading class details…</div>}
+        {!academicLoading && academicError && (
+          <div className="alert alert-error" style={{ marginBottom: 16 }}>{academicError}</div>
+        )}
+        {!academicLoading && !academicError && academic && (
           <>
             <div style={{ marginBottom: 12, fontWeight: 600 }}>Subjects</div>
             {(!academic.subjects || academic.subjects.length === 0) && (
@@ -272,6 +280,9 @@ function ProfileTab() {
               </div>
             )}
           </>
+        )}
+        {!academicLoading && !academicError && !academic && (
+          <div className="empty">No academic profile available.</div>
         )}
       </div>
     </>
@@ -348,71 +359,6 @@ function AttendanceTab() {
                   <td>{fmtDate(a.date)}</td>
                   <td><span className={`status ${a.status === "present" ? "status-active" : a.status === "absent" ? "status-inactive" : ""}`}>{a.status}</span></td>
                   <td>{a.remarks || "—"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </>
-  );
-}
-
-function ExamsTab() {
-  const [exams, setExams] = useState([]);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    examApi.getMyExams().then((e) => setExams(e || [])).catch((e) => setError(e.message));
-  }, []);
-
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = exams.filter((e) => !e.is_published && e.exam_date?.slice(0, 10) >= today);
-  const completed = exams.filter((e) => e.is_published || e.exam_date?.slice(0, 10) < today);
-
-  return (
-    <>
-      {error && <div className="alert alert-error">{error}</div>}
-
-      <div className="card">
-        <div className="card-title">
-          Upcoming Exams <span className="badge badge-get">GET /exams/me</span>
-        </div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Exam</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
-            <tbody>
-              {upcoming.length === 0 && <tr><td colSpan={4} className="empty">No upcoming exams.</td></tr>}
-              {upcoming.map((e) => (
-                <tr key={e.id}>
-                  <td><strong>{e.title}</strong></td>
-                  <td>{fmtDate(e.exam_date)}</td>
-                  <td>{e.total_marks}</td>
-                  <td><span className="status" style={{ background: "#fef3c7", color: "#92400e" }}>Upcoming</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div className="card">
-        <div className="card-title">Completed Exams</div>
-        <div className="table-wrap">
-          <table>
-            <thead><tr><th>Exam</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
-            <tbody>
-              {completed.length === 0 && <tr><td colSpan={4} className="empty">No completed exams.</td></tr>}
-              {completed.map((e) => (
-                <tr key={e.id}>
-                  <td><strong>{e.title}</strong></td>
-                  <td>{fmtDate(e.exam_date)}</td>
-                  <td>{e.total_marks}</td>
-                  <td>
-                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
-                      {e.is_published ? "Results Published" : "Awaiting Results"}
-                    </span>
-                  </td>
                 </tr>
               ))}
             </tbody>
