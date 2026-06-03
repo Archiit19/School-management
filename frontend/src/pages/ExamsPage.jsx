@@ -6,7 +6,6 @@ export default function ExamsPage() {
   const [results, setResults] = useState([]);
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
-  const [examQuery, setExamQuery] = useState({ class_id: "", published: "" });
   const [query, setQuery] = useState({ exam_id: "", student_id: "", class_id: "" });
   const [examFilter, setExamFilter] = useState({ class_id: "", section_id: "", upcoming: true });
   const [error, setError] = useState("");
@@ -18,16 +17,6 @@ export default function ExamsPage() {
   const [publishForm, setPublishForm] = useState({ exam_id: "" });
 
   const loadExams = useCallback(async () => {
-    try { setExams(await examApi.getExams(examQuery)); }
-    catch (err) { setError(err.message); }
-  }, [examQuery]);
-
-  const loadResults = useCallback(async () => {
-    try { setResults(await examApi.getResults(query)); }
-    catch (err) { setError(err.message); }
-  }, [query]);
-
-  const loadExams = useCallback(async () => {
     try {
       const q = { ...examFilter };
       if (!q.class_id) delete q.class_id;
@@ -36,8 +25,13 @@ export default function ExamsPage() {
     } catch (err) { setError(err.message); }
   }, [examFilter]);
 
-  useEffect(() => { load(); }, [load]);
+  const loadResults = useCallback(async () => {
+    try { setResults(await examApi.getResults(query)); }
+    catch (err) { setError(err.message); }
+  }, [query]);
+
   useEffect(() => { loadExams(); }, [loadExams]);
+  useEffect(() => { loadResults(); }, [loadResults]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
@@ -100,7 +94,6 @@ export default function ExamsPage() {
         <button className={`tab ${tab === "exam" ? "active" : ""}`} onClick={() => setTab("exam")}>Create Exam</button>
         <button className={`tab ${tab === "marks" ? "active" : ""}`} onClick={() => setTab("marks")}>Enter Marks</button>
         <button className={`tab ${tab === "publish" ? "active" : ""}`} onClick={() => setTab("publish")}>Publish</button>
-        <button className={`tab ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Results</button>
       </div>
 
       {tab === "exams" && (
