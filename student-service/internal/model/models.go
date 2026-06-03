@@ -9,6 +9,7 @@ import (
 type Student struct {
 	ID            uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	SchoolID      uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;index"`
+	StudentCode   string     `json:"student_code" gorm:"uniqueIndex;not null"`
 	FirstName     string     `json:"first_name" gorm:"not null"`
 	LastName      string     `json:"last_name" gorm:"not null"`
 	ParentName    string     `json:"parent_name"`
@@ -16,6 +17,7 @@ type Student struct {
 	ParentUserID  *uuid.UUID `json:"parent_user_id,omitempty" gorm:"type:uuid;index"`
 	ClassID       uuid.UUID  `json:"class_id" gorm:"type:uuid;not null;index"`
 	SectionID     *uuid.UUID `json:"section_id,omitempty" gorm:"type:uuid;index"`
+	AdmissionYear int        `json:"admission_year" gorm:"not null;index"`
 	IsActive      bool       `json:"is_active" gorm:"default:true"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`

@@ -199,8 +199,8 @@ function ProfileTab() {
             <input readOnly value={fmtDate(me.created_at)} />
           </div>
           <div className="form-group">
-            <label>Student ID</label>
-            <input readOnly className="mono" value={me.id || ""} />
+            <label>Student Code</label>
+            <input readOnly className="mono" value={me.student_code || "—"} style={{ fontWeight: 600 }} />
           </div>
           <div className="form-group">
             <label>School ID</label>

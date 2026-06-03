@@ -7,7 +7,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/avaneeshravat/school-management/student-service/internal/config"
 	"github.com/avaneeshravat/school-management/student-service/internal/model"
@@ -53,7 +56,8 @@ func (s *StudentService) CreateStudent(
 		sectionUUID = &parsed
 	}
 
-	if err := s.validateClassSection(authHeader, classID, sectionUUID); err != nil {
+	classInfo, sectionInfo, err := s.getClassSectionInfo(authHeader, classID, sectionUUID)
+	if err != nil {
 		return nil, err
 	}
 
@@ -75,8 +79,15 @@ func (s *StudentService) CreateStudent(
 		return nil, err
 	}
 
+	admissionYear := time.Now().Year()
+	studentCode, err := s.generateStudentCode(schoolID, classID, sectionUUID, classInfo.Name, sectionInfo, admissionYear)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate student code: %w", err)
+	}
+
 	student := &model.Student{
 		SchoolID:      schoolID,
+		StudentCode:   studentCode,
 		FirstName:     req.FirstName,
 		LastName:      req.LastName,
 		ParentName:    strings.TrimSpace(req.ParentName),
@@ -84,6 +95,7 @@ func (s *StudentService) CreateStudent(
 		ParentUserID:  parentUUID,
 		ClassID:       classID,
 		SectionID:     sectionUUID,
+		AdmissionYear: admissionYear,
 		IsActive:      true,
 	}
 
@@ -95,7 +107,6 @@ func (s *StudentService) CreateStudent(
 
 	if wantLogin {
 		if err := s.provisionStudentLogin(student, req.LoginEmail, req.LoginPassword); err != nil {
-			// Roll back admission so the admin can retry cleanly.
 			_ = s.repo.DeleteStudent(student.ID)
 			return nil, fmt.Errorf("admission rolled back: %w", err)
 		}
@@ -330,11 +341,78 @@ func (s *StudentService) validateParent(authHeader string, parentID, schoolID uu
 
 type academicClassResponse struct {
 	Class struct {
-		ID string `json:"id"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
 	} `json:"class"`
 	Sections []struct {
-		ID string `json:"id"`
+		ID   string `json:"id"`
+		Name string `json:"name"`
 	} `json:"sections"`
+}
+
+type classInfo struct {
+	ID   string
+	Name string
+}
+
+type sectionInfo struct {
+	ID   string
+	Name string
+}
+
+func (s *StudentService) getClassSectionInfo(
+	authHeader string,
+	classID uuid.UUID,
+	sectionID *uuid.UUID,
+) (*classInfo, *sectionInfo, error) {
+	url := fmt.Sprintf("%s/classes", s.cfg.AcademicServiceURL)
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, nil, errors.New("failed to validate class/section with academic-service")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, nil, fmt.Errorf("academic-service validation failed: %s", strings.TrimSpace(string(body)))
+	}
+
+	var classes []academicClassResponse
+	if err := json.NewDecoder(resp.Body).Decode(&classes); err != nil {
+		return nil, nil, errors.New("failed to decode academic-service response")
+	}
+
+	var foundClass *classInfo
+	var foundSection *sectionInfo
+
+	for _, class := range classes {
+		if class.Class.ID != classID.String() {
+			continue
+		}
+		foundClass = &classInfo{ID: class.Class.ID, Name: class.Class.Name}
+		if sectionID == nil {
+			break
+		}
+		for _, section := range class.Sections {
+			if section.ID == sectionID.String() {
+				foundSection = &sectionInfo{ID: section.ID, Name: section.Name}
+				break
+			}
+		}
+		break
+	}
+
+	if foundClass == nil {
+		return nil, nil, errors.New("class not found")
+	}
+	if sectionID != nil && foundSection == nil {
+		return nil, nil, errors.New("section does not belong to the selected class")
+	}
+
+	return foundClass, foundSection, nil
 }
 
 func (s *StudentService) validateClassSection(
@@ -342,51 +420,45 @@ func (s *StudentService) validateClassSection(
 	classID uuid.UUID,
 	sectionID *uuid.UUID,
 ) error {
-	url := fmt.Sprintf("%s/classes", s.cfg.AcademicServiceURL)
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
-	req.Header.Set("Authorization", authHeader)
+	_, _, err := s.getClassSectionInfo(authHeader, classID, sectionID)
+	return err
+}
 
-	resp, err := s.httpClient.Do(req)
+func (s *StudentService) generateStudentCode(
+	schoolID, classID uuid.UUID,
+	sectionID *uuid.UUID,
+	className string,
+	section *sectionInfo,
+	admissionYear int,
+) (string, error) {
+	classNum := extractClassNumber(className)
+	sectionLetter := "X"
+	if section != nil {
+		sectionLetter = strings.ToUpper(strings.TrimSpace(section.Name))
+		if sectionLetter == "" {
+			sectionLetter = "X"
+		}
+	}
+
+	count, err := s.repo.CountStudentsForEnrollment(schoolID, classID, sectionID, admissionYear)
 	if err != nil {
-		return errors.New("failed to validate class/section with academic-service")
+		return "", err
 	}
-	defer resp.Body.Close()
+	enrollmentNum := count + 1
 
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("academic-service validation failed: %s", strings.TrimSpace(string(body)))
-	}
+	code := fmt.Sprintf("%04d%s%s%02d", admissionYear, classNum, sectionLetter, enrollmentNum)
+	return code, nil
+}
 
-	var classes []academicClassResponse
-	if err := json.NewDecoder(resp.Body).Decode(&classes); err != nil {
-		return errors.New("failed to decode academic-service response")
+func extractClassNumber(className string) string {
+	re := regexp.MustCompile(`\d+`)
+	match := re.FindString(className)
+	if match == "" {
+		return "00"
 	}
-
-	classFound := false
-	sectionFound := sectionID == nil
-	for _, class := range classes {
-		if class.Class.ID != classID.String() {
-			continue
-		}
-		classFound = true
-		if sectionID == nil {
-			break
-		}
-		for _, section := range class.Sections {
-			if section.ID == sectionID.String() {
-				sectionFound = true
-				break
-			}
-		}
-		break
+	num, err := strconv.Atoi(match)
+	if err != nil {
+		return "00"
 	}
-
-	if !classFound {
-		return errors.New("class not found")
-	}
-	if !sectionFound {
-		return errors.New("section does not belong to the selected class")
-	}
-
-	return nil
+	return fmt.Sprintf("%02d", num)
 }
