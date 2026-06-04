@@ -82,7 +82,7 @@ docker compose down
 
 | Container | Purpose | Host port |
 |-----------|---------|-----------|
-| `auth-db` | PostgreSQL (auth) | 5433 |
+| `auth-db` | PostgreSQL (auth) | 15433 |
 | `user-db` | PostgreSQL (roles) | 5434 |
 | `academic-db` | PostgreSQL (academic) | 5435 |
 | `student-db` | PostgreSQL (students) | 5436 |

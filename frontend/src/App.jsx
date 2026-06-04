@@ -32,12 +32,7 @@ function RequirePerm({ any, children }) {
   const { hasPerm, loading } = useAuth();
   if (loading) return null;
   if (any.length > 0 && !any.some((p) => hasPerm(p))) {
-    return (
-      <div style={{ padding: 40, textAlign: "center" }}>
-        <h2>Access Denied</h2>
-        <p>You don't have permission to view this page.</p>
-      </div>
-    );
+    return <Navigate to="/" replace />;
   }
   return children;
 }

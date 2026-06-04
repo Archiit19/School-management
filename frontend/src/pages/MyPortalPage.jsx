@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   studentApi,
@@ -7,6 +8,12 @@ import {
   academicApi,
   financeApi,
 } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+function isAccessDenied(err) {
+  return err?.status === 403 || /permission|forbidden/i.test(err?.message || "");
+}
 
 const TABS = [
   { id: "profile", label: "Profile", perm: "view_own_profile" },
@@ -30,9 +37,12 @@ function fmtMoney(n) {
 }
 
 export default function MyPortalPage() {
-  const { user, hasPerm } = useAuth();
-  const visibleTabs = TABS.filter((t) => hasPerm(t.perm));
-  const [tab, setTab] = useState(visibleTabs[0]?.id || "profile");
+  const { user } = useAuth();
+  const { visibleTabs, tab, setTab } = usePermTabs(TABS, "profile");
+
+  if (visibleTabs.length === 0) {
+    return <Navigate to="/" replace />;
+  }
 
   return (
     <>
@@ -43,17 +53,7 @@ export default function MyPortalPage() {
         </p>
       </div>
 
-      <div className="tabs">
-        {visibleTabs.map((t) => (
-          <button
-            key={t.id}
-            className={`tab ${tab === t.id ? "active" : ""}`}
-            onClick={() => setTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "profile" && <ProfileTab />}
       {tab === "exams" && <ExamsTab />}
@@ -77,7 +77,7 @@ function ExamsTab() {
       const data = await examApi.getMyExams({ upcoming });
       setExams(data || []);
     } catch (e) {
-      setError(e.message);
+      if (!isAccessDenied(e)) setError(e.message);
     } finally {
       setLoading(false);
     }
@@ -138,25 +138,35 @@ function ProfileTab() {
   const [academicLoading, setAcademicLoading] = useState(true);
   const [error, setError] = useState("");
   const [academicError, setAcademicError] = useState("");
+  const [showAcademic, setShowAcademic] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     setAcademicLoading(true);
-    
+    setShowAcademic(true);
+
     studentApi.getMe()
       .then(setMe)
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        if (!isAccessDenied(e)) setError(e.message);
+      })
       .finally(() => setLoading(false));
-    
+
     academicApi.getMyAcademic()
       .then(setAcademic)
-      .catch((e) => setAcademicError(e.message || "Failed to load academic details"))
+      .catch((e) => {
+        if (isAccessDenied(e)) {
+          setShowAcademic(false);
+          return;
+        }
+        setAcademicError(e.message || "Failed to load academic details");
+      })
       .finally(() => setAcademicLoading(false));
   }, []);
 
   if (loading) return <div className="empty">Loading student profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
-  if (!me) return <div className="alert alert-error">Could not load student profile.</div>;
+  if (!me) return null;
 
   const fullName = `${me.first_name || ""} ${me.last_name || ""}`.trim();
   const school = user?.school || {};
@@ -229,6 +239,7 @@ function ProfileTab() {
         </div>
       </div>
 
+      {showAcademic && (
       <div className="card">
         <div className="card-title">
           Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
@@ -285,6 +296,7 @@ function ProfileTab() {
           <div className="empty">No academic profile available.</div>
         )}
       </div>
+      )}
     </>
   );
 }
@@ -307,7 +319,7 @@ function AttendanceTab() {
       setList(att?.attendance || []);
       setStats(st?.stats?.[0] || { total_days: 0, present_days: 0, absent_days: 0, late_days: 0, excused_days: 0, attendance_rate: 0 });
     } catch (e) {
-      setError(e.message);
+      if (!isAccessDenied(e)) setError(e.message);
     }
   }, [range.start_date, range.end_date]);
 
@@ -374,7 +386,9 @@ function ResultsTab() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    examApi.getMyResults().then((r) => setResults(r?.results || r || [])).catch((e) => setError(e.message));
+    examApi.getMyResults()
+      .then((r) => setResults(r?.results || r || []))
+      .catch((e) => { if (!isAccessDenied(e)) setError(e.message); });
   }, []);
 
   return (
@@ -427,7 +441,7 @@ function AssignmentsTab() {
       setAssignments(a || []);
       setSubmissions(s || []);
     } catch (e) {
-      setError(e.message);
+      if (!isAccessDenied(e)) setError(e.message);
     }
   }, []);
 
@@ -536,7 +550,9 @@ function DuesTab() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    financeApi.getMyDues().then((d) => setDues(d?.dues || d || [])).catch((e) => setError(e.message));
+    financeApi.getMyDues()
+      .then((d) => setDues(d?.dues || d || []))
+      .catch((e) => { if (!isAccessDenied(e)) setError(e.message); });
   }, []);
 
   const totalBalance = dues.reduce((sum, d) => sum + Number(d.balance || 0), 0);

@@ -107,6 +107,18 @@ func (r *AcademicRepository) GetTeacherAssignmentByComposite(
 	return &assignment, err
 }
 
+// GetTeacherAssignmentByClassSubject returns an assignment if any teacher is already
+// assigned to teach this subject in the class.
+func (r *AcademicRepository) GetTeacherAssignmentByClassSubject(
+	schoolID, classID, subjectID uuid.UUID,
+) (*model.TeacherAssignment, error) {
+	var assignment model.TeacherAssignment
+	err := r.db.
+		Where("school_id = ? AND class_id = ? AND subject_id = ?", schoolID, classID, subjectID).
+		First(&assignment).Error
+	return &assignment, err
+}
+
 func (r *AcademicRepository) GetTeacherAssignments(
 	schoolID uuid.UUID,
 	query model.TeacherAssignmentQuery,

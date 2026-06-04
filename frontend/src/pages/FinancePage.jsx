@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { financeApi, academicApi } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+const FINANCE_TABS = [
+  { id: "dues", label: "Dues", perm: "view_dues" },
+  { id: "fee", label: "Create Fee", perm: "create_fee" },
+  { id: "payment", label: "Record Payment", perm: "record_payment" },
+];
 
 export default function FinancePage() {
-  const [tab, setTab] = useState("dues");
+  const { visibleTabs, tab, setTab } = usePermTabs(FINANCE_TABS, "dues");
   const [dues, setDues] = useState([]);
   const [classes, setClasses] = useState([]);
   const [query, setQuery] = useState({ student_id: "", class_id: "", section_id: "" });
@@ -62,11 +70,7 @@ export default function FinancePage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "dues" ? "active" : ""}`} onClick={() => setTab("dues")}>Dues</button>
-        <button className={`tab ${tab === "fee" ? "active" : ""}`} onClick={() => setTab("fee")}>Create Fee</button>
-        <button className={`tab ${tab === "payment" ? "active" : ""}`} onClick={() => setTab("payment")}>Record Payment</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "dues" && (
         <div className="card">

@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { rolesApi, permissionsApi } from "../api/client";
+import PermGate from "../components/PermGate";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+const ROLES_TABS = [
+  { id: "roles", label: "Roles", any: ["create_role", "manage_permissions"] },
+  { id: "permissions", label: "Permissions", perm: "manage_permissions" },
+  { id: "assign", label: "Assign to Role", perm: "manage_permissions" },
+];
 
 export default function RolesPage() {
-  const [tab, setTab] = useState("roles");
+  const { visibleTabs, tab, setTab } = usePermTabs(ROLES_TABS, "roles");
   const [roles, setRoles] = useState([]);
   const [permissions, setPermissions] = useState([]);
   const [error, setError] = useState("");
@@ -56,24 +65,22 @@ export default function RolesPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "roles" ? "active" : ""}`} onClick={() => setTab("roles")}>Roles</button>
-        <button className={`tab ${tab === "permissions" ? "active" : ""}`} onClick={() => setTab("permissions")}>Permissions</button>
-        <button className={`tab ${tab === "assign" ? "active" : ""}`} onClick={() => setTab("assign")}>Assign to Role</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "roles" && (
         <>
-          <div className="card">
-            <div className="card-title">Create Role <span className="badge badge-post">POST</span></div>
-            <form onSubmit={createRole}>
-              <div className="grid-2">
-                <div className="form-group"><label>Name</label><input name="name" required value={roleForm.name} onChange={(e) => setRoleForm((p) => ({ ...p, name: e.target.value }))} placeholder="teacher" /></div>
-                <div className="form-group"><label>Description</label><input name="description" value={roleForm.description} onChange={(e) => setRoleForm((p) => ({ ...p, description: e.target.value }))} placeholder="Teacher role" /></div>
-              </div>
-              <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Role</button></div>
-            </form>
-          </div>
+          <PermGate perm="create_role">
+            <div className="card">
+              <div className="card-title">Create Role <span className="badge badge-post">POST</span></div>
+              <form onSubmit={createRole}>
+                <div className="grid-2">
+                  <div className="form-group"><label>Name</label><input name="name" required value={roleForm.name} onChange={(e) => setRoleForm((p) => ({ ...p, name: e.target.value }))} placeholder="teacher" /></div>
+                  <div className="form-group"><label>Description</label><input name="description" value={roleForm.description} onChange={(e) => setRoleForm((p) => ({ ...p, description: e.target.value }))} placeholder="Teacher role" /></div>
+                </div>
+                <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Role</button></div>
+              </form>
+            </div>
+          </PermGate>
           <div className="card">
             <div className="card-title">Roles <span className="badge badge-get">GET</span></div>
             <div className="table-wrap">

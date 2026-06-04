@@ -21,7 +21,7 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		DBHost:               getEnv("DB_HOST", "localhost"),
-		DBPort:               getEnv("DB_PORT", "5433"),
+		DBPort:               getEnv("DB_PORT", "15433"),
 		DBUser:               getEnv("DB_USER", "auth_user"),
 		DBPassword:           getEnv("DB_PASSWORD", "auth_pass"),
 		DBName:               getEnv("DB_NAME", "auth_db"),

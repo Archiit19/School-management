@@ -1,8 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
-import { examApi, academicApi } from "../api/client";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { examApi, academicApi, studentApi } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+function classNodeId(node) {
+  return (node.class || node).id;
+}
+
+const EXAM_TABS = [
+  { id: "exams", label: "Exams", perm: "view_exams" },
+  { id: "results", label: "Results", perm: "view_results" },
+  { id: "exam", label: "Create Exam", perm: "create_exam" },
+  { id: "marks", label: "Enter Marks", perm: "enter_marks" },
+  { id: "publish", label: "Publish", perm: "publish_results" },
+];
 
 export default function ExamsPage() {
-  const [tab, setTab] = useState("exams");
+  const { visibleTabs, tab, setTab } = usePermTabs(EXAM_TABS, "exams");
   const [results, setResults] = useState([]);
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -13,8 +27,18 @@ export default function ExamsPage() {
   const [busy, setBusy] = useState(false);
 
   const [examForm, setExamForm] = useState({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
-  const [marksForm, setMarksForm] = useState({ exam_id: "", student_id: "", marks_obtained: "", remarks: "" });
-  const [publishForm, setPublishForm] = useState({ exam_id: "" });
+  const [marksEntry, setMarksEntry] = useState({ class_id: "", section_id: "", exam_id: "" });
+  const [marksExamList, setMarksExamList] = useState([]);
+  const [marksStudents, setMarksStudents] = useState([]);
+  const [marksByStudent, setMarksByStudent] = useState({});
+  const [marksLoading, setMarksLoading] = useState(false);
+  const [marksSaving, setMarksSaving] = useState(false);
+  const [publishEntry, setPublishEntry] = useState({ class_id: "", section_id: "", exam_id: "" });
+  const [publishExamList, setPublishExamList] = useState([]);
+  const [publishStudents, setPublishStudents] = useState([]);
+  const [publishMarksByStudent, setPublishMarksByStudent] = useState({});
+  const [publishLoading, setPublishLoading] = useState(false);
+  const [publishSaving, setPublishSaving] = useState(false);
 
   const loadExams = useCallback(async () => {
     try {
@@ -30,16 +54,294 @@ export default function ExamsPage() {
     catch (err) { setError(err.message); }
   }, [query]);
 
-  useEffect(() => { loadExams(); }, [loadExams]);
-  useEffect(() => { loadResults(); }, [loadResults]);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+
+  useEffect(() => { if (tab === "exams" || tab === "exam") loadExams(); }, [loadExams, tab]);
+  useEffect(() => { if (tab === "results") loadResults(); }, [loadResults, tab]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
+
+  useEffect(() => {
+    if (!examForm.class_id) {
+      setTeacherAssignments([]);
+      return;
+    }
+    academicApi
+      .getTeacherAssignments({ class_id: examForm.class_id })
+      .then(setTeacherAssignments)
+      .catch(() => setTeacherAssignments([]));
+  }, [examForm.class_id]);
 
   const flatClasses = classes.map((c) => c.class || c);
   const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
   const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
 
-  const examFormSections = examForm.class_id ? flatSections.filter((s) => s.class_id === examForm.class_id) : [];
-  const examFormSubjects = examForm.class_id ? flatSubjects.filter((s) => s.class_id === examForm.class_id) : flatSubjects;
+  const examFormClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === examForm.class_id),
+    [classes, examForm.class_id],
+  );
+  const examFormSections = examFormClassNode?.sections || [];
+  const examFormHasSections = examFormSections.length > 0;
+
+  const assignedSubjectIdsForClass = useMemo(
+    () => new Set(teacherAssignments.map((ta) => ta.subject_id)),
+    [teacherAssignments],
+  );
+
+  const examFormAvailableSubjects = useMemo(() => {
+    if (!examForm.class_id || !examFormClassNode) return [];
+    const subjects = examFormClassNode.subjects || [];
+    return subjects.filter((s) => {
+      if (!assignedSubjectIdsForClass.has(s.id)) return false;
+      if (examFormHasSections) {
+        if (!examForm.section_id) return false;
+        if (!s.section_id) return true;
+        return s.section_id === examForm.section_id;
+      }
+      return !s.section_id;
+    });
+  }, [examForm.class_id, examForm.section_id, examFormClassNode, examFormHasSections, assignedSubjectIdsForClass]);
+
+  const canPickExamSubject = examForm.class_id && (!examFormHasSections || examForm.section_id);
+
+  function onExamFormClassChange(classId) {
+    setExamForm((p) => ({ ...p, class_id: classId, section_id: "", subject_id: "" }));
+  }
+
+  function onExamFormSectionChange(sectionId) {
+    setExamForm((p) => ({ ...p, section_id: sectionId, subject_id: "" }));
+  }
+
+  const marksClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === marksEntry.class_id),
+    [classes, marksEntry.class_id],
+  );
+  const marksSections = marksClassNode?.sections || [];
+  const marksHasSections = marksSections.length > 0;
+  const canPickMarksExam = marksEntry.class_id && (!marksHasSections || marksEntry.section_id);
+
+  const marksExamsForSelection = useMemo(() => {
+    if (!marksEntry.class_id) return [];
+    return marksExamList.filter((ex) => {
+      if (ex.is_published) return false;
+      if (!marksHasSections || !marksEntry.section_id) return true;
+      return !ex.section_id || ex.section_id === marksEntry.section_id;
+    });
+  }, [marksExamList, marksEntry.class_id, marksEntry.section_id, marksHasSections]);
+
+  const selectedMarksExam = useMemo(
+    () => marksExamList.find((ex) => ex.id === marksEntry.exam_id),
+    [marksExamList, marksEntry.exam_id],
+  );
+
+  useEffect(() => {
+    if (!marksEntry.class_id) {
+      setMarksExamList([]);
+      return;
+    }
+    examApi
+      .getExams({ class_id: marksEntry.class_id })
+      .then(setMarksExamList)
+      .catch(() => setMarksExamList([]));
+  }, [marksEntry.class_id]);
+
+  useEffect(() => {
+    if (!marksEntry.exam_id || !marksEntry.class_id) {
+      setMarksStudents([]);
+      setMarksByStudent({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setMarksLoading(true);
+      setError("");
+      try {
+        const q = { class_id: marksEntry.class_id, limit: 200, page: 1 };
+        if (marksEntry.section_id) q.section_id = marksEntry.section_id;
+        const [studRes, existing] = await Promise.all([
+          studentApi.list(q),
+          examApi.getResults({ exam_id: marksEntry.exam_id }),
+        ]);
+        if (cancelled) return;
+        const students = studRes.students || [];
+        setMarksStudents(students);
+        const rows = {};
+        students.forEach((s) => {
+          rows[s.id] = { marks_obtained: "", remarks: "" };
+        });
+        (existing || []).forEach((r) => {
+          if (rows[r.student_id]) {
+            rows[r.student_id] = {
+              marks_obtained: String(r.marks_obtained ?? ""),
+              remarks: "",
+            };
+          }
+        });
+        setMarksByStudent(rows);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setMarksLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [marksEntry.exam_id, marksEntry.class_id, marksEntry.section_id]);
+
+  function onMarksClassChange(classId) {
+    setMarksEntry({ class_id: classId, section_id: "", exam_id: "" });
+    setMarksStudents([]);
+    setMarksByStudent({});
+  }
+
+  function onMarksSectionChange(sectionId) {
+    setMarksEntry((p) => ({ ...p, section_id: sectionId, exam_id: "" }));
+    setMarksStudents([]);
+    setMarksByStudent({});
+  }
+
+  function setStudentMark(studentId, field, value) {
+    setMarksByStudent((prev) => ({
+      ...prev,
+      [studentId]: { ...prev[studentId], [field]: value },
+    }));
+  }
+
+  const publishClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === publishEntry.class_id),
+    [classes, publishEntry.class_id],
+  );
+  const publishSections = publishClassNode?.sections || [];
+  const publishHasSections = publishSections.length > 0;
+  const canPickPublishExam = publishEntry.class_id && (!publishHasSections || publishEntry.section_id);
+
+  const publishExamsForSelection = useMemo(() => {
+    if (!publishEntry.class_id) return [];
+    return publishExamList.filter((ex) => {
+      if (ex.is_published) return false;
+      if (!publishHasSections || !publishEntry.section_id) return true;
+      return !ex.section_id || ex.section_id === publishEntry.section_id;
+    });
+  }, [publishExamList, publishEntry.class_id, publishEntry.section_id, publishHasSections]);
+
+  const selectedPublishExam = useMemo(
+    () => publishExamList.find((ex) => ex.id === publishEntry.exam_id),
+    [publishExamList, publishEntry.exam_id],
+  );
+
+  useEffect(() => {
+    if (!publishEntry.class_id) {
+      setPublishExamList([]);
+      return;
+    }
+    examApi
+      .getExams({ class_id: publishEntry.class_id })
+      .then(setPublishExamList)
+      .catch(() => setPublishExamList([]));
+  }, [publishEntry.class_id]);
+
+  useEffect(() => {
+    if (!publishEntry.exam_id || !publishEntry.class_id) {
+      setPublishStudents([]);
+      setPublishMarksByStudent({});
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setPublishLoading(true);
+      setError("");
+      try {
+        const q = { class_id: publishEntry.class_id, limit: 200, page: 1 };
+        if (publishEntry.section_id) q.section_id = publishEntry.section_id;
+        const [studRes, existing] = await Promise.all([
+          studentApi.list(q),
+          examApi.getResults({ exam_id: publishEntry.exam_id }),
+        ]);
+        if (cancelled) return;
+        const students = studRes.students || [];
+        setPublishStudents(students);
+        const marks = {};
+        students.forEach((s) => {
+          marks[s.id] = null;
+        });
+        (existing || []).forEach((r) => {
+          if (Object.prototype.hasOwnProperty.call(marks, r.student_id)) {
+            marks[r.student_id] = r.marks_obtained;
+          }
+        });
+        setPublishMarksByStudent(marks);
+      } catch (err) {
+        if (!cancelled) setError(err.message);
+      } finally {
+        if (!cancelled) setPublishLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [publishEntry.exam_id, publishEntry.class_id, publishEntry.section_id]);
+
+  function onPublishClassChange(classId) {
+    setPublishEntry({ class_id: classId, section_id: "", exam_id: "" });
+    setPublishStudents([]);
+    setPublishMarksByStudent({});
+  }
+
+  function onPublishSectionChange(sectionId) {
+    setPublishEntry((p) => ({ ...p, section_id: sectionId, exam_id: "" }));
+    setPublishStudents([]);
+    setPublishMarksByStudent({});
+  }
+
+  const publishMarkedCount = useMemo(
+    () => Object.values(publishMarksByStudent).filter((m) => m != null && m !== "").length,
+    [publishMarksByStudent],
+  );
+
+  async function handleSaveAllMarks(e) {
+    e.preventDefault();
+    setError("");
+    if (!selectedMarksExam) {
+      setError("Select an exam.");
+      return;
+    }
+    if (selectedMarksExam.is_published) {
+      setError("Cannot enter marks after results are published.");
+      return;
+    }
+    const max = selectedMarksExam.total_marks;
+    const toSave = [];
+    for (const st of marksStudents) {
+      const row = marksByStudent[st.id];
+      if (!row || String(row.marks_obtained).trim() === "") continue;
+      const m = parseFloat(row.marks_obtained);
+      if (Number.isNaN(m) || m < 0 || m > max) {
+        setError(`Marks for ${st.first_name} ${st.last_name} must be between 0 and ${max}.`);
+        return;
+      }
+      toSave.push({
+        student_id: st.id,
+        marks_obtained: m,
+        remarks: row.remarks || "",
+      });
+    }
+    if (toSave.length === 0) {
+      setError("Enter marks for at least one student (leave blank to skip).");
+      return;
+    }
+    setMarksSaving(true);
+    try {
+      for (const row of toSave) {
+        await examApi.enterMarks({
+          exam_id: marksEntry.exam_id,
+          student_id: row.student_id,
+          marks_obtained: row.marks_obtained,
+          remarks: row.remarks,
+        });
+      }
+      msg(`Saved marks for ${toSave.length} student(s).`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setMarksSaving(false);
+    }
+  }
 
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
 
@@ -64,18 +366,38 @@ export default function ExamsPage() {
   const sectionNameById = new Map(classes.flatMap((c) => (c.sections || []).map((s) => [s.id, s.name])));
   const subjectNameById = new Map(classes.flatMap((c) => (c.subjects || []).map((s) => [s.id, s.name])));
 
-  async function handleEnterMarks(e) {
-    e.preventDefault(); setError(""); setBusy(true);
-    try {
-      await examApi.enterMarks({ ...marksForm, marks_obtained: parseFloat(marksForm.marks_obtained) });
-      msg("Marks saved.");
-    } catch (err) { setError(err.message); } finally { setBusy(false); }
-  }
-
   async function handlePublish(e) {
-    e.preventDefault(); setError(""); setBusy(true);
-    try { await examApi.publish(publishForm); msg("Results published."); loadResults(); loadExams(); }
-    catch (err) { setError(err.message); } finally { setBusy(false); }
+    e.preventDefault();
+    setError("");
+    if (!selectedPublishExam) {
+      setError("Select an exam.");
+      return;
+    }
+    if (selectedPublishExam.is_published) {
+      setError("This exam is already published.");
+      return;
+    }
+    if (publishMarkedCount === 0) {
+      setError("Enter marks for at least one student before publishing.");
+      return;
+    }
+    setPublishSaving(true);
+    try {
+      await examApi.publish({ exam_id: publishEntry.exam_id });
+      msg("Results published. Students can now view them in My Portal.");
+      setPublishEntry((p) => ({ ...p, exam_id: "" }));
+      setPublishStudents([]);
+      setPublishMarksByStudent({});
+      if (publishEntry.class_id) {
+        const list = await examApi.getExams({ class_id: publishEntry.class_id });
+        setPublishExamList(list);
+      }
+      loadExams();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setPublishSaving(false);
+    }
   }
 
   return (
@@ -88,13 +410,7 @@ export default function ExamsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "exams" ? "active" : ""}`} onClick={() => setTab("exams")}>Exams</button>
-        <button className={`tab ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Results</button>
-        <button className={`tab ${tab === "exam" ? "active" : ""}`} onClick={() => setTab("exam")}>Create Exam</button>
-        <button className={`tab ${tab === "marks" ? "active" : ""}`} onClick={() => setTab("marks")}>Enter Marks</button>
-        <button className={`tab ${tab === "publish" ? "active" : ""}`} onClick={() => setTab("publish")}>Publish</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "exams" && (
         <div className="card">
@@ -187,62 +503,335 @@ export default function ExamsPage() {
           <div className="card-title">Create Exam <span className="badge badge-post">POST /exams</span></div>
           <form onSubmit={handleCreateExam}>
             <div className="grid-3">
-              <div className="form-group"><label>Title</label><input required value={examForm.title} onChange={(e) => setExamForm((p) => ({ ...p, title: e.target.value }))} placeholder="Mid-term Math" /></div>
+              <div className="form-group">
+                <label>Title</label>
+                <input required value={examForm.title} onChange={(e) => setExamForm((p) => ({ ...p, title: e.target.value }))} placeholder="Mid-term Math" />
+              </div>
               <div className="form-group">
                 <label>Class</label>
-                <select required value={examForm.class_id} onChange={(e) => setExamForm((p) => ({ ...p, class_id: e.target.value, section_id: "", subject_id: "" }))}>
-                  <option value="">Select...</option>
+                <select required value={examForm.class_id} onChange={(e) => onExamFormClassChange(e.target.value)}>
+                  <option value="">Select class…</option>
                   {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label>Subject (optional)</label>
-                <select value={examForm.subject_id} onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))} disabled={!examForm.class_id}>
-                  <option value="">Any</option>
-                  {examFormSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label>Section</label>
+                <select
+                  required={examFormHasSections}
+                  disabled={!examForm.class_id}
+                  value={examForm.section_id}
+                  onChange={(e) => onExamFormSectionChange(e.target.value)}
+                >
+                  <option value="">
+                    {!examForm.class_id
+                      ? "Select class first…"
+                      : examFormHasSections
+                        ? "Select section…"
+                        : "No sections (class-wide)"}
+                  </option>
+                  {examFormSections.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
             <div className="grid-3">
               <div className="form-group">
-                <label>Section (optional)</label>
-                <select value={examForm.section_id} onChange={(e) => setExamForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!examForm.class_id}>
-                  <option value="">Any</option>
-                  {examFormSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label>Subject</label>
+                <select
+                  value={examForm.subject_id}
+                  onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))}
+                  disabled={!canPickExamSubject}
+                >
+                  <option value="">
+                    {!examForm.class_id
+                      ? "Select class first…"
+                      : examFormHasSections && !examForm.section_id
+                        ? "Select section first…"
+                        : examFormAvailableSubjects.length === 0
+                          ? "No subjects with teachers for this section"
+                          : "Select subject (optional)…"}
+                  </option>
+                  {examFormAvailableSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.code ? ` (${s.code})` : ""}
+                      {!s.section_id ? " — class-wide" : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="form-group"><label>Exam Date</label><input type="date" required value={examForm.exam_date} onChange={(e) => setExamForm((p) => ({ ...p, exam_date: e.target.value }))} /></div>
-              <div className="form-group"><label>Total Marks</label><input type="number" required min="1" value={examForm.total_marks} onChange={(e) => setExamForm((p) => ({ ...p, total_marks: e.target.value }))} placeholder="100" /></div>
+              <div className="form-group">
+                <label>Exam Date</label>
+                <input type="date" required value={examForm.exam_date} onChange={(e) => setExamForm((p) => ({ ...p, exam_date: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Total Marks</label>
+                <input type="number" required min="1" value={examForm.total_marks} onChange={(e) => setExamForm((p) => ({ ...p, total_marks: e.target.value }))} placeholder="100" />
+              </div>
             </div>
+            <p className="text-sm text-muted" style={{ marginTop: 8 }}>
+              Only subjects with a teacher assigned for this class and section are listed (see Teacher Assign).
+            </p>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Exam</button></div>
           </form>
         </div>
       )}
 
       {tab === "marks" && (
-        <div className="card">
-          <div className="card-title">Enter Marks <span className="badge badge-post">POST /marks</span></div>
-          <form onSubmit={handleEnterMarks}>
-            <div className="grid-4">
-              <div className="form-group"><label>Exam ID</label><input required value={marksForm.exam_id} onChange={(e) => setMarksForm((p) => ({ ...p, exam_id: e.target.value }))} placeholder="UUID" /></div>
-              <div className="form-group"><label>Student ID</label><input required value={marksForm.student_id} onChange={(e) => setMarksForm((p) => ({ ...p, student_id: e.target.value }))} placeholder="UUID" /></div>
-              <div className="form-group"><label>Marks Obtained</label><input type="number" required min="0" value={marksForm.marks_obtained} onChange={(e) => setMarksForm((p) => ({ ...p, marks_obtained: e.target.value }))} placeholder="85" /></div>
-              <div className="form-group"><label>Remarks</label><input value={marksForm.remarks} onChange={(e) => setMarksForm((p) => ({ ...p, remarks: e.target.value }))} placeholder="Optional" /></div>
-            </div>
-            <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Save Marks</button></div>
-          </form>
-        </div>
+        <>
+          <div className="card">
+            <div className="card-title">Enter Marks <span className="badge badge-post">POST /marks</span></div>
+            <form onSubmit={handleSaveAllMarks}>
+              <div className="grid-3 mb-4">
+                <div className="form-group">
+                  <label>Class</label>
+                  <select required value={marksEntry.class_id} onChange={(e) => onMarksClassChange(e.target.value)}>
+                    <option value="">Select class…</option>
+                    {flatClasses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Section</label>
+                  <select
+                    required={marksHasSections}
+                    disabled={!marksEntry.class_id}
+                    value={marksEntry.section_id}
+                    onChange={(e) => onMarksSectionChange(e.target.value)}
+                  >
+                    <option value="">
+                      {!marksEntry.class_id
+                        ? "Select class first…"
+                        : marksHasSections
+                          ? "Select section…"
+                          : "No sections"}
+                    </option>
+                    {marksSections.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Exam</label>
+                  <select
+                    required
+                    disabled={!canPickMarksExam}
+                    value={marksEntry.exam_id}
+                    onChange={(e) => setMarksEntry((p) => ({ ...p, exam_id: e.target.value }))}
+                  >
+                    <option value="">
+                      {!marksEntry.class_id
+                        ? "Select class first…"
+                        : marksHasSections && !marksEntry.section_id
+                          ? "Select section first…"
+                          : marksExamsForSelection.length === 0
+                            ? "No draft exams for this class/section"
+                            : "Select exam…"}
+                    </option>
+                    {marksExamsForSelection.map((ex) => (
+                      <option key={ex.id} value={ex.id}>
+                        {ex.title} — {ex.exam_date?.split("T")[0]} (max {ex.total_marks})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {selectedMarksExam && (
+                <p className="text-sm text-muted" style={{ marginBottom: 12 }}>
+                  Maximum marks: <strong>{selectedMarksExam.total_marks}</strong>. Leave blank to skip a student. Existing marks are pre-filled.
+                </p>
+              )}
+              {marksLoading && <div className="empty">Loading students…</div>}
+              {!marksLoading && marksEntry.exam_id && marksStudents.length === 0 && (
+                <div className="empty">No students in this class/section.</div>
+              )}
+              {!marksLoading && marksStudents.length > 0 && (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Student</th>
+                        <th>Code</th>
+                        <th>Marks obtained</th>
+                        <th>Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {marksStudents.map((st) => {
+                        const row = marksByStudent[st.id] || { marks_obtained: "", remarks: "" };
+                        const max = selectedMarksExam?.total_marks ?? 100;
+                        const m = parseFloat(row.marks_obtained);
+                        const invalid = row.marks_obtained !== "" && (Number.isNaN(m) || m < 0 || m > max);
+                        return (
+                          <tr key={st.id}>
+                            <td><strong>{st.first_name} {st.last_name}</strong></td>
+                            <td>{st.student_code || "—"}</td>
+                            <td>
+                              <input
+                                type="number"
+                                min={0}
+                                max={max}
+                                step="0.01"
+                                value={row.marks_obtained}
+                                onChange={(e) => setStudentMark(st.id, "marks_obtained", e.target.value)}
+                                placeholder={`0–${max}`}
+                                style={invalid ? { borderColor: "var(--clr-danger)" } : undefined}
+                              />
+                              {invalid && (
+                                <div className="text-sm" style={{ color: "var(--clr-danger)", marginTop: 4 }}>
+                                  Must be 0–{max}
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <input
+                                value={row.remarks}
+                                onChange={(e) => setStudentMark(st.id, "remarks", e.target.value)}
+                                placeholder="Optional"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div className="btn-row" style={{ marginTop: 16 }}>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={marksSaving || marksLoading || !marksEntry.exam_id || marksStudents.length === 0}
+                >
+                  {marksSaving ? "Saving…" : "Save all marks"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </>
       )}
 
       {tab === "publish" && (
         <div className="card">
           <div className="card-title">Publish Results <span className="badge badge-post">POST /results/publish</span></div>
           <form onSubmit={handlePublish}>
-            <div className="form-group" style={{ maxWidth: 400 }}>
-              <label>Exam ID</label>
-              <input required value={publishForm.exam_id} onChange={(e) => setPublishForm({ exam_id: e.target.value })} placeholder="UUID of exam to publish" />
+            <div className="grid-3 mb-4">
+              <div className="form-group">
+                <label>Class</label>
+                <select required value={publishEntry.class_id} onChange={(e) => onPublishClassChange(e.target.value)}>
+                  <option value="">Select class…</option>
+                  {flatClasses.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Section</label>
+                <select
+                  required={publishHasSections}
+                  disabled={!publishEntry.class_id}
+                  value={publishEntry.section_id}
+                  onChange={(e) => onPublishSectionChange(e.target.value)}
+                >
+                  <option value="">
+                    {!publishEntry.class_id
+                      ? "Select class first…"
+                      : publishHasSections
+                        ? "Select section…"
+                        : "No sections"}
+                  </option>
+                  {publishSections.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Exam</label>
+                <select
+                  required
+                  disabled={!canPickPublishExam}
+                  value={publishEntry.exam_id}
+                  onChange={(e) => setPublishEntry((p) => ({ ...p, exam_id: e.target.value }))}
+                >
+                  <option value="">
+                    {!publishEntry.class_id
+                      ? "Select class first…"
+                      : publishHasSections && !publishEntry.section_id
+                        ? "Select section first…"
+                        : publishExamsForSelection.length === 0
+                          ? "No draft exams for this class/section"
+                          : "Select exam…"}
+                  </option>
+                  {publishExamsForSelection.map((ex) => (
+                    <option key={ex.id} value={ex.id}>
+                      {ex.title} — {ex.exam_date?.split("T")[0]} (max {ex.total_marks})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Publish</button></div>
+            {selectedPublishExam && (
+              <p className="text-sm text-muted" style={{ marginBottom: 12 }}>
+                Review marks below, then publish to make results visible to students and parents.
+                {publishMarkedCount > 0 && (
+                  <> <strong>{publishMarkedCount}</strong> of {publishStudents.length} student(s) have marks entered.</>
+                )}
+              </p>
+            )}
+            {publishLoading && <div className="empty">Loading preview…</div>}
+            {!publishLoading && publishEntry.exam_id && publishStudents.length === 0 && (
+              <div className="empty">No students in this class/section.</div>
+            )}
+            {!publishLoading && publishStudents.length > 0 && (
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Student</th>
+                      <th>Code</th>
+                      <th>Marks</th>
+                      <th>Out of</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {publishStudents.map((st) => {
+                      const m = publishMarksByStudent[st.id];
+                      const hasMark = m != null && m !== "";
+                      const max = selectedPublishExam?.total_marks;
+                      return (
+                        <tr key={st.id}>
+                          <td><strong>{st.first_name} {st.last_name}</strong></td>
+                          <td>{st.student_code || "—"}</td>
+                          <td>
+                            {hasMark ? (
+                              <strong>{m}</strong>
+                            ) : (
+                              <span className="text-muted">Not entered</span>
+                            )}
+                          </td>
+                          <td>{hasMark ? max : "—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="btn-row" style={{ marginTop: 16 }}>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={
+                  publishSaving
+                  || publishLoading
+                  || !publishEntry.exam_id
+                  || publishMarkedCount === 0
+                }
+              >
+                {publishSaving ? "Publishing…" : "Publish results"}
+              </button>
+            </div>
           </form>
         </div>
       )}
