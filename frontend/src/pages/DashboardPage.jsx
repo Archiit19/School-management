@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import PermGate from "../components/PermGate";
 import { authApi, rolesApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
 
 const SERVICES = [
@@ -61,19 +62,21 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-title">Service Health</div>
-        <div className="stats-row">
-          {SERVICES.map((s) => (
-            <div className="stat-card" key={s.name}>
-              <div className="label">{s.name} :{s.port}</div>
-              <div className="value" style={{ color: health[s.name] === "up" ? "var(--clr-success)" : health[s.name] === "down" ? "var(--clr-danger)" : "var(--clr-text-secondary)" }}>
-                {health[s.name] === "up" ? "Online" : health[s.name] === "down" ? "Offline" : "..."}
+      <PermGate any={["view_users", "create_user"]}>
+        <div className="card">
+          <div className="card-title">Service Health</div>
+          <div className="stats-row">
+            {SERVICES.map((s) => (
+              <div className="stat-card" key={s.name}>
+                <div className="label">{s.name} :{s.port}</div>
+                <div className="value" style={{ color: health[s.name] === "up" ? "var(--clr-success)" : health[s.name] === "down" ? "var(--clr-danger)" : "var(--clr-text-secondary)" }}>
+                  {health[s.name] === "up" ? "Online" : health[s.name] === "down" ? "Offline" : "..."}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
+      </PermGate>
     </>
   );
 }

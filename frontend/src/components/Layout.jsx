@@ -28,9 +28,12 @@ export default function Layout() {
     navigate("/login");
   }
 
-  const visibleNav = NAV.filter(
-    (item) => item.perms.length === 0 || item.perms.some((p) => hasPerm(p)),
-  );
+  const visibleNav = NAV.filter((item) => {
+    if (item.to === "/me") {
+      return user?.role_name === "student" || !!user?.student_id;
+    }
+    return item.perms.length === 0 || item.perms.some((p) => hasPerm(p));
+  });
 
   return (
     <div className="app-shell">

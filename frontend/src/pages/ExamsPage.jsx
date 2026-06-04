@@ -1,8 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { examApi, academicApi } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+const EXAM_TABS = [
+  { id: "exams", label: "Exams", perm: "view_exams" },
+  { id: "results", label: "Results", perm: "view_results" },
+  { id: "exam", label: "Create Exam", perm: "create_exam" },
+  { id: "marks", label: "Enter Marks", perm: "enter_marks" },
+  { id: "publish", label: "Publish", perm: "publish_results" },
+];
 
 export default function ExamsPage() {
-  const [tab, setTab] = useState("exams");
+  const { visibleTabs, tab, setTab } = usePermTabs(EXAM_TABS, "exams");
   const [results, setResults] = useState([]);
   const [exams, setExams] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -30,8 +40,8 @@ export default function ExamsPage() {
     catch (err) { setError(err.message); }
   }, [query]);
 
-  useEffect(() => { loadExams(); }, [loadExams]);
-  useEffect(() => { loadResults(); }, [loadResults]);
+  useEffect(() => { if (tab === "exams" || tab === "exam" || tab === "publish") loadExams(); }, [loadExams, tab]);
+  useEffect(() => { if (tab === "results") loadResults(); }, [loadResults, tab]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   const flatClasses = classes.map((c) => c.class || c);
@@ -88,13 +98,7 @@ export default function ExamsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "exams" ? "active" : ""}`} onClick={() => setTab("exams")}>Exams</button>
-        <button className={`tab ${tab === "results" ? "active" : ""}`} onClick={() => setTab("results")}>Results</button>
-        <button className={`tab ${tab === "exam" ? "active" : ""}`} onClick={() => setTab("exam")}>Create Exam</button>
-        <button className={`tab ${tab === "marks" ? "active" : ""}`} onClick={() => setTab("marks")}>Enter Marks</button>
-        <button className={`tab ${tab === "publish" ? "active" : ""}`} onClick={() => setTab("publish")}>Publish</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "exams" && (
         <div className="card">

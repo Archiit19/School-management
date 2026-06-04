@@ -1,8 +1,17 @@
 import { useState, useEffect, useCallback } from "react";
 import { academicApi } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+const ACADEMIC_TABS = [
+  { id: "view", label: "View Tree", perm: "view_academic" },
+  { id: "class", label: "Add Class", perm: "create_class" },
+  { id: "section", label: "Add Section", perm: "create_section" },
+  { id: "subject", label: "Add Subject", perm: "create_subject" },
+];
 
 export default function AcademicPage() {
-  const [tab, setTab] = useState("view");
+  const { visibleTabs, tab, setTab } = usePermTabs(ACADEMIC_TABS, "view");
   const [classes, setClasses] = useState([]);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -53,12 +62,7 @@ export default function AcademicPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "view" ? "active" : ""}`} onClick={() => setTab("view")}>View Tree</button>
-        <button className={`tab ${tab === "class" ? "active" : ""}`} onClick={() => setTab("class")}>Add Class</button>
-        <button className={`tab ${tab === "section" ? "active" : ""}`} onClick={() => setTab("section")}>Add Section</button>
-        <button className={`tab ${tab === "subject" ? "active" : ""}`} onClick={() => setTab("subject")}>Add Subject</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "view" && (
         <div className="card">

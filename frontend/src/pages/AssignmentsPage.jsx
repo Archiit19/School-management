@@ -1,8 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
 import { academicApi } from "../api/client";
+import PermTabBar from "../components/PermTabBar";
+import { usePermTabs } from "../hooks/usePermTabs";
+
+const ASSIGNMENT_TABS = [
+  { id: "list", label: "View", perm: "view_assignments" },
+  { id: "create", label: "Create Assignment", perm: "create_assignment" },
+  { id: "submit", label: "Submit Work", perm: "submit_assignment" },
+];
 
 export default function AssignmentsPage() {
-  const [tab, setTab] = useState("list");
+  const { visibleTabs, tab, setTab } = usePermTabs(ASSIGNMENT_TABS, "list");
   const [assignments, setAssignments] = useState([]);
   const [classes, setClasses] = useState([]);
   const [query, setQuery] = useState({ class_id: "", subject_id: "", teacher_id: "" });
@@ -57,11 +65,7 @@ export default function AssignmentsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <div className="tabs">
-        <button className={`tab ${tab === "list" ? "active" : ""}`} onClick={() => setTab("list")}>View</button>
-        <button className={`tab ${tab === "create" ? "active" : ""}`} onClick={() => setTab("create")}>Create Assignment</button>
-        <button className={`tab ${tab === "submit" ? "active" : ""}`} onClick={() => setTab("submit")}>Submit Work</button>
-      </div>
+      <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
       {tab === "list" && (
         <div className="card">

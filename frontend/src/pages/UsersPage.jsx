@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { userMgmtApi, rolesApi } from "../api/client";
+import PermGate from "../components/PermGate";
+import { useAuth } from "../context/AuthContext";
 
 export default function UsersPage() {
+  const { hasPerm } = useAuth();
   const [users, setUsers] = useState([]);
   const [roles, setRoles] = useState([]);
   const [total, setTotal] = useState(0);
@@ -65,6 +68,7 @@ export default function UsersPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      <PermGate perm="create_user">
       <div className="card">
         <div className="card-title">Create User <span className="badge badge-post">POST /users</span></div>
         <form onSubmit={handleCreate}>
@@ -98,6 +102,7 @@ export default function UsersPage() {
           </div>
         </form>
       </div>
+      </PermGate>
 
       <div className="card">
         <div className="card-title">
@@ -124,7 +129,11 @@ export default function UsersPage() {
                   <td>{u.role_name || <span className="mono truncate">{u.role_id}</span>}</td>
                   <td><span className={`status ${u.is_active ? "status-active" : "status-inactive"}`}>{u.is_active ? "Active" : "Inactive"}</span></td>
                   <td><span className="mono truncate">{u.id}</span></td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)}>Delete</button></td>
+                  <td>
+                    {hasPerm("delete_user") && (
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)}>Delete</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { studentApi, academicApi } from "../api/client";
+import PermGate from "../components/PermGate";
+import { useAuth } from "../context/AuthContext";
 
 export default function StudentsPage() {
+  const { hasPerm } = useAuth();
   const [students, setStudents] = useState([]);
   const [classes, setClasses] = useState([]);
   const [total, setTotal] = useState(0);
@@ -125,6 +128,7 @@ export default function StudentsPage() {
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
+      <PermGate perm="admit_student">
       <div className="card">
         <div className="card-title">Admit Student <span className="badge badge-post">POST /students</span></div>
         <form onSubmit={handleCreate}>
@@ -166,6 +170,7 @@ export default function StudentsPage() {
           <div className="btn-row"><button className="btn btn-primary" disabled={busy}>{busy ? "Admitting..." : "Admit Student"}</button></div>
         </form>
       </div>
+      </PermGate>
 
       <div className="card">
         <div className="card-title">Students ({total}) <span className="badge badge-get">GET /students</span></div>
@@ -198,7 +203,11 @@ export default function StudentsPage() {
                   <td>{classMap[s.class_id] || s.class_id}</td>
                   <td>{s.section_id ? (sectionMap[s.section_id] || s.section_id) : "—"}</td>
                   <td><span className={`status ${s.is_active ? "status-active" : "status-inactive"}`}>{s.is_active ? "Active" : "Inactive"}</span></td>
-                  <td><button className="btn btn-ghost btn-sm" onClick={() => startEdit(s)}>Edit</button></td>
+                  <td>
+                    {hasPerm("update_student") && (
+                      <button className="btn btn-ghost btn-sm" onClick={() => startEdit(s)}>Edit</button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -213,7 +222,7 @@ export default function StudentsPage() {
         )}
       </div>
 
-      {editingStudent && (
+      {editingStudent && hasPerm("update_student") && (
         <div className="modal-overlay" onClick={cancelEdit}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
