@@ -193,6 +193,14 @@ func (s *AcademicService) CreateTeacherAssignment(
 		return nil, err
 	}
 
+	_, err = s.repo.GetTeacherAssignmentByClassSubject(schoolID, classID, subjectID)
+	if err == nil {
+		return nil, errors.New("this subject already has a teacher assigned for this class")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate subject assignment: %w", err)
+	}
+
 	_, err = s.repo.GetTeacherAssignmentByComposite(schoolID, teacherUserID, classID, subjectID)
 	if err == nil {
 		return nil, errors.New("teacher assignment already exists")
