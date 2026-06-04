@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { examApi, academicApi } from "../api/client";
 import PermTabBar from "../components/PermTabBar";
 import { usePermTabs } from "../hooks/usePermTabs";
+
+function classNodeId(node) {
+  return (node.class || node).id;
+}
 
 const EXAM_TABS = [
   { id: "exams", label: "Exams", perm: "view_exams" },
@@ -40,16 +44,62 @@ export default function ExamsPage() {
     catch (err) { setError(err.message); }
   }, [query]);
 
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
+
   useEffect(() => { if (tab === "exams" || tab === "exam" || tab === "publish") loadExams(); }, [loadExams, tab]);
   useEffect(() => { if (tab === "results") loadResults(); }, [loadResults, tab]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
+
+  useEffect(() => {
+    if (!examForm.class_id) {
+      setTeacherAssignments([]);
+      return;
+    }
+    academicApi
+      .getTeacherAssignments({ class_id: examForm.class_id })
+      .then(setTeacherAssignments)
+      .catch(() => setTeacherAssignments([]));
+  }, [examForm.class_id]);
 
   const flatClasses = classes.map((c) => c.class || c);
   const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
   const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
 
-  const examFormSections = examForm.class_id ? flatSections.filter((s) => s.class_id === examForm.class_id) : [];
-  const examFormSubjects = examForm.class_id ? flatSubjects.filter((s) => s.class_id === examForm.class_id) : flatSubjects;
+  const examFormClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === examForm.class_id),
+    [classes, examForm.class_id],
+  );
+  const examFormSections = examFormClassNode?.sections || [];
+  const examFormHasSections = examFormSections.length > 0;
+
+  const assignedSubjectIdsForClass = useMemo(
+    () => new Set(teacherAssignments.map((ta) => ta.subject_id)),
+    [teacherAssignments],
+  );
+
+  const examFormAvailableSubjects = useMemo(() => {
+    if (!examForm.class_id || !examFormClassNode) return [];
+    const subjects = examFormClassNode.subjects || [];
+    return subjects.filter((s) => {
+      if (!assignedSubjectIdsForClass.has(s.id)) return false;
+      if (examFormHasSections) {
+        if (!examForm.section_id) return false;
+        if (!s.section_id) return true;
+        return s.section_id === examForm.section_id;
+      }
+      return !s.section_id;
+    });
+  }, [examForm.class_id, examForm.section_id, examFormClassNode, examFormHasSections, assignedSubjectIdsForClass]);
+
+  const canPickExamSubject = examForm.class_id && (!examFormHasSections || examForm.section_id);
+
+  function onExamFormClassChange(classId) {
+    setExamForm((p) => ({ ...p, class_id: classId, section_id: "", subject_id: "" }));
+  }
+
+  function onExamFormSectionChange(sectionId) {
+    setExamForm((p) => ({ ...p, section_id: sectionId, subject_id: "" }));
+  }
 
   function msg(txt) { setSuccess(txt); setError(""); setTimeout(() => setSuccess(""), 3000); }
 
@@ -191,33 +241,75 @@ export default function ExamsPage() {
           <div className="card-title">Create Exam <span className="badge badge-post">POST /exams</span></div>
           <form onSubmit={handleCreateExam}>
             <div className="grid-3">
-              <div className="form-group"><label>Title</label><input required value={examForm.title} onChange={(e) => setExamForm((p) => ({ ...p, title: e.target.value }))} placeholder="Mid-term Math" /></div>
+              <div className="form-group">
+                <label>Title</label>
+                <input required value={examForm.title} onChange={(e) => setExamForm((p) => ({ ...p, title: e.target.value }))} placeholder="Mid-term Math" />
+              </div>
               <div className="form-group">
                 <label>Class</label>
-                <select required value={examForm.class_id} onChange={(e) => setExamForm((p) => ({ ...p, class_id: e.target.value, section_id: "", subject_id: "" }))}>
-                  <option value="">Select...</option>
+                <select required value={examForm.class_id} onChange={(e) => onExamFormClassChange(e.target.value)}>
+                  <option value="">Select class…</option>
                   {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
-                <label>Subject (optional)</label>
-                <select value={examForm.subject_id} onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))} disabled={!examForm.class_id}>
-                  <option value="">Any</option>
-                  {examFormSubjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label>Section</label>
+                <select
+                  required={examFormHasSections}
+                  disabled={!examForm.class_id}
+                  value={examForm.section_id}
+                  onChange={(e) => onExamFormSectionChange(e.target.value)}
+                >
+                  <option value="">
+                    {!examForm.class_id
+                      ? "Select class first…"
+                      : examFormHasSections
+                        ? "Select section…"
+                        : "No sections (class-wide)"}
+                  </option>
+                  {examFormSections.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
                 </select>
               </div>
             </div>
             <div className="grid-3">
               <div className="form-group">
-                <label>Section (optional)</label>
-                <select value={examForm.section_id} onChange={(e) => setExamForm((p) => ({ ...p, section_id: e.target.value }))} disabled={!examForm.class_id}>
-                  <option value="">Any</option>
-                  {examFormSections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                <label>Subject</label>
+                <select
+                  value={examForm.subject_id}
+                  onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))}
+                  disabled={!canPickExamSubject}
+                >
+                  <option value="">
+                    {!examForm.class_id
+                      ? "Select class first…"
+                      : examFormHasSections && !examForm.section_id
+                        ? "Select section first…"
+                        : examFormAvailableSubjects.length === 0
+                          ? "No subjects with teachers for this section"
+                          : "Select subject (optional)…"}
+                  </option>
+                  {examFormAvailableSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.code ? ` (${s.code})` : ""}
+                      {!s.section_id ? " — class-wide" : ""}
+                    </option>
+                  ))}
                 </select>
               </div>
-              <div className="form-group"><label>Exam Date</label><input type="date" required value={examForm.exam_date} onChange={(e) => setExamForm((p) => ({ ...p, exam_date: e.target.value }))} /></div>
-              <div className="form-group"><label>Total Marks</label><input type="number" required min="1" value={examForm.total_marks} onChange={(e) => setExamForm((p) => ({ ...p, total_marks: e.target.value }))} placeholder="100" /></div>
+              <div className="form-group">
+                <label>Exam Date</label>
+                <input type="date" required value={examForm.exam_date} onChange={(e) => setExamForm((p) => ({ ...p, exam_date: e.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Total Marks</label>
+                <input type="number" required min="1" value={examForm.total_marks} onChange={(e) => setExamForm((p) => ({ ...p, total_marks: e.target.value }))} placeholder="100" />
+              </div>
             </div>
+            <p className="text-sm text-muted" style={{ marginTop: 8 }}>
+              Only subjects with a teacher assigned for this class and section are listed (see Teacher Assign).
+            </p>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Exam</button></div>
           </form>
         </div>
