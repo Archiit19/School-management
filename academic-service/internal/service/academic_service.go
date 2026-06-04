@@ -401,9 +401,9 @@ func (s *AcademicService) GetMyAcademicProfile(
 		}
 	}
 
-	// 4. Subjects for the class
+	// 4. Subjects for the pupil's class, scoped to their section (+ class-wide subjects).
 	if subjects, err := s.repo.GetSubjectsByClassID(st.ClassID); err == nil {
-		profile.Subjects = subjects
+		profile.Subjects = filterSubjectsForStudent(subjects, st.SectionID)
 	}
 
 	// 5. Teacher assignments for the class, then enrich names via auth-service.
@@ -415,11 +415,16 @@ func (s *AcademicService) GetMyAcademicProfile(
 	}
 
 	subjectName := make(map[uuid.UUID]string, len(profile.Subjects))
+	visibleSubjectIDs := make(map[uuid.UUID]struct{}, len(profile.Subjects))
 	for _, sub := range profile.Subjects {
 		subjectName[sub.ID] = sub.Name
+		visibleSubjectIDs[sub.ID] = struct{}{}
 	}
 
 	for _, ta := range tas {
+		if _, ok := visibleSubjectIDs[ta.SubjectID]; !ok {
+			continue
+		}
 		ct := model.ClassTeacher{
 			TeacherUserID: ta.TeacherUserID,
 			SubjectID:     ta.SubjectID,
@@ -432,6 +437,23 @@ func (s *AcademicService) GetMyAcademicProfile(
 		profile.Teachers = append(profile.Teachers, ct)
 	}
 	return profile, nil
+}
+
+// filterSubjectsForStudent returns subjects the pupil should see: class-wide subjects
+// (no section) plus subjects tied to the pupil's own section. Without this filter,
+// every section's copy of "Hindi", "Math", etc. would appear and look like duplicates.
+func filterSubjectsForStudent(subjects []model.Subject, sectionID *uuid.UUID) []model.Subject {
+	filtered := make([]model.Subject, 0, len(subjects))
+	for _, s := range subjects {
+		if s.SectionID == nil {
+			filtered = append(filtered, s)
+			continue
+		}
+		if sectionID != nil && *s.SectionID == *sectionID {
+			filtered = append(filtered, s)
+		}
+	}
+	return filtered
 }
 
 // resolveUser fetches a user's name and email via auth-service's internal endpoint.
