@@ -9,6 +9,7 @@ import (
 	"github.com/Archiit19/School-management/auth-service/internal/middleware"
 	"github.com/Archiit19/School-management/auth-service/internal/migrate"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/Archiit19/School-management/auth-service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -17,62 +18,77 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/Archiit19/School-management/auth-service/docs" // swagger docs
+	_ "github.com/Archiit19/School-management/auth-service/docs"
 )
 
 // @title           Auth Service API
 // @version         1.0
-// @description     Authentication & User Management service for the School Management System.
-// @description     Handles school registration, login, JWT authentication, and user CRUD operations.
-
+// @description     Authentication, credentials, RBAC, and JWT for the School Management System.
 // @host            localhost:8081
 // @BasePath        /
-
 // @securityDefinitions.apikey BearerAuth
 // @in   header
 // @name Authorization
-// @description Enter your JWT token with the `Bearer ` prefix, e.g. `Bearer eyJhbGci...`
+func seedPermissionsFromJSON(db *gorm.DB) {
+	list, err := rbacdata.LoadPredefinedPermissions()
+	if err != nil {
+		log.Fatalf("failed to load predefined_permissions.json: %v", err)
+	}
+	for _, p := range list {
+		db.Where("name = ?", p.Name).FirstOrCreate(&model.Permission{
+			Name:        p.Name,
+			Description: p.Description,
+		})
+	}
+}
 
 func main() {
-	// Load config
 	cfg := config.Load()
 
-	// Connect to database
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
-	log.Println("✅ Connected to Auth DB")
+	log.Println("Connected to Auth DB")
 
-	// Auto-migrate
-	if err := db.AutoMigrate(&model.User{}); err != nil {
+	if err := db.AutoMigrate(
+		&model.UserCredential{},
+		&model.UserRole{},
+		&model.Role{},
+		&model.Permission{},
+		&model.RolePermission{},
+	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
-	if err := migrate.UserSchema(db); err != nil {
-		log.Fatalf("failed to apply user schema migration: %v", err)
+	if err := migrate.LegacySchema(db); err != nil {
+		log.Fatalf("failed legacy migration: %v", err)
 	}
-	log.Println("✅ Database migrated")
+	log.Println("Database migrated")
 
-	// Wire dependencies
-	repo := repository.NewAuthRepository(db)
-	authSvc := service.NewAuthService(repo, cfg)
-	userMgmtSvc := service.NewUserManagementService(repo, cfg, authSvc)
+	seedPermissionsFromJSON(db)
+	log.Println("Predefined permissions seeded")
+
+	rbacRepo := repository.NewRBACRepository(db)
+	credRepo := repository.NewCredentialRepository(db)
+	rbacSvc := service.NewRBACService(rbacRepo)
+	credSvc := service.NewCredentialService(credRepo, rbacSvc)
+	authSvc := service.NewAuthService(cfg, credSvc, rbacSvc)
+
+	if err := rbacSvc.SyncTemplateRolesForAllSchools(); err != nil {
+		log.Printf("template role sync: %v", err)
+	}
 
 	authHandler := handler.NewAuthHandler(authSvc)
-	userHandler := handler.NewUserHandler(userMgmtSvc)
+	rbacHandler := handler.NewRBACHandler(rbacSvc)
+	internalHandler := handler.NewInternalHandler(credSvc, rbacSvc)
 
-	// Setup Gin router
 	r := gin.Default()
 
-	// Health check
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "auth-service is running"})
 	})
-
-	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	// ─── Auth routes (public) ───────────────────────────────────────
 	auth := r.Group("/auth")
 	{
 		auth.POST("/signup", authHandler.Signup)
@@ -80,7 +96,6 @@ func main() {
 		auth.POST("/login", authHandler.Login)
 	}
 
-	// ─── Auth routes (protected) ────────────────────────────────────
 	authProtected := r.Group("/auth")
 	authProtected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
@@ -90,28 +105,39 @@ func main() {
 		authProtected.POST("/exit-school", authHandler.ExitSchool)
 	}
 
-	// ─── User Management routes (protected, permission-checked) ─────
-	users := r.Group("/users")
-	users.Use(middleware.JWTAuth(cfg.JWTSecret))
+	api := r.Group("/api/v1")
 	{
-		users.POST("", middleware.RequirePermission("create_user"), userHandler.CreateUser)
-		users.GET("", middleware.RequirePermission("view_users"), userHandler.GetUsers)
-		users.GET("/:id", middleware.RequirePermission("view_users"), userHandler.GetUserByID)
-		users.PATCH("/:id", middleware.RequirePermission("update_user"), userHandler.UpdateUser)
-		users.DELETE("/:id", middleware.RequirePermission("delete_user"), userHandler.DeleteUser)
+		api.POST("/roles/internal", rbacHandler.CreateRoleInternal)
+		api.POST("/internal/bootstrap-school", rbacHandler.BootstrapSchoolInternal)
+		api.GET("/internal/roles/by-name", rbacHandler.GetRoleByNameAndSchoolInternal)
+		api.GET("/roles/:id", rbacHandler.GetRoleByID)
+		api.GET("/roles/:id/permissions", rbacHandler.GetRolePermissions)
+	}
+
+	protected := api.Group("")
+	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
+	{
+		protected.POST("/roles", middleware.RequirePermission("create_role"), rbacHandler.CreateRole)
+		protected.GET("/roles", rbacHandler.GetRoles)
+		protected.POST("/roles/assign-permission", middleware.RequirePermission("manage_permissions"), rbacHandler.AssignPermission)
+		protected.DELETE("/roles/:id/permissions/:permissionId", middleware.RequirePermission("manage_permissions"), rbacHandler.RemovePermissionFromRole)
+		protected.GET("/permissions", rbacHandler.GetPermissions)
 	}
 
 	internal := r.Group("/internal")
 	internal.Use(middleware.RequireInternalToken(cfg.InternalServiceToken))
 	{
-		internal.GET("/users/:id", userHandler.GetUserInternal)
-		internal.POST("/users/from-student", userHandler.CreateStudentLoginInternal)
+		internal.POST("/credentials", internalHandler.SetCredential)
+		internal.DELETE("/credentials/:userId", internalHandler.DeleteCredential)
+		internal.POST("/user-roles", internalHandler.AssignUserRole)
+		internal.PATCH("/user-roles", internalHandler.UpdateUserRole)
+		internal.DELETE("/user-roles", internalHandler.RemoveUserRole)
+		internal.GET("/user-roles/:userId", internalHandler.ListUserRoles)
 	}
 
-	// Start server
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("🚀 Auth Service starting on %s", addr)
-	log.Printf("📖 Swagger UI: http://localhost%s/swagger/index.html", addr)
+	log.Printf("Auth Service starting on %s", addr)
+	log.Printf("Swagger UI: http://localhost%s/swagger/index.html", addr)
 	if err := r.Run(addr); err != nil {
 		log.Fatalf("failed to start server: %v", err)
 	}

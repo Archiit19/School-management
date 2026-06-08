@@ -13,7 +13,7 @@ Legend: **Public** = no JWT. **Bearer** = `Authorization: Bearer <token>`.
 
 | Method | Path | Auth | Notes |
 |--------|------|------|--------|
-| `POST` | `http://localhost:8081/auth/register-school` | Public | Creates school + `super_admin` role (via user-service) + admin user; returns JWT |
+| `POST` | `http://localhost:8081/auth/register-school` | Public | Creates school + bootstraps roles + admin profile; returns JWT |
 | `POST` | `http://localhost:8081/auth/login` | Public | Returns JWT |
 | `GET` | `http://localhost:8081/auth/me` | Bearer | Current user profile |
 | `GET` | `http://localhost:8081/health` | Public | Liveness |
@@ -21,22 +21,38 @@ Legend: **Public** = no JWT. **Bearer** = `Authorization: Bearer <token>`.
 
 ---
 
-## Flow 2 — Roles & permissions (User Service)
+## Flow 2 — Roles & permissions (Auth Service)
 
-**Goal:** Define roles (teacher, parent, staff, …), optional permissions, map permissions to roles.
+**Goal:** Define roles (teacher, parent, staff, …), permissions, and role-permission links.
 
-**Base path:** `http://localhost:8082/api/v1`
+**Base path:** `http://localhost:8081/api/v1`
 
 | Method | Path | Auth | Notes |
 |--------|------|------|--------|
-| `POST` | `/roles/internal` | Public | Used by auth-service during school registration |
-| `GET` | `/roles/:id` | Public | Role by UUID (used by auth to resolve role name) |
+| `POST` | `/internal/bootstrap-school` | Public | Bootstrap template roles for a new school |
+| `GET` | `/internal/roles/by-name` | Public | Resolve role UUID by school + name |
+| `GET` | `/roles/:id` | Public | Role by UUID |
 | `POST` | `/roles` | Bearer | Create role for your school |
 | `GET` | `/roles` | Bearer | List roles for your school |
-| `POST` | `/permissions` | Bearer | Create global permission |
 | `GET` | `/permissions` | Bearer | List all permissions |
 | `POST` | `/roles/assign-permission` | Bearer | Link permission → role |
 | `GET` | `/roles/:id/permissions` | Bearer | List permissions for a role |
+
+---
+
+## Flow 2b — User profiles (User Service)
+
+**Goal:** CRUD for user profiles (no password or role stored here).
+
+**Base path:** `http://localhost:8082`
+
+| Method | Path | Auth | Notes |
+|--------|------|------|--------|
+| `POST` | `/users` | Bearer + `create_user` | Creates profile + credentials + school membership + role |
+| `GET` | `/users` | Bearer + `view_users` | List users in current school |
+| `GET` | `/users/:id` | Bearer + `view_users` | Get one user |
+| `PATCH` | `/users/:id` | Bearer + `update_user` | Update profile / role |
+| `DELETE` | `/users/:id` | Bearer + `delete_user` | Remove from school; delete profile if no other schools |
 | `GET` | `http://localhost:8082/health` | Public | Liveness |
 | `GET` | `http://localhost:8082/swagger/*` | Public | Swagger UI |
 
@@ -137,17 +153,11 @@ Legend: **Public** = no JWT. **Bearer** = `Authorization: Bearer <token>`.
 
 ---
 
-## Cross-cutting — User management (Auth Service)
+## Cross-cutting — User management (User Service)
 
-**Goal:** Super admin creates staff / teachers / parents (needs `role_id` from user-service).
+**Goal:** Super admin creates staff / teachers / parents (needs `role_id` from auth-service roles API).
 
-| Method | Path | Auth | Notes |
-|--------|------|------|--------|
-| `POST` | `http://localhost:8081/users` | Bearer + **super_admin** | Create user |
-| `GET` | `http://localhost:8081/users` | Bearer + **super_admin** | List users |
-| `GET` | `http://localhost:8081/users/:id` | Bearer + **super_admin** | Get user |
-| `PATCH` | `http://localhost:8081/users/:id` | Bearer + **super_admin** | Update user |
-| `DELETE` | `http://localhost:8081/users/:id` | Bearer + **super_admin** | Delete user |
+See **Flow 2b** above (`http://localhost:8082/users`).
 
 ---
 
@@ -155,8 +165,8 @@ Legend: **Public** = no JWT. **Bearer** = `Authorization: Bearer <token>`.
 
 | Service | `swagger.yaml` |
 |---------|----------------|
-| auth-service | `auth-service/docs/swagger.yaml` |
-| user-service | `user-service/docs/swagger.yaml` |
+| auth-service | `auth-service/docs/swagger.yaml` (login + RBAC) |
+| user-service | `user-service/docs/swagger.yaml` (profiles) |
 | academic-service | `academic-service/docs/swagger.yaml` |
 | student-service | `student-service/docs/swagger.yaml` |
 | attendance-service | `attendance-service/docs/swagger.yaml` |

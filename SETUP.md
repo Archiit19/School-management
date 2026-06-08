@@ -87,15 +87,15 @@ docker compose down
 | Container | Purpose | Host port |
 |-----------|---------|-----------|
 | `auth-db` | PostgreSQL (auth) | 15433 |
-| `user-db` | PostgreSQL (roles) | 5434 |
+| `user-db` | PostgreSQL (user profiles) | 5434 |
 | `academic-db` | PostgreSQL (academic) | 5435 |
 | `student-db` | PostgreSQL (students) | 5436 |
 | `attendance-db` | PostgreSQL (attendance) | 5437 |
 | `exam-db` | PostgreSQL (exams) | 5438 |
 | `finance-db` | PostgreSQL (finance) | 5439 |
 | `school-db` | PostgreSQL (schools) | 5440 |
-| `auth-service` | Login, users, JWT | **8081** |
-| `user-service` | Roles & permissions | **8082** |
+| `auth-service` | Login, credentials, RBAC, JWT | **8081** |
+| `user-service` | User profile CRUD | **8082** |
 | `academic-service` | Classes, assignments | **8083** |
 | `student-service` | Student admission | **8084** |
 | `attendance-service` | Attendance | **8085** |
@@ -137,27 +137,35 @@ curl http://localhost:8087/health
 curl http://localhost:8088/health
 ```
 
-### User ↔ school mapping
+### Identity split (auth / user / school)
 
-Auth `users` no longer stores `school_id` or `role_id`. Membership lives in **school-service** table `user_schools` (`user_id`, `school_id`, `role_id`).
+| Data | Service | Table |
+|------|---------|-------|
+| Profiles (name, email, student_id) | **user-service** | `users` |
+| Passwords | **auth-service** | `user_credentials` |
+| Roles & permissions | **auth-service** | `roles`, `permissions`, `role_permissions` |
+| User ↔ role (per school) | **auth-service** | `user_roles` |
+| User ↔ school membership | **school-service** | `user_schools` |
 
-Internal APIs for other services (header `X-Internal-Token`):
+**UI routing:** login, roles, permissions → `/api/auth` (8081). User admin CRUD → `/api/users` (8082).
+
+School-service internal APIs (header `X-Internal-Token`):
 
 | Endpoint | Purpose |
 |----------|---------|
-| `GET /internal/users/:userId/memberships` | All schools + roles for a user |
-| `GET /internal/schools/:id/members` | All users in a school |
-| `GET /internal/schools/:id/members/:userId` | One membership |
-| `POST /internal/schools/:id/members` | Link user to school |
-| `PATCH /internal/schools/:id/members/:userId` | Update role |
-| `DELETE /internal/schools/:id/members/:userId` | Remove link |
+| `GET /internal/users/:userId/memberships` | All schools for a user |
+| `GET /internal/schools/:id/members` | All members in a school |
+| `POST /internal/schools/:id/members` | Link user to school (`user_id` only) |
+| `DELETE /internal/schools/:id/members/:userId` | Remove membership |
 
-`GET /internal/users/:id?school_id=...` on auth-service resolves `school_id` from the mapping.
+Auth-service assigns roles via `POST /internal/user-roles` (called by user-service when creating users).
+
+User-service internal: `GET /internal/users/:id`, `GET /internal/users/by-email`, `POST /internal/users/from-student`.
 
 ### Migrating existing data
 
-- Schools: `scripts/migrate_auth_schools_to_school_db.sql`
-- User school/role columns → `user_schools`: `scripts/migrate_users_school_id_to_user_schools.sql`
+- Auth/user restructure: `scripts/migrate_auth_user_restructure.sql`
+- Schools (legacy): `scripts/migrate_auth_schools_to_school_db.sql`
 
 Each should return a JSON status like `{"status":"...-service is running"}`.
 
@@ -169,8 +177,8 @@ With Docker running, open:
 
 | Service | Swagger URL |
 |---------|-------------|
-| Auth | http://localhost:8081/swagger/index.html |
-| User | http://localhost:8082/swagger/index.html |
+| Auth (login + RBAC) | http://localhost:8081/swagger/index.html |
+| User (profiles) | http://localhost:8082/swagger/index.html |
 | Academic | http://localhost:8083/swagger/index.html |
 | Student | http://localhost:8084/swagger/index.html |
 | Attendance | http://localhost:8085/swagger/index.html |
@@ -277,8 +285,8 @@ school-management/
 │   │   ├── pages/          # Dashboard, Students, MyPortal, …
 │   │   └── components/Layout.jsx
 │   └── vite.config.js
-├── auth-service/           # :8081
-├── user-service/           # :8082
+├── auth-service/           # :8081 — credentials, RBAC, JWT
+├── user-service/           # :8082 — user profiles
 ├── academic-service/       # :8083
 ├── student-service/        # :8084
 ├── attendance-service/     # :8085

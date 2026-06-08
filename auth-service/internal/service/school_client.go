@@ -18,7 +18,6 @@ import (
 type schoolMembership struct {
 	UserID   uuid.UUID `json:"user_id"`
 	SchoolID uuid.UUID `json:"school_id"`
-	RoleID   uuid.UUID `json:"role_id"`
 }
 
 type schoolClient struct {
@@ -277,30 +276,13 @@ func (c *schoolClient) ListMembersForSchool(schoolID uuid.UUID) ([]schoolMembers
 	return members, nil
 }
 
-func (c *schoolClient) ListUserIDsForSchool(schoolID uuid.UUID, roleID *uuid.UUID) ([]uuid.UUID, error) {
-	members, err := c.ListMembersForSchool(schoolID)
-	if err != nil {
-		return nil, err
-	}
-
-	ids := make([]uuid.UUID, 0, len(members))
-	for _, m := range members {
-		if roleID != nil && m.RoleID != *roleID {
-			continue
-		}
-		ids = append(ids, m.UserID)
-	}
-	return ids, nil
-}
-
-func (c *schoolClient) AddMember(schoolID, userID, roleID uuid.UUID) error {
+func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 	if !c.enabled() {
 		return errors.New("school service is not configured")
 	}
 
 	payload := map[string]string{
 		"user_id": userID.String(),
-		"role_id": roleID.String(),
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -323,37 +305,6 @@ func (c *schoolClient) AddMember(schoolID, userID, roleID uuid.UUID) error {
 	if resp.StatusCode != http.StatusCreated {
 		b, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("school-service add member returned status %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
-}
-
-func (c *schoolClient) UpdateMemberRole(schoolID, userID, roleID uuid.UUID) error {
-	if !c.enabled() {
-		return errors.New("school service is not configured")
-	}
-
-	payload := map[string]string{"role_id": roleID.String()}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-
-	url := fmt.Sprintf("%s/internal/schools/%s/members/%s", c.baseURL, schoolID.String(), userID.String())
-	req, err := http.NewRequest(http.MethodPatch, url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("school-service update member returned status %d: %s", resp.StatusCode, string(b))
 	}
 	return nil
 }

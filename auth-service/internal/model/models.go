@@ -18,21 +18,19 @@ type School struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// User represents an authenticated user in the system.
-// School and role context live in school-service user_schools mapping (JWT / API only here).
+// User is a profile DTO from user-service (not stored in auth DB).
 type User struct {
-	ID          uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440001"`
-	Name        string     `json:"name" gorm:"not null" example:"John Doe"`
-	Email       string     `json:"email" gorm:"uniqueIndex;not null" example:"john@springfield.edu"`
-	Password    string     `json:"-" gorm:"not null"`
-	StudentID   *uuid.UUID `json:"student_id,omitempty" gorm:"type:uuid;index" example:"550e8400-e29b-41d4-a716-446655440099"`
-	SchoolID    *uuid.UUID `json:"school_id,omitempty" gorm:"-" example:"550e8400-e29b-41d4-a716-446655440000"`
-	RoleID      *uuid.UUID `json:"role_id,omitempty" gorm:"-" example:"550e8400-e29b-41d4-a716-446655440002"`
-	RoleName    string     `json:"role_name" gorm:"-" example:"platform_admin"`
-	Permissions []string   `json:"permissions,omitempty" gorm:"-"`
-	School      *School    `json:"school,omitempty" gorm:"-"`
-	Schools     []School   `json:"schools,omitempty" gorm:"-"`
-	IsActive    bool       `json:"is_active" gorm:"default:true" example:"true"`
+	ID          uuid.UUID  `json:"id" example:"550e8400-e29b-41d4-a716-446655440001"`
+	Name        string     `json:"name" example:"John Doe"`
+	Email       string     `json:"email" example:"john@springfield.edu"`
+	StudentID   *uuid.UUID `json:"student_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440099"`
+	SchoolID    *uuid.UUID `json:"school_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440000"`
+	RoleID      *uuid.UUID `json:"role_id,omitempty" example:"550e8400-e29b-41d4-a716-446655440002"`
+	RoleName    string     `json:"role_name" example:"platform_admin"`
+	Permissions []string   `json:"permissions,omitempty"`
+	School      *School    `json:"school,omitempty"`
+	Schools     []School   `json:"schools,omitempty"`
+	IsActive    bool       `json:"is_active" example:"true"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 }

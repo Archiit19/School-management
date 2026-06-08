@@ -464,7 +464,7 @@ func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) 
 		return "", "", errors.New("internal service token not configured")
 	}
 	url := fmt.Sprintf("%s/internal/users/%s",
-		strings.TrimRight(s.cfg.AuthServiceURL, "/"),
+		strings.TrimRight(s.cfg.UserServiceURL, "/"),
 		userID.String(),
 	)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -478,7 +478,7 @@ func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("auth-service /internal/users returned %d", resp.StatusCode)
+		return "", "", fmt.Errorf("user-service /internal/users returned %d", resp.StatusCode)
 	}
 	var u struct {
 		Name  string `json:"name"`
@@ -583,13 +583,13 @@ func (s *AcademicService) validateTeacher(
 	authHeader string,
 	teacherUserID, schoolID uuid.UUID,
 ) error {
-	url := fmt.Sprintf("%s/users/%s", s.cfg.AuthServiceURL, teacherUserID.String())
+	url := fmt.Sprintf("%s/users/%s", s.cfg.UserServiceURL, teacherUserID.String())
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return errors.New("failed to validate teacher user with auth-service")
+		return errors.New("failed to validate teacher user with user-service")
 	}
 	defer resp.Body.Close()
 

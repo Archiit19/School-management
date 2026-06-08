@@ -286,7 +286,6 @@ func (h *SchoolHandler) GetMemberInternal(c *gin.Context) {
 	c.JSON(http.StatusOK, model.UserSchoolMember{
 		UserID:   m.UserID,
 		SchoolID: m.SchoolID,
-		RoleID:   m.RoleID,
 	})
 }
 
@@ -306,12 +305,7 @@ func (h *SchoolHandler) AddMemberInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user_id"})
 		return
 	}
-	roleID, err := uuid.Parse(req.RoleID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role_id"})
-		return
-	}
-	m, err := h.svc.AddMember(schoolID, userID, roleID)
+	m, err := h.svc.AddMember(schoolID, userID)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
@@ -319,36 +313,7 @@ func (h *SchoolHandler) AddMemberInternal(c *gin.Context) {
 	c.JSON(http.StatusCreated, model.UserSchoolMember{
 		UserID:   m.UserID,
 		SchoolID: m.SchoolID,
-		RoleID:   m.RoleID,
 	})
-}
-
-func (h *SchoolHandler) UpdateMemberInternal(c *gin.Context) {
-	schoolID, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school id"})
-		return
-	}
-	userID, err := uuid.Parse(c.Param("userId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
-		return
-	}
-	var req model.UpdateMemberRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	roleID, err := uuid.Parse(req.RoleID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role_id"})
-		return
-	}
-	if err := h.svc.UpdateMemberRole(schoolID, userID, roleID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"message": "membership updated"})
 }
 
 func (h *SchoolHandler) RemoveMemberInternal(c *gin.Context) {

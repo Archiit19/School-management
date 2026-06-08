@@ -14,94 +14,50 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-// ─── Roles ──────────────────────────────────────────────────────────
-
-func (r *UserRepository) CreateRole(role *model.Role) error {
-	return r.db.Create(role).Error
+func (r *UserRepository) Create(user *model.User) error {
+	return r.db.Create(user).Error
 }
 
-func (r *UserRepository) GetRoleByID(id uuid.UUID) (*model.Role, error) {
-	var role model.Role
-	err := r.db.Where("id = ?", id).First(&role).Error
-	return &role, err
+func (r *UserRepository) GetByEmail(email string) (*model.User, error) {
+	var user model.User
+	err := r.db.Where("email = ?", email).First(&user).Error
+	return &user, err
 }
 
-func (r *UserRepository) GetRolesBySchoolID(schoolID uuid.UUID) ([]model.Role, error) {
-	var roles []model.Role
-	err := r.db.Where("school_id = ?", schoolID).Find(&roles).Error
-	return roles, err
+func (r *UserRepository) GetByID(id uuid.UUID) (*model.User, error) {
+	var user model.User
+	err := r.db.Where("id = ?", id).First(&user).Error
+	return &user, err
 }
 
-// ListDistinctSchoolIDsFromRoles returns every school_id that has at least one role (for backfill sync).
-func (r *UserRepository) ListDistinctSchoolIDsFromRoles() ([]uuid.UUID, error) {
-	var ids []uuid.UUID
-	err := r.db.Model(&model.Role{}).Distinct("school_id").Pluck("school_id", &ids).Error
-	return ids, err
-}
-
-func (r *UserRepository) GetRoleByNameAndSchool(name string, schoolID uuid.UUID) (*model.Role, error) {
-	var role model.Role
-	err := r.db.Where("name = ? AND school_id = ?", name, schoolID).First(&role).Error
-	return &role, err
-}
-
-// ─── Permissions ────────────────────────────────────────────────────
-
-func (r *UserRepository) CreatePermission(perm *model.Permission) error {
-	return r.db.Create(perm).Error
-}
-
-func (r *UserRepository) GetPermissionByID(id uuid.UUID) (*model.Permission, error) {
-	var perm model.Permission
-	err := r.db.Where("id = ?", id).First(&perm).Error
-	return &perm, err
-}
-
-func (r *UserRepository) GetAllPermissions() ([]model.Permission, error) {
-	var perms []model.Permission
-	err := r.db.Find(&perms).Error
-	return perms, err
-}
-
-func (r *UserRepository) GetPermissionByName(name string) (*model.Permission, error) {
-	var perm model.Permission
-	err := r.db.Where("name = ?", name).First(&perm).Error
-	return &perm, err
-}
-
-// ─── Role-Permission Mapping ────────────────────────────────────────
-
-func (r *UserRepository) AssignPermissionToRole(rp *model.RolePermission) error {
-	return r.db.Create(rp).Error
-}
-
-// AssignPermissionToRoleIfMissing inserts the mapping only if it does not already exist.
-func (r *UserRepository) AssignPermissionToRoleIfMissing(roleID, permissionID uuid.UUID) error {
-	var n int64
-	r.db.Model(&model.RolePermission{}).
-		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
-		Count(&n)
-	if n > 0 {
-		return nil
+func (r *UserRepository) GetByIDs(userIDs []uuid.UUID, query model.UserListQuery) ([]model.User, int64, error) {
+	if len(userIDs) == 0 {
+		return []model.User{}, 0, nil
 	}
-	rp := &model.RolePermission{
-		RoleID:       roleID,
-		PermissionID: permissionID,
+	var users []model.User
+	var total int64
+	db := r.db.Where("id IN ?", userIDs)
+	if query.IsActive != nil {
+		db = db.Where("is_active = ?", *query.IsActive)
 	}
-	return r.db.Create(rp).Error
+	if query.Search != "" {
+		search := "%" + query.Search + "%"
+		db = db.Where("name ILIKE ? OR email ILIKE ?", search, search)
+	}
+	if err := db.Model(&model.User{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (query.Page - 1) * query.Limit
+	if err := db.Offset(offset).Limit(query.Limit).Order("created_at DESC").Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
 }
 
-func (r *UserRepository) GetPermissionsByRoleID(roleID uuid.UUID) ([]model.Permission, error) {
-	var perms []model.Permission
-	err := r.db.
-		Joins("JOIN role_permissions ON role_permissions.permission_id = permissions.id").
-		Where("role_permissions.role_id = ?", roleID).
-		Find(&perms).Error
-	return perms, err
+func (r *UserRepository) Update(user *model.User) error {
+	return r.db.Save(user).Error
 }
 
-func (r *UserRepository) RemovePermissionFromRole(roleID, permissionID uuid.UUID) error {
-	return r.db.
-		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
-		Delete(&model.RolePermission{}).Error
+func (r *UserRepository) Delete(id uuid.UUID) error {
+	return r.db.Where("id = ?", id).Delete(&model.User{}).Error
 }

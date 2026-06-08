@@ -48,9 +48,9 @@ type authUserInternal struct {
 
 func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID) error {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
-		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and AUTH_SERVICE_URL)")
+		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and USER_SERVICE_URL)")
 	}
-	base := strings.TrimRight(s.cfg.AuthServiceURL, "/")
+	base := strings.TrimRight(s.cfg.UserServiceURL, "/")
 	url := fmt.Sprintf("%s/internal/users/%s?school_id=%s", base, userID.String(), schoolID.String())
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
@@ -60,7 +60,7 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return apierrors.ServiceUnavailable("auth-service unreachable for user validation")
+		return apierrors.ServiceUnavailable("user-service unreachable for user validation")
 	}
 	defer resp.Body.Close()
 
@@ -68,12 +68,12 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 		return apierrors.BadRequest("user not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return apierrors.ServiceUnavailable("auth-service user validation failed")
+		return apierrors.ServiceUnavailable("user-service user validation failed")
 	}
 
 	var u authUserInternal
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
-		return apierrors.ServiceUnavailable("invalid response from auth-service")
+		return apierrors.ServiceUnavailable("invalid response from user-service")
 	}
 
 	sid, err := uuid.Parse(u.SchoolID)
