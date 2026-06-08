@@ -1,4 +1,12 @@
 [
+  {"name": "view_profile", "description": "View own platform admin profile"},
+  {"name": "manage_profile", "description": "Update own platform admin profile"},
+  {"name": "view_my_schools", "description": "List schools you administer"},
+  {"name": "create_school", "description": "Create a new school"},
+  {"name": "select_school", "description": "Enter a school admin workspace"},
+  {"name": "view_school", "description": "View school profile"},
+  {"name": "manage_school", "description": "Update or deactivate a school profile"},
+  {"name": "view_all_schools", "description": "List all schools (platform operator)"},
   {"name": "create_user", "description": "Create new users (staff, teacher, parent)"},
   {"name": "view_users", "description": "View the users list"},
   {"name": "update_user", "description": "Update user details"},

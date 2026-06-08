@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/avaneeshravat/school-management/auth-service/internal/config"
-	"github.com/avaneeshravat/school-management/auth-service/internal/model"
-	"github.com/avaneeshravat/school-management/auth-service/internal/repository"
+	"github.com/Archiit19/School-management/auth-service/internal/config"
+	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -16,34 +16,29 @@ import (
 type UserManagementService struct {
 	repo *repository.AuthRepository
 	cfg  *config.Config
-	auth *AuthService // reuse for inter-service helpers
+	auth *AuthService
 }
 
 func NewUserManagementService(repo *repository.AuthRepository, cfg *config.Config, auth *AuthService) *UserManagementService {
 	return &UserManagementService{repo: repo, cfg: cfg, auth: auth}
 }
 
-// ─── Create User ────────────────────────────────────────────────────
-
 func (s *UserManagementService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID) (*model.User, error) {
-	// 1. Check if email already exists
 	_, err := s.repo.GetUserByEmail(req.Email)
 	if err == nil {
 		return nil, errors.New("user with this email already exists")
 	}
 
-	// 2. Validate role exists (via user-service)
 	roleID, err := uuid.Parse(req.RoleID)
 	if err != nil {
 		return nil, errors.New("invalid role_id format")
 	}
 
-	roleName := s.auth.fetchRoleName(roleID)
+	roleName := s.auth.fetchRoleName(&roleID)
 	if roleName == "" {
 		return nil, errors.New("role not found — make sure the role_id is valid")
 	}
 
-	// 2b. student role requires student_id; non-student roles must not send one
 	var studentUUID *uuid.UUID
 	if strings.EqualFold(roleName, "student") {
 		if strings.TrimSpace(req.StudentID) == "" {
@@ -58,19 +53,15 @@ func (s *UserManagementService) CreateUser(req model.CreateUserRequest, schoolID
 		return nil, errors.New("student_id is only allowed when role is student")
 	}
 
-	// 3. Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	// 4. Create user
 	user := &model.User{
-		SchoolID:  schoolID,
 		Name:      req.Name,
 		Email:     req.Email,
 		Password:  string(hashedPassword),
-		RoleID:    roleID,
 		StudentID: studentUUID,
 		IsActive:  true,
 	}
@@ -79,14 +70,17 @@ func (s *UserManagementService) CreateUser(req model.CreateUserRequest, schoolID
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
+	if err := s.auth.school.AddMember(schoolID, user.ID, roleID); err != nil {
+		return nil, fmt.Errorf("failed to link user to school: %w", err)
+	}
+
+	user.SchoolID = &schoolID
+	user.RoleID = &roleID
 	user.RoleName = roleName
 	return user, nil
 }
 
-// ─── List Users ─────────────────────────────────────────────────────
-
 func (s *UserManagementService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*model.UserListResponse, error) {
-	// Ensure sane defaults
 	if query.Page < 1 {
 		query.Page = 1
 	}
@@ -94,14 +88,30 @@ func (s *UserManagementService) GetUsers(schoolID uuid.UUID, query model.UserLis
 		query.Limit = 20
 	}
 
-	users, total, err := s.repo.GetUsersBySchoolID(schoolID, query)
+	var roleFilter *uuid.UUID
+	if query.RoleID != "" {
+		if rid, err := uuid.Parse(query.RoleID); err == nil {
+			roleFilter = &rid
+		}
+	}
+
+	userIDs, err := s.auth.school.ListUserIDsForSchool(schoolID, roleFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list school members: %w", err)
+	}
+
+	users, total, err := s.repo.GetUsersByIDs(userIDs, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
-	// Enrich each user with role name
+	roleByUser := s.roleByUserForSchool(schoolID)
 	for i := range users {
-		users[i].RoleName = s.auth.fetchRoleName(users[i].RoleID)
+		if rid, ok := roleByUser[users[i].ID]; ok {
+			users[i].RoleID = &rid
+			users[i].RoleName = s.auth.fetchRoleName(&rid)
+		}
+		users[i].SchoolID = &schoolID
 	}
 
 	return &model.UserListResponse{
@@ -112,23 +122,23 @@ func (s *UserManagementService) GetUsers(schoolID uuid.UUID, query model.UserLis
 	}, nil
 }
 
-// ─── Get Single User ────────────────────────────────────────────────
-
-func (s *UserManagementService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*model.User, error) {
-	user, err := s.repo.GetUserByIDAndSchool(id, schoolID)
+func (s *UserManagementService) roleByUserForSchool(schoolID uuid.UUID) map[uuid.UUID]uuid.UUID {
+	out := make(map[uuid.UUID]uuid.UUID)
+	members, err := s.auth.school.ListMembersForSchool(schoolID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
-		}
-		return nil, fmt.Errorf("failed to fetch user: %w", err)
+		return out
 	}
-
-	user.RoleName = s.auth.fetchRoleName(user.RoleID)
-	return user, nil
+	for _, m := range members {
+		out[m.UserID] = m.RoleID
+	}
+	return out
 }
 
-// GetUserForInternalService returns a user by ID for trusted service-to-service calls (no school scope in request).
-func (s *UserManagementService) GetUserForInternalService(id uuid.UUID) (*model.User, error) {
+func (s *UserManagementService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*model.User, error) {
+	if _, err := s.auth.school.GetMembership(schoolID, id); err != nil {
+		return nil, errors.New("user not found")
+	}
+
 	user, err := s.repo.GetUserByID(id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -137,15 +147,16 @@ func (s *UserManagementService) GetUserForInternalService(id uuid.UUID) (*model.
 		return nil, fmt.Errorf("failed to fetch user: %w", err)
 	}
 
-	user.RoleName = s.auth.fetchRoleName(user.RoleID)
+	if m, err := s.auth.school.GetMembership(schoolID, id); err == nil {
+		user.RoleID = &m.RoleID
+		user.RoleName = s.auth.fetchRoleName(&m.RoleID)
+	}
+	user.SchoolID = &schoolID
 	return user, nil
 }
 
-// ─── Update User ────────────────────────────────────────────────────
-
-func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, schoolID uuid.UUID) (*model.User, error) {
-	// 1. Fetch existing user (scoped to school)
-	user, err := s.repo.GetUserByIDAndSchool(id, schoolID)
+func (s *UserManagementService) GetUserForInternalService(id uuid.UUID, schoolID *uuid.UUID) (*model.User, error) {
+	user, err := s.repo.GetUserByID(id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("user not found")
@@ -153,13 +164,43 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 		return nil, fmt.Errorf("failed to fetch user: %w", err)
 	}
 
-	// 2. Apply partial updates
+	if schoolID != nil && *schoolID != uuid.Nil {
+		if m, err := s.auth.school.GetMembership(*schoolID, id); err == nil {
+			user.SchoolID = schoolID
+			user.RoleID = &m.RoleID
+			user.RoleName = s.auth.fetchRoleName(&m.RoleID)
+		}
+	} else {
+		memberships, err := s.auth.school.ListMembershipsForUser(id)
+		if err == nil && len(memberships) == 1 {
+			m := memberships[0]
+			user.SchoolID = &m.SchoolID
+			user.RoleID = &m.RoleID
+			user.RoleName = s.auth.fetchRoleName(&m.RoleID)
+		}
+	}
+
+	return user, nil
+}
+
+func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, schoolID uuid.UUID) (*model.User, error) {
+	if _, err := s.auth.school.GetMembership(schoolID, id); err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	user, err := s.repo.GetUserByID(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to fetch user: %w", err)
+	}
+
 	if req.Name != nil {
 		user.Name = *req.Name
 	}
 
 	if req.Email != nil {
-		// Check email uniqueness
 		existing, err := s.repo.GetUserByEmail(*req.Email)
 		if err == nil && existing.ID != user.ID {
 			return nil, errors.New("email already in use by another user")
@@ -172,12 +213,10 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 		if err != nil {
 			return nil, errors.New("invalid role_id format")
 		}
-		// Validate role exists
-		roleName := s.auth.fetchRoleName(roleID)
+		roleName := s.auth.fetchRoleName(&roleID)
 		if roleName == "" {
 			return nil, errors.New("role not found — make sure the role_id is valid")
 		}
-		// switching to student requires a student_id (existing or in this update)
 		if strings.EqualFold(roleName, "student") {
 			hasNew := req.StudentID != nil && strings.TrimSpace(*req.StudentID) != ""
 			if user.StudentID == nil && !hasNew {
@@ -186,7 +225,10 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 		} else if req.StudentID != nil && strings.TrimSpace(*req.StudentID) != "" {
 			return nil, errors.New("student_id is only valid for the student role")
 		}
-		user.RoleID = roleID
+		if err := s.auth.school.UpdateMemberRole(schoolID, id, roleID); err != nil {
+			return nil, fmt.Errorf("failed to update school membership: %w", err)
+		}
+		user.RoleID = &roleID
 	}
 
 	if req.StudentID != nil {
@@ -206,16 +248,16 @@ func (s *UserManagementService) UpdateUser(id uuid.UUID, req model.UpdateUserReq
 		user.IsActive = *req.IsActive
 	}
 
-	// 3. Save
 	if err := s.repo.UpdateUser(user); err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
-	user.RoleName = s.auth.fetchRoleName(user.RoleID)
+	if user.RoleID != nil {
+		user.RoleName = s.auth.fetchRoleName(user.RoleID)
+	}
+	user.SchoolID = &schoolID
 	return user, nil
 }
-
-// ─── Create Student Login (internal: called by student-service on admit) ────
 
 func (s *UserManagementService) CreateStudentLogin(req model.CreateStudentLoginRequest) (*model.User, error) {
 	schoolID, err := uuid.Parse(req.SchoolID)
@@ -242,40 +284,47 @@ func (s *UserManagementService) CreateStudentLogin(req model.CreateStudentLoginR
 	}
 
 	user := &model.User{
-		SchoolID:  schoolID,
 		Name:      req.Name,
 		Email:     req.Email,
 		Password:  string(hashedPassword),
-		RoleID:    roleID,
 		StudentID: &studentID,
 		IsActive:  true,
 	}
 	if err := s.repo.CreateUser(user); err != nil {
 		return nil, fmt.Errorf("failed to create student login: %w", err)
 	}
+
+	if err := s.auth.school.AddMember(schoolID, user.ID, roleID); err != nil {
+		return nil, fmt.Errorf("failed to link student to school: %w", err)
+	}
+
+	user.SchoolID = &schoolID
+	user.RoleID = &roleID
 	user.RoleName = "student"
 	return user, nil
 }
 
-// ─── Delete User (hard delete) ──────────────────────────────────────
-
 func (s *UserManagementService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUserID uuid.UUID) error {
-	// Prevent self-deletion
 	if id == requestingUserID {
 		return errors.New("you cannot delete your own account")
 	}
 
-	// Check user exists in this school
-	_, err := s.repo.GetUserByIDAndSchool(id, schoolID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("user not found")
-		}
-		return fmt.Errorf("failed to fetch user: %w", err)
+	if _, err := s.auth.school.GetMembership(schoolID, id); err != nil {
+		return errors.New("user not found")
 	}
 
-	if err := s.repo.DeleteUser(id, schoolID); err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+	if err := s.auth.school.RemoveMember(schoolID, id); err != nil {
+		return fmt.Errorf("failed to remove school membership: %w", err)
+	}
+
+	memberships, err := s.auth.school.ListMembershipsForUser(id)
+	if err != nil {
+		return err
+	}
+	if len(memberships) == 0 {
+		if err := s.repo.DeleteUser(id); err != nil {
+			return fmt.Errorf("failed to delete user: %w", err)
+		}
 	}
 
 	return nil

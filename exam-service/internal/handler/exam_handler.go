@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/avaneeshravat/school-management/exam-service/internal/model"
-	"github.com/avaneeshravat/school-management/exam-service/internal/service"
+	"github.com/Archiit19/School-management/exam-service/internal/model"
+	"github.com/Archiit19/School-management/exam-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

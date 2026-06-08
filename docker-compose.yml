@@ -142,6 +142,26 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # PostgreSQL for School Service
+  # ──────────────────────────────────────
+  school-db:
+    image: postgres:16-alpine
+    container_name: school-db
+    environment:
+      POSTGRES_USER: school_user
+      POSTGRES_PASSWORD: school_pass
+      POSTGRES_DB: school_db
+    ports:
+      - "5440:5432"
+    volumes:
+      - school_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U school_user -d school_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -160,12 +180,15 @@ services:
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
       STUDENT_SERVICE_URL: http://student-service:8084
+      SCHOOL_SERVICE_URL: http://school-service:8088
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8081
     depends_on:
       auth-db:
         condition: service_healthy
       user-service:
+        condition: service_started
+      school-service:
         condition: service_started
 
   # ──────────────────────────────────────
@@ -315,6 +338,32 @@ services:
       finance-db:
         condition: service_healthy
 
+  # ──────────────────────────────────────
+  # School Service
+  # ──────────────────────────────────────
+  school-service:
+    build:
+      context: ./school-service
+      dockerfile: Dockerfile
+    container_name: school-service
+    ports:
+      - "8088:8088"
+    environment:
+      DB_HOST: school-db
+      DB_PORT: 5432
+      DB_USER: school_user
+      DB_PASSWORD: school_pass
+      DB_NAME: school_db
+      JWT_SECRET: super-secret-jwt-key-change-in-production
+      USER_SERVICE_URL: http://user-service:8082
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
+      PORT: 8088
+    depends_on:
+      school-db:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
 volumes:
   auth_db_data:
   user_db_data:
@@ -323,3 +372,4 @@ volumes:
   attendance_db_data:
   exam_db_data:
   finance_db_data:
+  school_db_data:

@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/attendance-service
+module github.com/Archiit19/School-management/attendance-service
 
 go 1.23.0
 

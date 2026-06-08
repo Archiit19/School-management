@@ -4,19 +4,19 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/avaneeshravat/school-management/finance-service/internal/config"
-	"github.com/avaneeshravat/school-management/finance-service/internal/handler"
-	"github.com/avaneeshravat/school-management/finance-service/internal/middleware"
-	"github.com/avaneeshravat/school-management/finance-service/internal/model"
-	"github.com/avaneeshravat/school-management/finance-service/internal/repository"
-	"github.com/avaneeshravat/school-management/finance-service/internal/service"
+	"github.com/Archiit19/School-management/finance-service/internal/config"
+	"github.com/Archiit19/School-management/finance-service/internal/handler"
+	"github.com/Archiit19/School-management/finance-service/internal/middleware"
+	"github.com/Archiit19/School-management/finance-service/internal/model"
+	"github.com/Archiit19/School-management/finance-service/internal/repository"
+	"github.com/Archiit19/School-management/finance-service/internal/service"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/avaneeshravat/school-management/finance-service/docs"
+	_ "github.com/Archiit19/School-management/finance-service/docs"
 )
 
 // @title           Finance Service API

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/avaneeshravat/school-management/attendance-service/internal/apierrors"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/config"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/repository"
+	"github.com/Archiit19/School-management/attendance-service/internal/apierrors"
+	"github.com/Archiit19/School-management/attendance-service/internal/config"
+	"github.com/Archiit19/School-management/attendance-service/internal/model"
+	"github.com/Archiit19/School-management/attendance-service/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -51,7 +51,7 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and AUTH_SERVICE_URL)")
 	}
 	base := strings.TrimRight(s.cfg.AuthServiceURL, "/")
-	url := fmt.Sprintf("%s/internal/users/%s", base, userID.String())
+	url := fmt.Sprintf("%s/internal/users/%s?school_id=%s", base, userID.String(), schoolID.String())
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build auth request: %w", err)

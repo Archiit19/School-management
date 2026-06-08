@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/avaneeshravat/school-management/academic-service/internal/config"
-	"github.com/avaneeshravat/school-management/academic-service/internal/model"
-	"github.com/avaneeshravat/school-management/academic-service/internal/repository"
+	"github.com/Archiit19/School-management/academic-service/internal/config"
+	"github.com/Archiit19/School-management/academic-service/internal/model"
+	"github.com/Archiit19/School-management/academic-service/internal/repository"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

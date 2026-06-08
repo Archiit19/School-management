@@ -1,6 +1,7 @@
 const SERVICES = {
   auth: "/api/auth",
   users: "/api/users",
+  schools: "/api/schools",
   academic: "/api/academic",
   students: "/api/students",
   attendance: "/api/attendance",
@@ -64,9 +65,12 @@ async function request(service, path, { method = "GET", body, query } = {}) {
 }
 
 export const authApi = {
+  signup: (body) => request("auth", "/auth/signup", { method: "POST", body }),
   registerSchool: (body) => request("auth", "/auth/register-school", { method: "POST", body }),
   login: (body) => request("auth", "/auth/login", { method: "POST", body }),
   me: () => request("auth", "/auth/me"),
+  selectSchool: (schoolId) => request("auth", "/auth/select-school", { method: "POST", body: { school_id: schoolId } }),
+  exitSchool: () => request("auth", "/auth/exit-school", { method: "POST" }),
   health: () => request("auth", "/health"),
 };
 
@@ -147,6 +151,18 @@ export const examApi = {
   getResults: (query) => request("exams", "/results", { query }),
   getMyResults: (query) => request("exams", "/results/me", { query }),
   health: () => request("exams", "/health"),
+};
+
+export const schoolApi = {
+  create: (body) => request("schools", "/schools", { method: "POST", body }),
+  listMine: () => request("schools", "/schools/mine"),
+  list: (query) => request("schools", "/schools", { query }),
+  getMe: () => request("schools", "/schools/me"),
+  updateMe: (body) => request("schools", "/schools/me", { method: "PATCH", body }),
+  getById: (id) => request("schools", `/schools/${id}`),
+  update: (id, body) => request("schools", `/schools/${id}`, { method: "PATCH", body }),
+  remove: (id) => request("schools", `/schools/${id}`, { method: "DELETE" }),
+  health: () => request("schools", "/health"),
 };
 
 export const financeApi = {

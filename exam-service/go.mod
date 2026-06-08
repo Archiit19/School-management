@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/exam-service
+module github.com/Archiit19/School-management/exam-service
 
 go 1.23.0
 

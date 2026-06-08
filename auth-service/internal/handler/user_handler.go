@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/avaneeshravat/school-management/auth-service/internal/model"
-	"github.com/avaneeshravat/school-management/auth-service/internal/service"
+	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -149,7 +149,17 @@ func (h *UserHandler) GetUserInternal(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.GetUserForInternalService(id)
+	var schoolID *uuid.UUID
+	if sid := c.Query("school_id"); sid != "" {
+		parsed, err := uuid.Parse(sid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
+			return
+		}
+		schoolID = &parsed
+	}
+
+	user, err := h.svc.GetUserForInternalService(id, schoolID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

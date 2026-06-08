@@ -12,6 +12,7 @@ import AttendancePage from "./pages/AttendancePage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import ExamsPage from "./pages/ExamsPage";
 import FinancePage from "./pages/FinancePage";
+import SchoolsPage from "./pages/SchoolsPage";
 import MyPortalPage from "./pages/MyPortalPage";
 
 function ProtectedRoute({ children }) {
@@ -29,12 +30,21 @@ function GuestRoute({ children }) {
 }
 
 function RequirePerm({ any, children }) {
-  const { hasPerm, loading } = useAuth();
-  if (loading) return null;
+  const { hasPerm, loading, user } = useAuth();
+  if (loading || (user === null && any.length > 0)) return null;
   if (any.length > 0 && !any.some((p) => hasPerm(p))) {
     return <Navigate to="/" replace />;
   }
   return children;
+}
+
+function HomeRoute() {
+  const { isPlatformAdmin, loading } = useAuth();
+  if (loading) return <div style={{ padding: 40, textAlign: "center" }}>Loading...</div>;
+  if (isPlatformAdmin) {
+    return <Navigate to="/schools" replace />;
+  }
+  return <DashboardPage />;
 }
 
 export default function App() {
@@ -44,7 +54,7 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<GuestRoute><LoginPage /></GuestRoute>} />
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
-            <Route index element={<DashboardPage />} />
+            <Route index element={<HomeRoute />} />
             <Route path="users" element={<RequirePerm any={["create_user", "view_users"]}><UsersPage /></RequirePerm>} />
             <Route path="roles" element={<RequirePerm any={["create_role", "manage_permissions"]}><RolesPage /></RequirePerm>} />
             <Route path="academic" element={<RequirePerm any={["create_class", "create_section", "create_subject", "view_academic"]}><AcademicPage /></RequirePerm>} />
@@ -54,6 +64,7 @@ export default function App() {
             <Route path="assignments" element={<RequirePerm any={["create_assignment", "view_assignments", "submit_assignment"]}><AssignmentsPage /></RequirePerm>} />
             <Route path="exams" element={<RequirePerm any={["create_exam", "view_exams", "enter_marks", "publish_results", "view_results"]}><ExamsPage /></RequirePerm>} />
             <Route path="finance" element={<RequirePerm any={["create_fee", "record_payment", "view_dues"]}><FinancePage /></RequirePerm>} />
+            <Route path="schools" element={<RequirePerm any={["view_my_schools", "create_school"]}><SchoolsPage /></RequirePerm>} />
             <Route
               path="me"
               element={

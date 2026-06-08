@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/avaneeshravat/school-management/finance-service/internal/model"
+	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

@@ -6,19 +6,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/avaneeshravat/school-management/exam-service/internal/config"
-	"github.com/avaneeshravat/school-management/exam-service/internal/handler"
-	"github.com/avaneeshravat/school-management/exam-service/internal/middleware"
-	"github.com/avaneeshravat/school-management/exam-service/internal/model"
-	"github.com/avaneeshravat/school-management/exam-service/internal/repository"
-	"github.com/avaneeshravat/school-management/exam-service/internal/service"
+	"github.com/Archiit19/School-management/exam-service/internal/config"
+	"github.com/Archiit19/School-management/exam-service/internal/handler"
+	"github.com/Archiit19/School-management/exam-service/internal/middleware"
+	"github.com/Archiit19/School-management/exam-service/internal/model"
+	"github.com/Archiit19/School-management/exam-service/internal/repository"
+	"github.com/Archiit19/School-management/exam-service/internal/service"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/avaneeshravat/school-management/exam-service/docs"
+	_ "github.com/Archiit19/School-management/exam-service/docs"
 )
 
 // @title           Exam Service API

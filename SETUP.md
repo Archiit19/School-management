@@ -48,7 +48,11 @@ Vite prints the local URL, usually:
 
 Open that URL in your browser. You should see the **login page**.
 
-### 4. Log in
+### 4. Sign up or log in
+
+**New platform admins:** use **Sign Up** on the login page (name, email, password only). After login you get a platform dashboard with **Profile** and **Schools**. Create a school there, then click **Open school** to manage users, students, academics, etc.
+
+### 5. Log in (existing accounts)
 
 Use an account that already exists for your school, for example (see `CREDENTIALS.local.md` if you have one):
 
@@ -89,6 +93,7 @@ docker compose down
 | `attendance-db` | PostgreSQL (attendance) | 5437 |
 | `exam-db` | PostgreSQL (exams) | 5438 |
 | `finance-db` | PostgreSQL (finance) | 5439 |
+| `school-db` | PostgreSQL (schools) | 5440 |
 | `auth-service` | Login, users, JWT | **8081** |
 | `user-service` | Roles & permissions | **8082** |
 | `academic-service` | Classes, assignments | **8083** |
@@ -96,6 +101,7 @@ docker compose down
 | `attendance-service` | Attendance | **8085** |
 | `exam-service` | Exams & results | **8086** |
 | `finance-service` | Fees & dues | **8087** |
+| `school-service` | School CRUD | **8088** |
 
 The frontend does **not** run in Docker. It proxies API calls to these ports (see `frontend/vite.config.js`).
 
@@ -112,6 +118,7 @@ The UI calls paths like `/api/auth/...`; Vite forwards them to localhost:
 | `/api/attendance` | http://localhost:8085 |
 | `/api/exams` | http://localhost:8086 |
 | `/api/finance` | http://localhost:8087 |
+| `/api/schools` | http://localhost:8088 |
 
 **Login flow in the UI:** `POST /api/auth/auth/login` → then `GET /api/auth/auth/me` (see `frontend/src/api/client.js` and `frontend/src/context/AuthContext.jsx`).
 
@@ -127,7 +134,30 @@ curl http://localhost:8084/health
 curl http://localhost:8085/health
 curl http://localhost:8086/health
 curl http://localhost:8087/health
+curl http://localhost:8088/health
 ```
+
+### User ↔ school mapping
+
+Auth `users` no longer stores `school_id` or `role_id`. Membership lives in **school-service** table `user_schools` (`user_id`, `school_id`, `role_id`).
+
+Internal APIs for other services (header `X-Internal-Token`):
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /internal/users/:userId/memberships` | All schools + roles for a user |
+| `GET /internal/schools/:id/members` | All users in a school |
+| `GET /internal/schools/:id/members/:userId` | One membership |
+| `POST /internal/schools/:id/members` | Link user to school |
+| `PATCH /internal/schools/:id/members/:userId` | Update role |
+| `DELETE /internal/schools/:id/members/:userId` | Remove link |
+
+`GET /internal/users/:id?school_id=...` on auth-service resolves `school_id` from the mapping.
+
+### Migrating existing data
+
+- Schools: `scripts/migrate_auth_schools_to_school_db.sql`
+- User school/role columns → `user_schools`: `scripts/migrate_users_school_id_to_user_schools.sql`
 
 Each should return a JSON status like `{"status":"...-service is running"}`.
 

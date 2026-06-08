@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/auth-service
+module github.com/Archiit19/School-management/auth-service
 
 go 1.23.0
 
