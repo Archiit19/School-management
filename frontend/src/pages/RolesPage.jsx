@@ -21,6 +21,8 @@ export default function RolesPage() {
   const [roleForm, setRoleForm] = useState({ name: "", description: "" });
   const [assignForm, setAssignForm] = useState({ role_id: "", permission_id: "" });
   const [rolePerms, setRolePerms] = useState({});
+  const [editingRoleId, setEditingRoleId] = useState(null);
+  const [addPermId, setAddPermId] = useState("");
 
   const loadRoles = useCallback(async () => {
     try { setRoles(await rolesApi.list()); } catch (err) { setError(err.message); }
@@ -50,10 +52,61 @@ export default function RolesPage() {
     try {
       const perms = await permissionsApi.forRole(roleId);
       setRolePerms((p) => ({ ...p, [roleId]: perms }));
-    } catch {}
+      return perms;
+    } catch (err) {
+      setError(err.message);
+      return [];
+    }
+  }
+
+  async function openEditPerms(role) {
+    setEditingRoleId(role.id);
+    setAddPermId("");
+    await viewRolePerms(role.id);
+  }
+
+  function closeEditPerms() {
+    setEditingRoleId(null);
+    setAddPermId("");
+  }
+
+  async function removePerm(roleId, permissionId) {
+    if (!confirm("Remove this permission from the role?")) return;
+    setError("");
+    setBusy(true);
+    try {
+      await permissionsApi.removeFromRole(roleId, permissionId);
+      msg("Permission removed.");
+      await viewRolePerms(roleId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function addPermToRole(e) {
+    e.preventDefault();
+    if (!addPermId || !editingRoleId) return;
+    setError("");
+    setBusy(true);
+    try {
+      await permissionsApi.assign({ role_id: editingRoleId, permission_id: addPermId });
+      msg("Permission added.");
+      setAddPermId("");
+      await viewRolePerms(editingRoleId);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   const PERM_GROUPS = groupPermissions(permissions);
+  const editingRole = roles.find((r) => r.id === editingRoleId);
+  const editingPerms = editingRoleId ? (rolePerms[editingRoleId] || []) : [];
+  const assignedPermIds = new Set(editingPerms.map((p) => p.id));
+  const availableToAdd = permissions.filter((p) => !assignedPermIds.has(p.id));
 
   return (
     <>
@@ -85,26 +138,26 @@ export default function RolesPage() {
             <div className="card-title">Roles <span className="badge badge-get">GET</span></div>
             <div className="table-wrap">
               <table>
-                <thead><tr><th>Name</th><th>Description</th><th>ID</th><th>Permissions</th></tr></thead>
+                <thead><tr><th>Name</th><th>Description</th><th>Permissions</th><th>Actions</th></tr></thead>
                 <tbody>
                   {roles.length === 0 && <tr><td colSpan={4} className="empty">No roles.</td></tr>}
                   {roles.map((r) => (
                     <tr key={r.id}>
                       <td><strong>{r.name}</strong></td>
                       <td>{r.description}</td>
-                      <td><span className="mono truncate">{r.id}</span></td>
                       <td>
-                        {!rolePerms[r.id] ? (
-                          <button className="btn btn-ghost btn-sm" onClick={() => viewRolePerms(r.id)}>Load</button>
-                        ) : rolePerms[r.id].length === 0 ? (
-                          <em className="text-muted text-sm">None assigned</em>
+                        {rolePerms[r.id]?.length > 0 ? (
+                          <span className="text-sm">{rolePerms[r.id].length} assigned</span>
                         ) : (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                            {rolePerms[r.id].map((p) => (
-                              <span key={p.id} className="status status-active">{p.name}</span>
-                            ))}
-                          </div>
+                          <span className="text-muted text-sm">—</span>
                         )}
+                      </td>
+                      <td>
+                        <PermGate perm="manage_permissions">
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEditPerms(r)}>
+                            Edit Permissions
+                          </button>
+                        </PermGate>
                       </td>
                     </tr>
                   ))}
@@ -164,6 +217,53 @@ export default function RolesPage() {
             </div>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Assign</button></div>
           </form>
+        </div>
+      )}
+
+      {editingRole && (
+        <div className="modal-overlay" onClick={closeEditPerms}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit permissions — {editingRole.name}</h3>
+              <button type="button" className="modal-close" onClick={closeEditPerms} aria-label="Close">&times;</button>
+            </div>
+
+            <p className="text-sm text-muted mb-4">Add or remove permissions for this role. Users with this role inherit these permissions.</p>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16, minHeight: 32 }}>
+              {editingPerms.length === 0 && (
+                <em className="text-muted text-sm">No permissions assigned yet.</em>
+              )}
+              {editingPerms.map((p) => (
+                <span key={p.id} className="perm-chip">
+                  {p.name}
+                  <button type="button" title="Remove" onClick={() => removePerm(editingRoleId, p.id)}>&times;</button>
+                </span>
+              ))}
+            </div>
+
+            <form onSubmit={addPermToRole}>
+              <div className="form-group">
+                <label>Add permission</label>
+                <select
+                  value={addPermId}
+                  onChange={(e) => setAddPermId(e.target.value)}
+                  disabled={availableToAdd.length === 0}
+                >
+                  <option value="">
+                    {availableToAdd.length === 0 ? "All permissions already assigned" : "Select permission…"}
+                  </option>
+                  {availableToAdd.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="btn-row">
+                <button type="button" className="btn btn-ghost" onClick={closeEditPerms}>Close</button>
+                <button type="submit" className="btn btn-primary" disabled={busy || !addPermId}>Add Permission</button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </>

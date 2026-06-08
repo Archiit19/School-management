@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"fmt"
+
 	"github.com/Archiit19/School-management/student-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -75,23 +77,29 @@ func (r *StudentRepository) DeleteStudent(id uuid.UUID) error {
 	return r.db.Delete(&model.Student{}, "id = ?", id).Error
 }
 
-// CountStudentsForEnrollment returns the count of students enrolled in a specific
-// school, class, section (optional), and admission year. Used to generate the next enrollment number.
-func (r *StudentRepository) CountStudentsForEnrollment(
-	schoolID, classID uuid.UUID,
-	sectionID *uuid.UUID,
-	admissionYear int,
-) (int64, error) {
-	var count int64
-	q := r.db.Model(&model.Student{}).Where(
-		"school_id = ? AND class_id = ? AND admission_year = ?",
-		schoolID, classID, admissionYear,
-	)
-	if sectionID != nil {
-		q = q.Where("section_id = ?", *sectionID)
-	} else {
-		q = q.Where("section_id IS NULL")
+// MaxEnrollmentForCodePrefix returns the highest enrollment suffix already used for a
+// student-code prefix (e.g. "202610A" → 3 if 202610A03 exists). student_code is globally
+// unique, so this must scan all schools — not just the admitting school.
+func (r *StudentRepository) MaxEnrollmentForCodePrefix(codePrefix string) (int, error) {
+	var codes []string
+	err := r.db.Model(&model.Student{}).
+		Where("student_code LIKE ?", codePrefix+"%").
+		Pluck("student_code", &codes).Error
+	if err != nil {
+		return 0, err
 	}
-	err := q.Count(&count).Error
-	return count, err
+
+	maxNum := 0
+	suffixLen := len(codePrefix)
+	for _, code := range codes {
+		if len(code) <= suffixLen {
+			continue
+		}
+		suffix := code[suffixLen:]
+		var n int
+		if _, scanErr := fmt.Sscanf(suffix, "%d", &n); scanErr == nil && n > maxNum {
+			maxNum = n
+		}
+	}
+	return maxNum, nil
 }

@@ -94,6 +94,8 @@ export const permissionsApi = {
   list: () => request("users", "/api/v1/permissions"),
   assign: (body) => request("users", "/api/v1/roles/assign-permission", { method: "POST", body }),
   forRole: (roleId) => request("users", `/api/v1/roles/${roleId}/permissions`),
+  removeFromRole: (roleId, permissionId) =>
+    request("users", `/api/v1/roles/${roleId}/permissions/${permissionId}`, { method: "DELETE" }),
 };
 
 export const academicApi = {

@@ -127,3 +127,13 @@ func (s *UserService) AssignPermissionToRole(req model.AssignPermissionRequest) 
 func (s *UserService) GetPermissionsByRoleID(roleID uuid.UUID) ([]model.Permission, error) {
 	return s.repo.GetPermissionsByRoleID(roleID)
 }
+
+func (s *UserService) RemovePermissionFromRole(roleID, permissionID uuid.UUID) error {
+	if _, err := s.repo.GetRoleByID(roleID); err != nil {
+		return errors.New("role not found")
+	}
+	if _, err := s.repo.GetPermissionByID(permissionID); err != nil {
+		return errors.New("permission not found")
+	}
+	return s.repo.RemovePermissionFromRole(roleID, permissionID)
+}
