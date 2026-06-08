@@ -4,9 +4,9 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/avaneeshravat/school-management/attendance-service/internal/apierrors"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/service"
+	"github.com/Archiit19/School-management/attendance-service/internal/apierrors"
+	"github.com/Archiit19/School-management/attendance-service/internal/model"
+	"github.com/Archiit19/School-management/attendance-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

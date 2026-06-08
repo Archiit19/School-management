@@ -1,0 +1,8 @@
+-- One-time migration: copy schools from auth_db into school_db.
+-- Run after school-service is up and school_db exists.
+--
+-- Example (from host, adjust passwords/ports):
+--   docker exec -i auth-db psql -U auth_user -d auth_db -c "\copy (SELECT id, name, address, phone, email, true AS is_active, created_at, updated_at FROM schools) TO STDOUT WITH CSV HEADER" \
+--     | docker exec -i school-db psql -U school_user -d school_db -c "\copy schools (id, name, address, phone, email, is_active, created_at, updated_at) FROM STDIN WITH CSV HEADER"
+--
+-- Or use pg_dump/pg_restore for your environment. New installs do not need this.

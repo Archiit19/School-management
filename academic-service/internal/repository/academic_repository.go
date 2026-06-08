@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"github.com/avaneeshravat/school-management/academic-service/internal/model"
+	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

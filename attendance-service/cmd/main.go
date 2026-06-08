@@ -6,19 +6,19 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/avaneeshravat/school-management/attendance-service/internal/config"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/handler"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/middleware"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/repository"
-	"github.com/avaneeshravat/school-management/attendance-service/internal/service"
+	"github.com/Archiit19/School-management/attendance-service/internal/config"
+	"github.com/Archiit19/School-management/attendance-service/internal/handler"
+	"github.com/Archiit19/School-management/attendance-service/internal/middleware"
+	"github.com/Archiit19/School-management/attendance-service/internal/model"
+	"github.com/Archiit19/School-management/attendance-service/internal/repository"
+	"github.com/Archiit19/School-management/attendance-service/internal/service"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/avaneeshravat/school-management/attendance-service/docs"
+	_ "github.com/Archiit19/School-management/attendance-service/docs"
 )
 
 // @title           Attendance Service API

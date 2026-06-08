@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/user-service
+module github.com/Archiit19/School-management/user-service
 
 go 1.23.0
 

@@ -1,5 +1,6 @@
-import { createContext, useContext, useState, useCallback, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { authApi } from "../api/client";
+import { parseTokenClaims } from "../utils/jwt";
 
 const AuthContext = createContext(null);
 
@@ -23,18 +24,39 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!token) {
+      setUser(null);
+      setPermissions([]);
       setLoading(false);
       return;
     }
+
+    let cancelled = false;
+    setLoading(true);
     authApi
       .me()
       .then((data) => {
+        if (cancelled) return;
         setUser(data);
         setPermissions(data.permissions || []);
       })
-      .catch(() => logout())
-      .finally(() => setLoading(false));
+      .catch(() => {
+        if (!cancelled) logout();
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token, logout]);
+
+  const claims = useMemo(() => parseTokenClaims(token), [token]);
+  const sessionRole = user?.role_name || claims.role_name;
+  const sessionSchoolId = user?.school_id || claims.school_id;
+
+  const inSchoolContext = sessionRole === "super_admin" && Boolean(sessionSchoolId);
+  const isPlatformAdmin = sessionRole === "platform_admin" && !sessionSchoolId;
 
   const hasPerm = useCallback(
     (perm) => {
@@ -44,7 +66,21 @@ export function AuthProvider({ children }) {
     [user, permissions],
   );
 
-  const value = { token, user, permissions, loading, saveToken, logout, setUser, hasPerm };
+  const value = useMemo(
+    () => ({
+      token,
+      user,
+      permissions,
+      loading,
+      saveToken,
+      logout,
+      setUser,
+      hasPerm,
+      isPlatformAdmin,
+      inSchoolContext,
+    }),
+    [token, user, permissions, loading, saveToken, logout, hasPerm, isPlatformAdmin, inSchoolContext],
+  );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

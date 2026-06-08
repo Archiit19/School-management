@@ -1,0 +1,62 @@
+flowchart TB
+    %% ──────────── Client tier ────────────
+    subgraph Client["Client Tier"]
+        FE["Frontend (React + Vite)<br/>frontend/"]
+    end
+
+    %% ──────────── Service tier ────────────
+    subgraph Services["Microservices (Go + Gin + GORM)"]
+        AUTH["auth-service<br/>:8081"]
+        USER["user-service<br/>:8082"]
+        ACAD["academic-service<br/>:8083"]
+        STU["student-service<br/>:8084"]
+        ATT["attendance-service<br/>:8085"]
+        EXAM["exam-service<br/>:8086"]
+        FIN["finance-service<br/>:8087"]
+    end
+
+    %% ──────────── Data tier ────────────
+    subgraph Data["Data Tier (PostgreSQL 16-alpine, one DB per service)"]
+        AUTHDB[("auth_db @ :15433<br/>• schools<br/>• users")]
+        USERDB[("user_db @ :5434<br/>• roles<br/>• permissions<br/>• role_permissions")]
+        ACADDB[("academic_db @ :5435<br/>• classes<br/>• sections<br/>• subjects<br/>• teacher_assignments<br/>• assignments<br/>• submissions")]
+        STUDB[("student_db @ :5436<br/>• students")]
+        ATTDB[("attendance_db @ :5437<br/>• attendances<br/>• teacher_attendances")]
+        EXAMDB[("exam_db @ :5438<br/>• exams<br/>• marks")]
+        FINDB[("finance_db @ :5439<br/>• fees<br/>• payments")]
+    end
+
+    %% Frontend → services
+    FE -- "REST + JWT" --> AUTH
+    FE --> USER
+    FE --> ACAD
+    FE --> STU
+    FE --> ATT
+    FE --> EXAM
+    FE --> FIN
+
+    %% Service ↔ service (internal token)
+    AUTH -. provisions users/students .-> USER
+    AUTH -. links pupil logins .-> STU
+    ACAD -. verifies users .-> AUTH
+    ACAD -. resolves pupils .-> STU
+    STU  -. creates pupil logins .-> AUTH
+    STU  -. resolves class/section .-> ACAD
+    ATT  -. verifies users .-> AUTH
+    EXAM -. resolves pupils .-> STU
+
+    %% Service → own DB
+    AUTH --> AUTHDB
+    USER --> USERDB
+    ACAD --> ACADDB
+    STU  --> STUDB
+    ATT  --> ATTDB
+    EXAM --> EXAMDB
+    FIN  --> FINDB
+
+    classDef svc fill:#e3f2fd,stroke:#1565c0,color:#0d47a1;
+    classDef db  fill:#fff3e0,stroke:#ef6c00,color:#e65100;
+    classDef fe  fill:#e8f5e9,stroke:#2e7d32,color:#1b5e20;
+    class AUTH,USER,ACAD,STU,ATT,EXAM,FIN svc;
+    class AUTHDB,USERDB,ACADDB,STUDB,ATTDB,EXAMDB,FINDB db;
+    class FE fe;

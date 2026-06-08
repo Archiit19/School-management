@@ -4,20 +4,20 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/avaneeshravat/school-management/user-service/internal/config"
-	"github.com/avaneeshravat/school-management/user-service/internal/handler"
-	"github.com/avaneeshravat/school-management/user-service/internal/middleware"
-	"github.com/avaneeshravat/school-management/user-service/internal/model"
-	"github.com/avaneeshravat/school-management/user-service/internal/rbacdata"
-	"github.com/avaneeshravat/school-management/user-service/internal/repository"
-	"github.com/avaneeshravat/school-management/user-service/internal/service"
+	"github.com/Archiit19/School-management/user-service/internal/config"
+	"github.com/Archiit19/School-management/user-service/internal/handler"
+	"github.com/Archiit19/School-management/user-service/internal/middleware"
+	"github.com/Archiit19/School-management/user-service/internal/model"
+	"github.com/Archiit19/School-management/user-service/internal/rbacdata"
+	"github.com/Archiit19/School-management/user-service/internal/repository"
+	"github.com/Archiit19/School-management/user-service/internal/service"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/avaneeshravat/school-management/user-service/docs" // swagger docs
+	_ "github.com/Archiit19/School-management/user-service/docs" // swagger docs
 )
 
 // @title           User Service API

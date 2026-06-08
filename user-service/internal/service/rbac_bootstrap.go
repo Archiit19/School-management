@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/avaneeshravat/school-management/user-service/internal/model"
-	"github.com/avaneeshravat/school-management/user-service/internal/rbacdata"
+	"github.com/Archiit19/School-management/user-service/internal/model"
+	"github.com/Archiit19/School-management/user-service/internal/rbacdata"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

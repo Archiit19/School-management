@@ -1,8 +1,14 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { authApi } from "../api/client";
 
-const NAV = [
-  { to: "/", icon: "grid", label: "Dashboard", perms: [] },
+const PLATFORM_NAV = [
+  { to: "/", icon: "grid", label: "Dashboard" },
+  { to: "/schools", icon: "building", label: "Schools" },
+];
+
+const SCHOOL_NAV = [
+  { to: "/", icon: "grid", label: "Dashboard" },
   { to: "/me", icon: "user-check", label: "My Portal", perms: ["view_own_profile", "view_own_attendance", "view_own_exams", "view_own_results", "view_own_assignments", "view_own_dues"] },
   { to: "/users", icon: "users", label: "Users", perms: ["create_user", "view_users"] },
   { to: "/roles", icon: "shield", label: "Roles & Permissions", perms: ["create_role", "manage_permissions"] },
@@ -20,7 +26,7 @@ function Icon({ name }) {
 }
 
 export default function Layout() {
-  const { user, logout, hasPerm } = useAuth();
+  const { user, logout, hasPerm, inSchoolContext, isPlatformAdmin, saveToken, loading } = useAuth();
   const navigate = useNavigate();
 
   function handleLogout() {
@@ -28,11 +34,25 @@ export default function Layout() {
     navigate("/login");
   }
 
-  const visibleNav = NAV.filter((item) => {
+  async function handleExitSchool() {
+    try {
+      const res = await authApi.exitSchool();
+      saveToken(res.token);
+      navigate("/schools");
+    } catch {
+      navigate("/schools");
+    }
+  }
+
+  const showPlatformNav = !loading && isPlatformAdmin;
+  const navSource = showPlatformNav ? PLATFORM_NAV : SCHOOL_NAV;
+
+  const visibleNav = navSource.filter((item) => {
     if (item.to === "/me") {
       return user?.role_name === "student" || !!user?.student_id;
     }
-    return item.perms.length === 0 || item.perms.some((p) => hasPerm(p));
+    if (!item.perms) return true;
+    return item.perms.some((p) => hasPerm(p));
   });
 
   return (
@@ -42,6 +62,12 @@ export default function Layout() {
           <span className="brand-icon">S</span>
           <span className="brand-text">SchoolMgmt</span>
         </div>
+
+        {inSchoolContext && user?.school && (
+          <div className="text-sm" style={{ padding: "0 16px 12px", color: "var(--clr-muted)" }}>
+            <strong style={{ color: "var(--clr-text)" }}>{user.school.name}</strong>
+          </div>
+        )}
 
         <nav className="sidebar-nav">
           {visibleNav.map((item) => (
@@ -66,6 +92,11 @@ export default function Layout() {
                 <span className="user-role">{user.role_name}</span>
               </div>
             </div>
+          )}
+          {inSchoolContext && (
+            <button className="btn btn-ghost btn-sm" style={{ marginBottom: 8 }} onClick={handleExitSchool}>
+              Exit school
+            </button>
           )}
           <button className="btn btn-ghost btn-sm" onClick={handleLogout}>
             Logout

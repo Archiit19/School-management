@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/avaneeshravat/school-management/auth-service/internal/config"
-	"github.com/avaneeshravat/school-management/auth-service/internal/handler"
-	"github.com/avaneeshravat/school-management/auth-service/internal/middleware"
-	"github.com/avaneeshravat/school-management/auth-service/internal/model"
-	"github.com/avaneeshravat/school-management/auth-service/internal/repository"
-	"github.com/avaneeshravat/school-management/auth-service/internal/service"
+	"github.com/Archiit19/School-management/auth-service/internal/config"
+	"github.com/Archiit19/School-management/auth-service/internal/handler"
+	"github.com/Archiit19/School-management/auth-service/internal/middleware"
+	"github.com/Archiit19/School-management/auth-service/internal/migrate"
+	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/repository"
+	"github.com/Archiit19/School-management/auth-service/internal/service"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
-	_ "github.com/avaneeshravat/school-management/auth-service/docs" // swagger docs
+	_ "github.com/Archiit19/School-management/auth-service/docs" // swagger docs
 )
 
 // @title           Auth Service API
@@ -44,8 +45,11 @@ func main() {
 	log.Println("✅ Connected to Auth DB")
 
 	// Auto-migrate
-	if err := db.AutoMigrate(&model.School{}, &model.User{}); err != nil {
+	if err := db.AutoMigrate(&model.User{}); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
+	}
+	if err := migrate.UserSchema(db); err != nil {
+		log.Fatalf("failed to apply user schema migration: %v", err)
 	}
 	log.Println("✅ Database migrated")
 
@@ -71,6 +75,7 @@ func main() {
 	// ─── Auth routes (public) ───────────────────────────────────────
 	auth := r.Group("/auth")
 	{
+		auth.POST("/signup", authHandler.Signup)
 		auth.POST("/register-school", authHandler.RegisterSchool)
 		auth.POST("/login", authHandler.Login)
 	}
@@ -80,6 +85,9 @@ func main() {
 	authProtected.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
 		authProtected.GET("/me", authHandler.GetMe)
+		authProtected.PATCH("/me", authHandler.UpdateProfile)
+		authProtected.POST("/select-school", authHandler.SelectSchool)
+		authProtected.POST("/exit-school", authHandler.ExitSchool)
 	}
 
 	// ─── User Management routes (protected, permission-checked) ─────

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/avaneeshravat/school-management/finance-service/internal/model"
-	"github.com/avaneeshravat/school-management/finance-service/internal/repository"
+	"github.com/Archiit19/School-management/finance-service/internal/model"
+	"github.com/Archiit19/School-management/finance-service/internal/repository"
 	"github.com/google/uuid"
 )
 

@@ -3,8 +3,8 @@ package handler
 import (
 	"net/http"
 
-	"github.com/avaneeshravat/school-management/auth-service/internal/model"
-	"github.com/avaneeshravat/school-management/auth-service/internal/service"
+	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -17,17 +17,21 @@ func NewAuthHandler(svc *service.AuthService) *AuthHandler {
 	return &AuthHandler{svc: svc}
 }
 
-// RegisterSchool godoc
-// @Summary      Register a new school
-// @Description  Creates a new school, a super_admin role, and the first admin user. Returns a JWT token.
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        body  body      model.RegisterSchoolRequest  true  "School and admin details"
-// @Success      201   {object}  model.RegisterSchoolResponse
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      409   {object}  model.ErrorResponse
-// @Router       /auth/register-school [post]
+func (h *AuthHandler) Signup(c *gin.Context) {
+	var req model.SignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp, err := h.svc.Signup(req)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, resp)
+}
+
 func (h *AuthHandler) RegisterSchool(c *gin.Context) {
 	var req model.RegisterSchoolRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -40,21 +44,9 @@ func (h *AuthHandler) RegisterSchool(c *gin.Context) {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusCreated, resp)
 }
 
-// Login godoc
-// @Summary      Login
-// @Description  Authenticate with email and password. Returns a JWT token.
-// @Tags         Auth
-// @Accept       json
-// @Produce      json
-// @Param        body  body      model.LoginRequest  true  "Login credentials"
-// @Success      200   {object}  model.LoginResponse
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      401   {object}  model.ErrorResponse
-// @Router       /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req model.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -67,28 +59,66 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
-
 	c.JSON(http.StatusOK, resp)
 }
 
-// GetMe godoc
-// @Summary      Get current user
-// @Description  Returns the profile of the currently authenticated user.
-// @Tags         Auth
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {object}  model.User
-// @Failure      401  {object}  model.ErrorResponse
-// @Failure      404  {object}  model.ErrorResponse
-// @Router       /auth/me [get]
-func (h *AuthHandler) GetMe(c *gin.Context) {
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found in context"})
+func (h *AuthHandler) SelectSchool(c *gin.Context) {
+	var req model.SelectSchoolRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user, err := h.svc.GetMe(userID.(uuid.UUID))
+	schoolID, err := uuid.Parse(req.SchoolID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
+		return
+	}
+
+	userID := c.MustGet("user_id").(uuid.UUID)
+	resp, err := h.svc.SelectSchool(userID, schoolID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AuthHandler) ExitSchool(c *gin.Context) {
+	userID := c.MustGet("user_id").(uuid.UUID)
+	resp, err := h.svc.ExitSchool(userID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	var req model.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.MustGet("user_id").(uuid.UUID)
+	user, err := h.svc.UpdateProfile(userID, req)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *AuthHandler) GetMe(c *gin.Context) {
+	userID := c.MustGet("user_id").(uuid.UUID)
+	schoolID, _ := c.Get("school_id")
+	roleName, _ := c.Get("role_name")
+
+	sid, _ := schoolID.(uuid.UUID)
+	rn, _ := roleName.(string)
+
+	user, err := h.svc.GetMe(userID, sid, rn)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

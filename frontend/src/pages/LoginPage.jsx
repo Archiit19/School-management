@@ -11,18 +11,14 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });
-  const [regForm, setRegForm] = useState({
-    school_name: "",
-    school_email: "",
-    school_address: "",
-    school_phone: "",
-    admin_name: "",
-    admin_email: "",
-    admin_password: "",
-  });
+  const [signupForm, setSignupForm] = useState({ name: "", email: "", password: "" });
 
   function field(setter) {
     return (e) => setter((p) => ({ ...p, [e.target.name]: e.target.value }));
+  }
+
+  function homeFor(user) {
+    return user?.role_name === "platform_admin" ? "/schools" : "/";
   }
 
   async function handleLogin(e) {
@@ -32,7 +28,7 @@ export default function LoginPage() {
     try {
       const res = await authApi.login(loginForm);
       saveToken(res.token);
-      navigate("/");
+      navigate(homeFor(res.user));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -40,14 +36,14 @@ export default function LoginPage() {
     }
   }
 
-  async function handleRegister(e) {
+  async function handleSignup(e) {
     e.preventDefault();
     setError("");
     setBusy(true);
     try {
-      const res = await authApi.registerSchool(regForm);
+      const res = await authApi.signup(signupForm);
       saveToken(res.token);
-      navigate("/");
+      navigate(homeFor(res.user));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -60,14 +56,14 @@ export default function LoginPage() {
       <div className="login-container">
         <div className="login-card">
           <h1>School Management</h1>
-          <p>Sign in to your account or register a new school.</p>
+          <p>Sign in or create an admin account, then add your schools from the dashboard.</p>
 
           <div className="login-tabs">
             <button className={`login-tab ${tab === "login" ? "active" : ""}`} onClick={() => { setTab("login"); setError(""); }}>
               Login
             </button>
-            <button className={`login-tab ${tab === "register" ? "active" : ""}`} onClick={() => { setTab("register"); setError(""); }}>
-              Register School
+            <button className={`login-tab ${tab === "signup" ? "active" : ""}`} onClick={() => { setTab("signup"); setError(""); }}>
+              Sign Up
             </button>
           </div>
 
@@ -77,7 +73,7 @@ export default function LoginPage() {
             <form onSubmit={handleLogin}>
               <div className="form-group">
                 <label>Email</label>
-                <input name="email" type="email" required value={loginForm.email} onChange={field(setLoginForm)} placeholder="admin@school.edu" />
+                <input name="email" type="email" required value={loginForm.email} onChange={field(setLoginForm)} placeholder="you@example.com" />
               </div>
               <div className="form-group">
                 <label>Password</label>
@@ -88,42 +84,21 @@ export default function LoginPage() {
               </button>
             </form>
           ) : (
-            <form onSubmit={handleRegister}>
+            <form onSubmit={handleSignup}>
               <div className="form-group">
-                <label>School Name</label>
-                <input name="school_name" required value={regForm.school_name} onChange={field(setRegForm)} placeholder="Springfield Elementary" />
-              </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label>School Email</label>
-                  <input name="school_email" type="email" required value={regForm.school_email} onChange={field(setRegForm)} placeholder="info@school.edu" />
-                </div>
-                <div className="form-group">
-                  <label>School Phone</label>
-                  <input name="school_phone" value={regForm.school_phone} onChange={field(setRegForm)} placeholder="555-0100" />
-                </div>
+                <label>Full Name</label>
+                <input name="name" required value={signupForm.name} onChange={field(setSignupForm)} placeholder="John Doe" />
               </div>
               <div className="form-group">
-                <label>School Address</label>
-                <input name="school_address" value={regForm.school_address} onChange={field(setRegForm)} placeholder="123 Main St" />
+                <label>Email</label>
+                <input name="email" type="email" required value={signupForm.email} onChange={field(setSignupForm)} placeholder="you@example.com" />
               </div>
-              <hr style={{ border: "none", borderTop: "1px solid var(--clr-border)", margin: "12px 0" }} />
               <div className="form-group">
-                <label>Admin Full Name</label>
-                <input name="admin_name" required value={regForm.admin_name} onChange={field(setRegForm)} placeholder="John Doe" />
-              </div>
-              <div className="grid-2">
-                <div className="form-group">
-                  <label>Admin Email</label>
-                  <input name="admin_email" type="email" required value={regForm.admin_email} onChange={field(setRegForm)} placeholder="john@school.edu" />
-                </div>
-                <div className="form-group">
-                  <label>Admin Password</label>
-                  <input name="admin_password" type="password" required minLength={6} value={regForm.admin_password} onChange={field(setRegForm)} placeholder="Min 6 characters" />
-                </div>
+                <label>Password</label>
+                <input name="password" type="password" required minLength={6} value={signupForm.password} onChange={field(setSignupForm)} placeholder="Min 6 characters" />
               </div>
               <button className="btn btn-primary" disabled={busy}>
-                {busy ? "Registering..." : "Register School"}
+                {busy ? "Creating account..." : "Create Admin Account"}
               </button>
             </form>
           )}

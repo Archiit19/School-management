@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/student-service
+module github.com/Archiit19/School-management/student-service
 
 go 1.23.0
 

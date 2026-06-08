@@ -4,8 +4,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/avaneeshravat/school-management/user-service/internal/model"
-	"github.com/avaneeshravat/school-management/user-service/internal/repository"
+	"github.com/Archiit19/School-management/user-service/internal/model"
+	"github.com/Archiit19/School-management/user-service/internal/repository"
 	"github.com/google/uuid"
 )
 

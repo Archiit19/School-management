@@ -3,7 +3,7 @@ package repository
 import (
 	"time"
 
-	"github.com/avaneeshravat/school-management/attendance-service/internal/model"
+	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

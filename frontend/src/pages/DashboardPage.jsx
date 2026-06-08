@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import PermGate from "../components/PermGate";
-import { authApi, rolesApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
+import { authApi, rolesApi, schoolApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
 
 const SERVICES = [
   { name: "Auth", fn: authApi.health, port: 8081 },
   { name: "User / Roles", fn: rolesApi.health, port: 8082 },
+  { name: "School", fn: schoolApi.health, port: 8088 },
   { name: "Academic", fn: academicApi.health, port: 8083 },
   { name: "Student", fn: studentApi.health, port: 8084 },
   { name: "Attendance", fn: attendanceApi.health, port: 8085 },
@@ -14,7 +15,7 @@ const SERVICES = [
 ];
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isPlatformAdmin, inSchoolContext } = useAuth();
   const [health, setHealth] = useState({});
 
   useEffect(() => {
@@ -29,8 +30,24 @@ export default function DashboardPage() {
     <>
       <div className="page-header">
         <h1>Dashboard</h1>
-        <p>Welcome back, {user?.name || "Admin"}. Overview of all services.</p>
+        <p>
+          Welcome back, {user?.name || "Admin"}.
+          {isPlatformAdmin && !inSchoolContext && " Create or open a school from the Schools page to manage academics, students, and staff."}
+          {inSchoolContext && user?.school && ` Managing ${user.school.name}.`}
+        </p>
       </div>
+
+      {isPlatformAdmin && !inSchoolContext && (user?.schools?.length > 0) && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-title">Your schools</div>
+          <p className="text-sm text-muted">Open a school from the <strong>Schools</strong> sidebar to manage it.</p>
+          <ul>
+            {(user.schools || []).map((s) => (
+              <li key={s.id}><strong>{s.name}</strong> — {s.email}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title">Your Profile</div>

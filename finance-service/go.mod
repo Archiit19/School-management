@@ -1,4 +1,4 @@
-module github.com/avaneeshravat/school-management/finance-service
+module github.com/Archiit19/School-management/finance-service
 
 go 1.23.0
 

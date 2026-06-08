@@ -1,0 +1,16 @@
+-- Migrate auth users.school_id + role_id into school_db.user_schools, then drop columns from users.
+-- Run after deploying school-service with user_schools table.
+--
+-- 1) Copy memberships (adjust connection/credentials for your environment):
+-- docker exec -i auth-db psql -U auth_user -d auth_db -t -A -F',' -c \
+--   "SELECT id, school_id, role_id FROM users WHERE school_id IS NOT NULL AND role_id IS NOT NULL" \
+-- | while IFS=, read -r uid sid rid; do
+--     docker exec -i school-db psql -U school_user -d school_db -c \
+--       "INSERT INTO user_schools (id, user_id, school_id, role_id, created_at, updated_at)
+--        VALUES (gen_random_uuid(), '$uid', '$sid', '$rid', NOW(), NOW())
+--        ON CONFLICT DO NOTHING;"
+--   done
+--
+-- 2) Drop columns from auth users (after verifying mappings):
+-- ALTER TABLE users DROP COLUMN IF EXISTS school_id;
+-- ALTER TABLE users DROP COLUMN IF EXISTS role_id;
