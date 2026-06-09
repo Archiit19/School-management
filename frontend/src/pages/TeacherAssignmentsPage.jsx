@@ -26,6 +26,13 @@ export default function TeacherAssignmentsPage() {
     section_id: "",
     subject_id: "",
   });
+  const [editingAssignment, setEditingAssignment] = useState(null);
+  const [editForm, setEditForm] = useState({
+    teacher_user_id: "",
+    class_id: "",
+    section_id: "",
+    subject_id: "",
+  });
 
   const subjectById = useMemo(() => {
     const map = new Map();
@@ -124,6 +131,14 @@ export default function TeacherAssignmentsPage() {
     return ids;
   }, [allAssignments, form.class_id]);
 
+  const assignedSubjectIdsForEditClass = useMemo(() => {
+    const ids = new Set();
+    allAssignments.forEach((a) => {
+      if (a.class_id === editForm.class_id) ids.add(a.subject_id);
+    });
+    return ids;
+  }, [allAssignments, editForm.class_id]);
+
   const availableSubjects = useMemo(() => {
     if (!form.class_id || !formClassNode) return [];
     const subjects = formClassNode.subjects || [];
@@ -137,6 +152,35 @@ export default function TeacherAssignmentsPage() {
       return !s.section_id;
     });
   }, [form.class_id, form.section_id, formClassNode, formHasSections, assignedSubjectIdsForClass]);
+
+  const editClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === editForm.class_id),
+    [classes, editForm.class_id],
+  );
+  const editSections = editClassNode?.sections || [];
+  const editHasSections = editSections.length > 0;
+
+  const editAvailableSubjects = useMemo(() => {
+    if (!editForm.class_id || !editClassNode) return [];
+    const subjects = editClassNode.subjects || [];
+    const currentSubjectId = editingAssignment?.subject_id;
+    return subjects.filter((s) => {
+      if (assignedSubjectIdsForEditClass.has(s.id) && s.id !== currentSubjectId) return false;
+      if (editHasSections) {
+        if (!editForm.section_id) return false;
+        if (!s.section_id) return true;
+        return s.section_id === editForm.section_id;
+      }
+      return !s.section_id;
+    });
+  }, [
+    editForm.class_id,
+    editForm.section_id,
+    editClassNode,
+    editHasSections,
+    assignedSubjectIdsForEditClass,
+    editingAssignment?.subject_id,
+  ]);
 
   const queryClassNode = useMemo(
     () => classes.find((c) => classNodeId(c) === query.class_id),
@@ -186,7 +230,73 @@ export default function TeacherAssignmentsPage() {
     }
   }
 
+  function openEdit(assignment) {
+    const sub = subjectById.get(assignment.subject_id);
+    setEditingAssignment(assignment);
+    setEditForm({
+      teacher_user_id: assignment.teacher_user_id,
+      class_id: assignment.class_id,
+      section_id: sub?.section_id || "",
+      subject_id: assignment.subject_id,
+    });
+    setError("");
+  }
+
+  function closeEdit() {
+    setEditingAssignment(null);
+  }
+
+  function onEditClassChange(classId) {
+    setEditForm((p) => ({ ...p, class_id: classId, section_id: "", subject_id: "" }));
+  }
+
+  function onEditSectionChange(sectionId) {
+    setEditForm((p) => ({ ...p, section_id: sectionId, subject_id: "" }));
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault();
+    if (!editingAssignment) return;
+    setError("");
+    setBusy(true);
+    try {
+      await academicApi.updateTeacherAssignment(editingAssignment.id, {
+        teacher_user_id: editForm.teacher_user_id,
+        class_id: editForm.class_id,
+        subject_id: editForm.subject_id,
+      });
+      msg("Assignment updated.");
+      closeEdit();
+      await loadAllAssignments();
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleRemove(assignment) {
+    const sub = subjectById.get(assignment.subject_id);
+    const teacherName = teacherMap[assignment.teacher_user_id]?.name || "this teacher";
+    const subjectName = sub?.name || "this subject";
+    if (!confirm(`Remove ${teacherName} from ${subjectName}?`)) return;
+    setError("");
+    setBusy(true);
+    try {
+      await academicApi.deleteTeacherAssignment(assignment.id);
+      msg("Assignment removed.");
+      await loadAllAssignments();
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const canPickSubject = form.class_id && (!formHasSections || form.section_id);
+  const canPickEditSubject = editForm.class_id && (!editHasSections || editForm.section_id);
   const subjectSelectDisabled = !canPickSubject;
 
   return (
@@ -393,7 +503,7 @@ export default function TeacherAssignmentsPage() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Teacher</th><th>Class</th><th>Section</th><th>Subject</th><th>Assignment ID</th></tr></thead>
+            <thead><tr><th>Teacher</th><th>Class</th><th>Section</th><th>Subject</th><th>Actions</th></tr></thead>
             <tbody>
               {assignments.length === 0 && <tr><td colSpan={5} className="empty">No assignments found.</td></tr>}
               {assignments.map((a) => {
@@ -415,7 +525,14 @@ export default function TeacherAssignmentsPage() {
                     <td>{classMap[a.class_id] || a.class_id}</td>
                     <td>{sectionLabel}</td>
                     <td>{sub?.name || a.subject_id}{sub?.code ? ` (${sub.code})` : ""}</td>
-                    <td><span className="mono truncate">{a.id}</span></td>
+                    <td>
+                      <PermGate perm="assign_teacher">
+                        <div className="btn-row" style={{ flexWrap: "nowrap" }}>
+                          <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(a)}>Edit</button>
+                          <button type="button" className="btn btn-danger btn-sm" onClick={() => handleRemove(a)} disabled={busy}>Remove</button>
+                        </div>
+                      </PermGate>
+                    </td>
                   </tr>
                 );
               })}
@@ -423,6 +540,107 @@ export default function TeacherAssignmentsPage() {
           </table>
         </div>
       </div>
+
+      {editingAssignment && (
+        <div className="modal-overlay" onClick={closeEdit}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit teacher assignment</h3>
+              <button type="button" className="modal-close" onClick={closeEdit} aria-label="Close">&times;</button>
+            </div>
+            <form onSubmit={handleUpdate}>
+              <div className="form-group">
+                <label>Teacher</label>
+                {hasPerm("view_users") && teachers.length > 0 ? (
+                  <select
+                    required
+                    value={editForm.teacher_user_id}
+                    onChange={(e) => setEditForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
+                  >
+                    <option value="">Select teacher…</option>
+                    {teachers.filter((t) => t.is_active !== false).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name} — {t.email}</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    required
+                    value={editForm.teacher_user_id}
+                    onChange={(e) => setEditForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
+                    placeholder="UUID of teacher user"
+                  />
+                )}
+              </div>
+              <div className="grid-3">
+                <div className="form-group">
+                  <label>Class</label>
+                  <select
+                    required
+                    value={editForm.class_id}
+                    onChange={(e) => onEditClassChange(e.target.value)}
+                  >
+                    <option value="">Select class…</option>
+                    {flatClasses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Section</label>
+                  <select
+                    required={editHasSections}
+                    disabled={!editForm.class_id}
+                    value={editForm.section_id}
+                    onChange={(e) => onEditSectionChange(e.target.value)}
+                  >
+                    <option value="">
+                      {!editForm.class_id
+                        ? "Select class first…"
+                        : editHasSections
+                          ? "Select section…"
+                          : "No sections"}
+                    </option>
+                    {editSections.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Subject</label>
+                  <select
+                    required
+                    disabled={!canPickEditSubject}
+                    value={editForm.subject_id}
+                    onChange={(e) => setEditForm((p) => ({ ...p, subject_id: e.target.value }))}
+                  >
+                    <option value="">
+                      {!editForm.class_id
+                        ? "Select class first…"
+                        : editHasSections && !editForm.section_id
+                          ? "Select section first…"
+                          : editAvailableSubjects.length === 0
+                            ? "No subjects available"
+                            : "Select subject…"}
+                    </option>
+                    {editAvailableSubjects.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}{s.code ? ` (${s.code})` : ""}
+                        {!s.section_id ? " — class-wide" : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="btn-row">
+                <button type="button" className="btn btn-ghost" onClick={closeEdit}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy || !editForm.subject_id}>
+                  {busy ? "Saving…" : "Save changes"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

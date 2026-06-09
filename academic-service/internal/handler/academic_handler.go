@@ -179,6 +179,68 @@ func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 	c.JSON(http.StatusOK, assignments)
 }
 
+// UpdateTeacherAssignment godoc
+// @Summary      Update teacher assignment
+// @Description  Change teacher, class, or subject on an existing assignment.
+// @Tags         TeacherAssignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string  true  "Assignment ID"
+// @Param        body  body      model.UpdateTeacherAssignmentRequest  true  "Fields to update"
+// @Success      200   {object}  model.TeacherAssignment
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /teacher-assignments/{id} [patch]
+func (h *AcademicHandler) UpdateTeacherAssignment(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assignment id"})
+		return
+	}
+
+	var req model.UpdateTeacherAssignmentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	authHeader := c.GetHeader("Authorization")
+	assignment, err := h.svc.UpdateTeacherAssignment(id, req, schoolID, authHeader)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, assignment)
+}
+
+// DeleteTeacherAssignment godoc
+// @Summary      Remove teacher assignment
+// @Description  Unassign a teacher from a class and subject.
+// @Tags         TeacherAssignments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id  path  string  true  "Assignment ID"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  model.ErrorResponse
+// @Router       /teacher-assignments/{id} [delete]
+func (h *AcademicHandler) DeleteTeacherAssignment(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assignment id"})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	if err := h.svc.DeleteTeacherAssignment(id, schoolID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "teacher assignment removed"})
+}
+
 // CreateAssignment godoc
 // @Summary      Create assignment
 // @Description  Teacher or super admin creates assignment and material.
