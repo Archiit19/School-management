@@ -22,7 +22,6 @@
       "publish_results",
       "view_results",
       "view_exams",
-      "assign_teacher",
       "mark_own_teacher_attendance",
       "mark_teacher_attendance",
       "view_teacher_attendance"

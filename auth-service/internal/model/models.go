@@ -35,6 +35,12 @@ type User struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+// MeResponse is returned by GET /auth/me with live permissions from the database.
+type MeResponse struct {
+	User
+	Token string `json:"token,omitempty"`
+}
+
 // ─── Request / Response DTOs ────────────────────────────────────────
 
 // SignupRequest creates a platform admin account (no school yet).

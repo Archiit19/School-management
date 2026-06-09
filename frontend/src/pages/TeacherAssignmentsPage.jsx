@@ -1,14 +1,52 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { academicApi, rolesApi, userMgmtApi } from "../api/client";
-import PermGate from "../components/PermGate";
 import { useAuth } from "../context/AuthContext";
 
 function classNodeId(node) {
   return (node.class || node).id;
 }
 
+function TeacherSelectField({
+  label,
+  value,
+  onChange,
+  teachers,
+  lockedTeacher,
+  allowAll = false,
+  required = false,
+  name,
+  placeholder = "Select teacher…",
+}) {
+  const locked = lockedTeacher;
+  const options = locked ? [locked] : teachers;
+
+  return (
+    <div className="form-group">
+      <label>{label}</label>
+      <select
+        name={name}
+        required={required && !locked}
+        disabled={!!locked}
+        value={locked ? locked.id : value}
+        onChange={onChange}
+      >
+        {!locked && allowAll && <option value="">All teachers</option>}
+        {!locked && !allowAll && <option value="">{placeholder}</option>}
+        {options.map((t) => (
+          <option key={t.id} value={t.id}>
+            {t.name}{t.email ? ` — ${t.email}` : ""}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export default function TeacherAssignmentsPage() {
-  const { hasPerm } = useAuth();
+  const { user, hasPerm } = useAuth();
+  const canAssignTeacher = hasPerm("assign_teacher");
+  const canListTeachers = hasPerm("view_users");
+  const isViewOnly = !canAssignTeacher;
   const [assignments, setAssignments] = useState([]);
   const [allAssignments, setAllAssignments] = useState([]);
   const [classes, setClasses] = useState([]);
@@ -83,7 +121,12 @@ export default function TeacherAssignmentsPage() {
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
 
   useEffect(() => {
-    if (!hasPerm("view_users")) {
+    if (!user?.id || canAssignTeacher) return;
+    setQuery((q) => (q.teacher_user_id ? q : { ...q, teacher_user_id: user.id }));
+  }, [user?.id, canAssignTeacher]);
+
+  useEffect(() => {
+    if (!canListTeachers) {
       setTeachersLoading(false);
       return;
     }
@@ -107,14 +150,51 @@ export default function TeacherAssignmentsPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [hasPerm]);
+  }, [canListTeachers]);
 
   const flatClasses = classes.map((c) => c.class || c);
   const classMap = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
-  const teacherMap = useMemo(
-    () => Object.fromEntries(teachers.map((t) => [t.id, t])),
-    [teachers],
-  );
+
+  const selfTeacher = useMemo(() => {
+    if (!user?.id) return null;
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      is_active: user.is_active !== false,
+    };
+  }, [user]);
+
+  const teachersFromAssignments = useMemo(() => {
+    const byId = new Map();
+    if (selfTeacher) byId.set(selfTeacher.id, selfTeacher);
+    teachers.forEach((t) => byId.set(t.id, t));
+    allAssignments.forEach((a) => {
+      const id = a.teacher_user_id;
+      if (!byId.has(id)) {
+        byId.set(id, { id, name: `Teacher ${String(id).slice(0, 8)}…`, email: "", is_active: true });
+      }
+    });
+    return Array.from(byId.values());
+  }, [allAssignments, selfTeacher, teachers]);
+
+  const assignFormTeachers = canListTeachers
+    ? teachers.filter((t) => t.is_active !== false)
+    : teachersFromAssignments.filter((t) => t.is_active !== false);
+
+  const lockedAssignTeacher = !canListTeachers && assignFormTeachers.length === 1 ? assignFormTeachers[0] : null;
+
+  useEffect(() => {
+    if (!lockedAssignTeacher) return;
+    setForm((f) => (f.teacher_user_id === lockedAssignTeacher.id ? f : { ...f, teacher_user_id: lockedAssignTeacher.id }));
+  }, [lockedAssignTeacher]);
+
+  const teacherRows = canListTeachers ? teachers : isViewOnly && selfTeacher ? [selfTeacher] : teachersFromAssignments;
+
+  const teacherMap = useMemo(() => {
+    const map = Object.fromEntries(teachersFromAssignments.map((t) => [t.id, t]));
+    return map;
+  }, [teachersFromAssignments]);
 
   const formClassNode = useMemo(
     () => classes.find((c) => classNodeId(c) === form.class_id),
@@ -211,6 +291,10 @@ export default function TeacherAssignmentsPage() {
 
   async function handleCreate(e) {
     e.preventDefault();
+    if (!canAssignTeacher) {
+      setError("You do not have permission to assign teachers.");
+      return;
+    }
     setError("");
     setBusy(true);
     try {
@@ -304,73 +388,59 @@ export default function TeacherAssignmentsPage() {
       <div className="page-header">
         <h1>Teacher Assignments</h1>
         <p>
-          Assign one teacher per subject: choose class, then section, then a subject that does not already have a teacher.
+          {canAssignTeacher
+            ? "Assign one teacher per subject: choose class, then section, then a subject that does not already have a teacher."
+            : "View your teaching assignments by class, section, and subject."}
         </p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
       {success && <div className="alert alert-success">{success}</div>}
 
-      <PermGate perm="view_users">
-        <div className="card">
-          <div className="card-title">
-            School teachers <span className="badge badge-get">GET /users?role_id=…</span>
-          </div>
-          {teachersError && <div className="alert alert-error">{teachersError}</div>}
-          <div className="table-wrap">
-            <table>
-              <thead><tr><th>Name</th><th>Email</th><th>User ID</th><th>Status</th></tr></thead>
-              <tbody>
-                {teachersLoading && <tr><td colSpan={4} className="empty">Loading teachers…</td></tr>}
-                {!teachersLoading && teachers.length === 0 && (
-                  <tr><td colSpan={4} className="empty">No teacher accounts yet. Create users with the &quot;teacher&quot; role under User Management.</td></tr>
-                )}
-                {!teachersLoading && teachers.map((t) => (
-                  <tr key={t.id}>
-                    <td><strong>{t.name}</strong></td>
-                    <td>{t.email}</td>
-                    <td><span className="mono truncate">{t.id}</span></td>
-                    <td>
-                      <span className={`status ${t.is_active ? "status-active" : "status-inactive"}`}>
-                        {t.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+      <div className="card">
+        <div className="card-title">
+          School teachers <span className="badge badge-get">GET /users?role_id=…</span>
         </div>
-      </PermGate>
+        {canListTeachers && teachersError && <div className="alert alert-error">{teachersError}</div>}
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Name</th><th>Email</th><th>User ID</th><th>Status</th></tr></thead>
+            <tbody>
+              {canListTeachers && teachersLoading && <tr><td colSpan={4} className="empty">Loading teachers…</td></tr>}
+              {!teachersLoading && teacherRows.length === 0 && (
+                <tr><td colSpan={4} className="empty">No teacher accounts found.</td></tr>
+              )}
+              {!teachersLoading && teacherRows.map((t) => (
+                <tr key={t.id}>
+                  <td><strong>{t.name}</strong></td>
+                  <td>{t.email}</td>
+                  <td><span className="mono truncate">{t.id}</span></td>
+                  <td>
+                    <span className={`status ${t.is_active ? "status-active" : "status-inactive"}`}>
+                      {t.is_active ? "Active" : "Inactive"}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="card">
         <div className="card-title">Assign Teacher <span className="badge badge-post">POST /teacher-assignments</span></div>
+        {canAssignTeacher ? (
         <form onSubmit={handleCreate}>
           <div className="grid-4">
-            <div className="form-group">
-              <label>Teacher</label>
-              {hasPerm("view_users") && teachers.length > 0 ? (
-                <select
-                  name="teacher_user_id"
-                  required
-                  value={form.teacher_user_id}
-                  onChange={(e) => setForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
-                >
-                  <option value="">Select teacher…</option>
-                  {teachers.filter((t) => t.is_active !== false).map((t) => (
-                    <option key={t.id} value={t.id}>{t.name} — {t.email}</option>
-                  ))}
-                </select>
-              ) : (
-                <input
-                  name="teacher_user_id"
-                  required
-                  value={form.teacher_user_id}
-                  onChange={(e) => setForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
-                  placeholder="UUID of teacher user"
-                />
-              )}
-            </div>
+            <TeacherSelectField
+              label="Teacher"
+              name="teacher_user_id"
+              required
+              value={form.teacher_user_id}
+              teachers={assignFormTeachers}
+              lockedTeacher={lockedAssignTeacher}
+              onChange={(e) => setForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
+            />
             <div className="form-group">
               <label>Class</label>
               <select
@@ -438,28 +508,27 @@ export default function TeacherAssignmentsPage() {
             <button className="btn btn-primary" disabled={busy || !form.subject_id}>Assign</button>
           </div>
         </form>
+        ) : (
+          <p className="text-muted" style={{ margin: 0 }}>
+            You do not have permission to assign teachers. Use the filters below to view your classes and subjects.
+          </p>
+        )}
       </div>
 
       <div className="card">
-        <div className="card-title">Class assignments <span className="badge badge-get">GET /teacher-assignments</span></div>
+        <div className="card-title">
+          {isViewOnly ? "My teaching assignments" : "Class assignments"}{" "}
+          <span className="badge badge-get">GET /teacher-assignments</span>
+        </div>
         <div className="grid-4 mb-4">
-          <div className="form-group">
-            <label>Teacher</label>
-            {hasPerm("view_users") && teachers.length > 0 ? (
-              <select value={query.teacher_user_id} onChange={(e) => setQuery((q) => ({ ...q, teacher_user_id: e.target.value }))}>
-                <option value="">All teachers</option>
-                {teachers.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-            ) : (
-              <input
-                placeholder="Filter by teacher UUID…"
-                value={query.teacher_user_id}
-                onChange={(e) => setQuery((q) => ({ ...q, teacher_user_id: e.target.value }))}
-              />
-            )}
-          </div>
+          <TeacherSelectField
+            label="Teacher"
+            allowAll={canAssignTeacher}
+            value={query.teacher_user_id}
+            teachers={canListTeachers ? teachers : teachersFromAssignments}
+            lockedTeacher={isViewOnly ? selfTeacher : null}
+            onChange={(e) => setQuery((q) => ({ ...q, teacher_user_id: e.target.value }))}
+          />
           <div className="form-group">
             <label>Class</label>
             <select

@@ -248,28 +248,64 @@ func (s *AuthService) UpdateProfile(userID uuid.UUID, req model.UpdateProfileReq
 	return user, nil
 }
 
-func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtRoleName string) (*model.User, error) {
+func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissions []string) (*model.MeResponse, error) {
 	user, err := s.users.GetByID(userID)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
 
+	var ctx tokenContext
 	if jwtSchoolID != uuid.Nil {
-		user.SchoolID = &jwtSchoolID
-		user.RoleName = jwtRoleName
-		if ur, err := s.creds.GetUserRole(userID, jwtSchoolID); err == nil {
-			user.RoleID = &ur.RoleID
+		ur, err := s.creds.GetUserRole(userID, jwtSchoolID)
+		if err != nil {
+			return nil, errors.New("no role assigned for this school")
 		}
+		roleName := s.rbac.RoleName(ur.RoleID)
+		freshPerms := s.rbac.RolePermissionNames(ur.RoleID)
+		ctx = tokenContext{
+			SchoolID:    &jwtSchoolID,
+			RoleID:      &ur.RoleID,
+			RoleName:    roleName,
+			Permissions: freshPerms,
+		}
+		user.SchoolID = &jwtSchoolID
+		user.RoleID = &ur.RoleID
+		user.RoleName = roleName
+		user.Permissions = freshPerms
 		if school, err := s.school.GetSchoolByID(jwtSchoolID); err == nil {
 			user.School = school
 		}
 	} else {
-		user.RoleName = platformAdminRole
-		if schools, err := s.school.ListSchoolsForUser(userID); err == nil {
-			user.Schools = schools
+		ctx = s.platformLoginContext(user)
+		user.Permissions = ctx.Permissions
+	}
+
+	resp := &model.MeResponse{User: *user}
+	if !permissionSetsEqual(jwtPermissions, user.Permissions) {
+		token, err := s.generateToken(user, ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to refresh session token: %w", err)
+		}
+		resp.Token = token
+	}
+	return resp, nil
+}
+
+func permissionSetsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, p := range a {
+		seen[p]++
+	}
+	for _, p := range b {
+		seen[p]--
+		if seen[p] < 0 {
+			return false
 		}
 	}
-	return user, nil
+	return true
 }
 
 func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string, error) {

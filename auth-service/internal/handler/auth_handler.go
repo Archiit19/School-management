@@ -113,22 +113,20 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 func (h *AuthHandler) GetMe(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	schoolID, _ := c.Get("school_id")
-	roleName, _ := c.Get("role_name")
-
 	sid, _ := schoolID.(uuid.UUID)
-	rn, _ := roleName.(string)
 
-	user, err := h.svc.GetMe(userID, sid, rn)
+	var jwtPerms []string
+	if perms, ok := c.Get("permissions"); ok {
+		if permList, ok := perms.([]string); ok {
+			jwtPerms = permList
+		}
+	}
+
+	resp, err := h.svc.GetMe(userID, sid, jwtPerms)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	if perms, ok := c.Get("permissions"); ok {
-		if permList, ok := perms.([]string); ok {
-			user.Permissions = permList
-		}
-	}
-
-	c.JSON(http.StatusOK, user)
+	c.JSON(http.StatusOK, resp)
 }
