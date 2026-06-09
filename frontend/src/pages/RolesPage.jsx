@@ -191,7 +191,7 @@ export default function RolesPage() {
               </div>
             </div>
           ))}
-          {permissions.length === 0 && <div className="empty">No permissions found. Make sure user-service is running.</div>}
+          {permissions.length === 0 && <div className="empty">No permissions found. Make sure auth-service is running.</div>}
         </div>
       )}
 

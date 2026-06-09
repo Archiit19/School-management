@@ -85,12 +85,6 @@ func (r *SchoolRepository) GetMembersForSchool(schoolID uuid.UUID) ([]model.User
 	return rows, err
 }
 
-func (r *SchoolRepository) UpdateMembershipRole(schoolID, userID, roleID uuid.UUID) error {
-	return r.db.Model(&model.UserSchool{}).
-		Where("school_id = ? AND user_id = ?", schoolID, userID).
-		Update("role_id", roleID).Error
-}
-
 func (r *SchoolRepository) DeleteMembership(schoolID, userID uuid.UUID) error {
 	return r.db.Where("school_id = ? AND user_id = ?", schoolID, userID).Delete(&model.UserSchool{}).Error
 }
@@ -113,12 +107,8 @@ func (r *SchoolRepository) ListSchoolsForUser(userID uuid.UUID) ([]model.School,
 	return schools, err
 }
 
-func (r *SchoolRepository) ListUserIDsForSchool(schoolID uuid.UUID, roleID *uuid.UUID) ([]uuid.UUID, error) {
-	q := r.db.Model(&model.UserSchool{}).Where("school_id = ?", schoolID)
-	if roleID != nil {
-		q = q.Where("role_id = ?", *roleID)
-	}
+func (r *SchoolRepository) ListUserIDsForSchool(schoolID uuid.UUID) ([]uuid.UUID, error) {
 	var ids []uuid.UUID
-	err := q.Pluck("user_id", &ids).Error
+	err := r.db.Model(&model.UserSchool{}).Where("school_id = ?", schoolID).Pluck("user_id", &ids).Error
 	return ids, err
 }

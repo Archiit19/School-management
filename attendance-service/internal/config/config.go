@@ -12,7 +12,7 @@ type Config struct {
 	DBPassword           string
 	DBName               string
 	JWTSecret            string
-	AuthServiceURL       string
+	UserServiceURL       string
 	InternalServiceToken string
 	Port                 string
 }
@@ -25,7 +25,7 @@ func Load() *Config {
 		DBPassword:           getEnv("DB_PASSWORD", "attendance_pass"),
 		DBName:               getEnv("DB_NAME", "attendance_db"),
 		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		AuthServiceURL:       getEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
+		UserServiceURL:       getEnv("USER_SERVICE_URL", "http://user-service:8082"),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 		Port:                 getEnv("PORT", "8085"),
 	}

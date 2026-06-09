@@ -17,12 +17,11 @@ type School struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// UserSchool maps an auth user to a school with a school-scoped role.
+// UserSchool maps an auth user to a school (role lives in auth-service user_roles).
 type UserSchool struct {
 	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
 	UserID    uuid.UUID `json:"user_id" gorm:"type:uuid;not null;index;uniqueIndex:ux_user_school"`
 	SchoolID  uuid.UUID `json:"school_id" gorm:"type:uuid;not null;index;uniqueIndex:ux_user_school"`
-	RoleID    uuid.UUID `json:"role_id" gorm:"type:uuid;not null"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
@@ -30,16 +29,10 @@ type UserSchool struct {
 type UserSchoolMember struct {
 	UserID   uuid.UUID `json:"user_id"`
 	SchoolID uuid.UUID `json:"school_id"`
-	RoleID   uuid.UUID `json:"role_id"`
 }
 
 type AddMemberRequest struct {
 	UserID string `json:"user_id" binding:"required,uuid"`
-	RoleID string `json:"role_id" binding:"required,uuid"`
-}
-
-type UpdateMemberRequest struct {
-	RoleID string `json:"role_id" binding:"required,uuid"`
 }
 
 type CreateSchoolWithAdminRequest struct {

@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import PermGate from "../components/PermGate";
-import { authApi, rolesApi, schoolApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
+import { authApi, userMgmtApi, schoolApi, academicApi, studentApi, attendanceApi, examApi, financeApi } from "../api/client";
 
 const SERVICES = [
-  { name: "Auth", fn: authApi.health, port: 8081 },
-  { name: "User / Roles", fn: rolesApi.health, port: 8082 },
+  { name: "Auth (login + RBAC)", fn: authApi.health, port: 8081 },
+  { name: "User profiles", fn: userMgmtApi.health, port: 8082 },
   { name: "School", fn: schoolApi.health, port: 8088 },
   { name: "Academic", fn: academicApi.health, port: 8083 },
   { name: "Student", fn: studentApi.health, port: 8084 },

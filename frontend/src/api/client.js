@@ -75,27 +75,28 @@ export const authApi = {
 };
 
 export const userMgmtApi = {
-  create: (body) => request("auth", "/users", { method: "POST", body }),
-  list: (query) => request("auth", "/users", { query }),
-  getById: (id) => request("auth", `/users/${id}`),
-  update: (id, body) => request("auth", `/users/${id}`, { method: "PATCH", body }),
-  remove: (id) => request("auth", `/users/${id}`, { method: "DELETE" }),
-};
-
-export const rolesApi = {
-  create: (body) => request("users", "/api/v1/roles", { method: "POST", body }),
-  list: () => request("users", "/api/v1/roles"),
-  getById: (id) => request("users", `/api/v1/roles/${id}`),
+  create: (body) => request("users", "/users", { method: "POST", body }),
+  list: (query) => request("users", "/users", { query }),
+  getById: (id) => request("users", `/users/${id}`),
+  update: (id, body) => request("users", `/users/${id}`, { method: "PATCH", body }),
+  remove: (id) => request("users", `/users/${id}`, { method: "DELETE" }),
   health: () => request("users", "/health"),
 };
 
+export const rolesApi = {
+  create: (body) => request("auth", "/api/v1/roles", { method: "POST", body }),
+  list: () => request("auth", "/api/v1/roles"),
+  getById: (id) => request("auth", `/api/v1/roles/${id}`),
+  health: () => request("auth", "/health"),
+};
+
 export const permissionsApi = {
-  create: (body) => request("users", "/api/v1/permissions", { method: "POST", body }),
-  list: () => request("users", "/api/v1/permissions"),
-  assign: (body) => request("users", "/api/v1/roles/assign-permission", { method: "POST", body }),
-  forRole: (roleId) => request("users", `/api/v1/roles/${roleId}/permissions`),
+  create: (body) => request("auth", "/api/v1/permissions", { method: "POST", body }),
+  list: () => request("auth", "/api/v1/permissions"),
+  assign: (body) => request("auth", "/api/v1/roles/assign-permission", { method: "POST", body }),
+  forRole: (roleId) => request("auth", `/api/v1/roles/${roleId}/permissions`),
   removeFromRole: (roleId, permissionId) =>
-    request("users", `/api/v1/roles/${roleId}/permissions/${permissionId}`, { method: "DELETE" }),
+    request("auth", `/api/v1/roles/${roleId}/permissions/${permissionId}`, { method: "DELETE" }),
 };
 
 export const academicApi = {

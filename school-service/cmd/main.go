@@ -7,6 +7,7 @@ import (
 
 	"github.com/Archiit19/School-management/school-service/internal/config"
 	"github.com/Archiit19/School-management/school-service/internal/handler"
+	"github.com/Archiit19/School-management/school-service/internal/migrate"
 	"github.com/Archiit19/School-management/school-service/internal/middleware"
 	"github.com/Archiit19/School-management/school-service/internal/model"
 	"github.com/Archiit19/School-management/school-service/internal/repository"
@@ -36,10 +37,13 @@ func main() {
 	if err := db.AutoMigrate(&model.School{}, &model.UserSchool{}); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
+	if err := migrate.DropRoleIDFromMemberships(db); err != nil {
+		log.Fatalf("failed membership schema migration: %v", err)
+	}
 	log.Println("school database migrated")
 
 	repo := repository.NewSchoolRepository(db)
-	svc := service.NewSchoolService(repo, cfg.UserServiceURL)
+	svc := service.NewSchoolService(repo, cfg.AuthServiceURL, cfg.InternalServiceToken)
 	h := handler.NewSchoolHandler(svc)
 
 	r := gin.Default()
@@ -58,7 +62,6 @@ func main() {
 		internal.GET("/schools/:id/members", h.ListMembersForSchoolInternal)
 		internal.POST("/schools/:id/members", h.AddMemberInternal)
 		internal.GET("/schools/:id/members/:userId", h.GetMemberInternal)
-		internal.PATCH("/schools/:id/members/:userId", h.UpdateMemberInternal)
 		internal.DELETE("/schools/:id/members/:userId", h.RemoveMemberInternal)
 		internal.GET("/schools/:id/admins/:userId", h.CheckAdminInternal)
 		internal.GET("/schools/:id", h.GetSchoolInternal)

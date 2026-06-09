@@ -12,13 +12,13 @@ import (
 
 type SchoolService struct {
 	repo      *repository.SchoolRepository
-	bootstrap *userBootstrapClient
+	bootstrap *authBootstrapClient
 }
 
-func NewSchoolService(repo *repository.SchoolRepository, userServiceURL string) *SchoolService {
+func NewSchoolService(repo *repository.SchoolRepository, authServiceURL, internalToken string) *SchoolService {
 	return &SchoolService{
 		repo:      repo,
-		bootstrap: newUserBootstrapClient(userServiceURL),
+		bootstrap: newAuthBootstrapClient(authServiceURL, internalToken),
 	}
 }
 
@@ -59,18 +59,18 @@ func (s *SchoolService) CreateSchoolForUser(userID uuid.UUID, req model.CreateSc
 		return nil, fmt.Errorf("failed to resolve super_admin role: %w", err)
 	}
 
-	if err := s.repo.CreateMembership(&model.UserSchool{
-		SchoolID: school.ID,
-		UserID:   userID,
-		RoleID:   roleID,
-	}); err != nil {
+	if err := s.repo.CreateMembership(&model.UserSchool{SchoolID: school.ID, UserID: userID}); err != nil {
 		return nil, fmt.Errorf("failed to link user to school: %w", err)
+	}
+
+	if err := s.bootstrap.AssignUserRole(userID, school.ID, roleID); err != nil {
+		return nil, fmt.Errorf("failed to assign super_admin role: %w", err)
 	}
 
 	return school, nil
 }
 
-func (s *SchoolService) AddMember(schoolID, userID, roleID uuid.UUID) (*model.UserSchool, error) {
+func (s *SchoolService) AddMember(schoolID, userID uuid.UUID) (*model.UserSchool, error) {
 	if _, err := s.repo.GetByID(schoolID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("school not found")
@@ -83,28 +83,15 @@ func (s *SchoolService) AddMember(schoolID, userID, roleID uuid.UUID) (*model.Us
 		return nil, err
 	}
 
-	m := &model.UserSchool{SchoolID: schoolID, UserID: userID, RoleID: roleID}
+	m := &model.UserSchool{SchoolID: schoolID, UserID: userID}
 	if err := s.repo.CreateMembership(m); err != nil {
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
 	return m, nil
 }
 
-func (s *SchoolService) UpdateMemberRole(schoolID, userID, roleID uuid.UUID) error {
-	if _, err := s.repo.GetMembership(schoolID, userID); err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("membership not found")
-		}
-		return err
-	}
-	return s.repo.UpdateMembershipRole(schoolID, userID, roleID)
-}
-
 func (s *SchoolService) RemoveMember(schoolID, userID uuid.UUID) error {
-	if err := s.repo.DeleteMembership(schoolID, userID); err != nil {
-		return err
-	}
-	return nil
+	return s.repo.DeleteMembership(schoolID, userID)
 }
 
 func (s *SchoolService) GetMembership(schoolID, userID uuid.UUID) (*model.UserSchool, error) {
@@ -125,11 +112,7 @@ func (s *SchoolService) ListMembershipsForUser(userID uuid.UUID) ([]model.UserSc
 	}
 	out := make([]model.UserSchoolMember, len(rows))
 	for i, r := range rows {
-		out[i] = model.UserSchoolMember{
-			UserID:   r.UserID,
-			SchoolID: r.SchoolID,
-			RoleID:   r.RoleID,
-		}
+		out[i] = model.UserSchoolMember{UserID: r.UserID, SchoolID: r.SchoolID}
 	}
 	return out, nil
 }
@@ -141,17 +124,13 @@ func (s *SchoolService) ListMembersForSchool(schoolID uuid.UUID) ([]model.UserSc
 	}
 	out := make([]model.UserSchoolMember, len(rows))
 	for i, r := range rows {
-		out[i] = model.UserSchoolMember{
-			UserID:   r.UserID,
-			SchoolID: r.SchoolID,
-			RoleID:   r.RoleID,
-		}
+		out[i] = model.UserSchoolMember{UserID: r.UserID, SchoolID: r.SchoolID}
 	}
 	return out, nil
 }
 
-func (s *SchoolService) ListUserIDsForSchool(schoolID uuid.UUID, roleID *uuid.UUID) ([]uuid.UUID, error) {
-	return s.repo.ListUserIDsForSchool(schoolID, roleID)
+func (s *SchoolService) ListUserIDsForSchool(schoolID uuid.UUID) ([]uuid.UUID, error) {
+	return s.repo.ListUserIDsForSchool(schoolID)
 }
 
 func (s *SchoolService) GetSchool(id uuid.UUID) (*model.School, error) {

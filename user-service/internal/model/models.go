@@ -6,55 +6,69 @@ import (
 	"github.com/google/uuid"
 )
 
-// Role represents a role scoped to a school.
-type Role struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440000"`
-	SchoolID    uuid.UUID `json:"school_id" gorm:"type:uuid;not null;index" example:"550e8400-e29b-41d4-a716-446655440001"`
-	Name        string    `json:"name" gorm:"not null" example:"teacher"`
-	Description string    `json:"description" example:"Teacher role"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+type User struct {
+	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	Name      string     `json:"name" gorm:"not null"`
+	Email     string     `json:"email" gorm:"uniqueIndex;not null"`
+	StudentID *uuid.UUID `json:"student_id,omitempty" gorm:"type:uuid;index"`
+	IsActive  bool       `json:"is_active" gorm:"default:true"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+
+	SchoolID *uuid.UUID `json:"school_id,omitempty" gorm:"-"`
+	RoleID   *uuid.UUID `json:"role_id,omitempty" gorm:"-"`
+	RoleName string     `json:"role_name,omitempty" gorm:"-"`
 }
 
-// Permission represents a system-level permission.
-type Permission struct {
-	ID          uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440010"`
-	Name        string    `json:"name" gorm:"uniqueIndex;not null" example:"manage_students"`
-	Description string    `json:"description" example:"Can manage student records"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+type CreateUserRequest struct {
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+	RoleID    string `json:"role_id" binding:"required,uuid"`
+	StudentID string `json:"student_id,omitempty" binding:"omitempty,uuid"`
 }
 
-// RolePermission is the join table between roles and permissions.
-type RolePermission struct {
-	ID           uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()" example:"550e8400-e29b-41d4-a716-446655440020"`
-	RoleID       uuid.UUID `json:"role_id" gorm:"type:uuid;not null;index" example:"550e8400-e29b-41d4-a716-446655440000"`
-	PermissionID uuid.UUID `json:"permission_id" gorm:"type:uuid;not null;index" example:"550e8400-e29b-41d4-a716-446655440010"`
-	CreatedAt    time.Time `json:"created_at"`
+type UpdateUserRequest struct {
+	Name      *string `json:"name"`
+	Email     *string `json:"email"`
+	RoleID    *string `json:"role_id"`
+	StudentID *string `json:"student_id"`
+	IsActive  *bool   `json:"is_active"`
 }
 
-// ─── Request / Response DTOs ────────────────────────────────────────
-
-// CreateRoleRequest is the payload for creating a new role.
-type CreateRoleRequest struct {
-	Name        string `json:"name" binding:"required" example:"teacher"`
-	Description string `json:"description" example:"Teacher role"`
-	SchoolID    string `json:"school_id" example:"550e8400-e29b-41d4-a716-446655440001"` // set from JWT for public API, from body for internal
+type UserListQuery struct {
+	Page     int    `form:"page,default=1"`
+	Limit    int    `form:"limit,default=20"`
+	Search   string `form:"search"`
+	RoleID   string `form:"role_id"`
+	IsActive *bool  `form:"is_active"`
 }
 
-// CreatePermissionRequest is the payload for creating a new permission.
-type CreatePermissionRequest struct {
-	Name        string `json:"name" binding:"required" example:"manage_students"`
-	Description string `json:"description" example:"Can manage student records"`
+type UserListResponse struct {
+	Users []User `json:"users"`
+	Total int64  `json:"total"`
+	Page  int    `json:"page"`
+	Limit int    `json:"limit"`
 }
 
-// AssignPermissionRequest is the payload for assigning a permission to a role.
-type AssignPermissionRequest struct {
-	RoleID       string `json:"role_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
-	PermissionID string `json:"permission_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440010"`
+type CreateProfileInternalRequest struct {
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	StudentID string `json:"student_id,omitempty" binding:"omitempty,uuid"`
 }
 
-// ErrorResponse represents a generic error response.
+type CreateStudentLoginRequest struct {
+	SchoolID  string `json:"school_id" binding:"required,uuid"`
+	StudentID string `json:"student_id" binding:"required,uuid"`
+	Name      string `json:"name" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6"`
+}
+
 type ErrorResponse struct {
-	Error string `json:"error" example:"something went wrong"`
+	Error string `json:"error"`
+}
+
+type MessageResponse struct {
+	Message string `json:"message"`
 }

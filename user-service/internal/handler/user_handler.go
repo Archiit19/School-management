@@ -17,286 +17,182 @@ func NewUserHandler(svc *service.UserService) *UserHandler {
 	return &UserHandler{svc: svc}
 }
 
-// ─── Roles ──────────────────────────────────────────────────────────
-
-// CreateRole godoc
-// @Summary      Create a role
-// @Description  Create a new role scoped to the authenticated user's school.
-// @Tags         Roles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        body  body      model.CreateRoleRequest  true  "Role details"
-// @Success      201   {object}  model.Role
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      401   {object}  model.ErrorResponse
-// @Failure      409   {object}  model.ErrorResponse
-// @Router       /api/v1/roles [post]
-func (h *UserHandler) CreateRole(c *gin.Context) {
-	var req model.CreateRoleRequest
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	var req model.CreateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
 	schoolID, _ := c.Get("school_id")
-
-	role, err := h.svc.CreateRole(req, schoolID.(uuid.UUID))
+	user, err := h.svc.CreateUser(req, schoolID.(uuid.UUID))
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusCreated, role)
+	c.JSON(http.StatusCreated, user)
 }
 
-// CreateRoleInternal godoc
-// @Summary      Create a role (internal)
-// @Description  Internal endpoint used by auth-service during school registration. School ID comes from the request body.
-// @Tags         Internal
-// @Accept       json
-// @Produce      json
-// @Param        body  body      model.CreateRoleRequest  true  "Role details with school_id"
-// @Success      201   {object}  model.Role
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      409   {object}  model.ErrorResponse
-// @Router       /api/v1/roles/internal [post]
-func (h *UserHandler) CreateRoleInternal(c *gin.Context) {
-	var req model.CreateRoleRequest
+func (h *UserHandler) GetUsers(c *gin.Context) {
+	var query model.UserListQuery
+	if err := c.ShouldBindQuery(&query); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	schoolID, _ := c.Get("school_id")
+	resp, err := h.svc.GetUsers(schoolID.(uuid.UUID), query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+func (h *UserHandler) GetUserByID(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	schoolID, _ := c.Get("school_id")
+	user, err := h.svc.GetUserByID(id, schoolID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) UpdateUser(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	var req model.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	schoolID, _ := c.Get("school_id")
+	user, err := h.svc.UpdateUser(id, req, schoolID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
 
-	role, err := h.svc.CreateRoleInternal(req)
+func (h *UserHandler) DeleteUser(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	schoolID, _ := c.Get("school_id")
+	requestingUserID, _ := c.Get("user_id")
+	if err := h.svc.DeleteUser(id, schoolID.(uuid.UUID), requestingUserID.(uuid.UUID)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "user deleted successfully"})
+}
+
+func (h *UserHandler) CreateProfileInternal(c *gin.Context) {
+	var req model.CreateProfileInternalRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	user, err := h.svc.CreateProfileInternal(req)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusCreated, role)
+	c.JSON(http.StatusCreated, user)
 }
 
-// BootstrapSchoolInternal creates template roles and permissions for a school (see role_templates.json).
-// Called by auth-service when a new school registers. Returns the super_admin role id for the first admin user.
-func (h *UserHandler) BootstrapSchoolInternal(c *gin.Context) {
+func (h *UserHandler) GetUserInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	var schoolID *uuid.UUID
+	if sid := c.Query("school_id"); sid != "" {
+		parsed, err := uuid.Parse(sid)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
+			return
+		}
+		schoolID = &parsed
+	}
+	user, err := h.svc.GetUserForInternal(id, schoolID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) GetUserByEmailInternal(c *gin.Context) {
+	email := c.Query("email")
+	if email == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email query param required"})
+		return
+	}
+	user, err := h.svc.GetUserForInternalByEmail(email)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
+func (h *UserHandler) UpdateProfileInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
 	var req struct {
-		SchoolID string `json:"school_id" binding:"required,uuid"`
+		Name  *string `json:"name"`
+		Email *string `json:"email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	schoolID, err := uuid.Parse(req.SchoolID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
-		return
-	}
-
-	superID, err := h.svc.BootstrapSchoolRoles(schoolID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"super_admin_role_id": superID.String()})
-}
-
-// GetRoleByNameAndSchoolInternal looks up a role by school+name. Used by other services (e.g. auth-service)
-// to resolve template role ids without needing a JWT.
-func (h *UserHandler) GetRoleByNameAndSchoolInternal(c *gin.Context) {
-	schoolStr := c.Query("school_id")
-	name := c.Query("name")
-	if schoolStr == "" || name == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "school_id and name query params are required"})
-		return
-	}
-	schoolID, err := uuid.Parse(schoolStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid school_id"})
-		return
-	}
-
-	role, err := h.svc.GetRoleByNameAndSchool(name, schoolID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
-		return
-	}
-	c.JSON(http.StatusOK, role)
-}
-
-// GetRoleByID godoc
-// @Summary      Get role by ID
-// @Description  Retrieve a single role by its UUID.
-// @Tags         Roles
-// @Produce      json
-// @Param        id   path      string  true  "Role ID (UUID)"
-// @Success      200  {object}  model.Role
-// @Failure      400  {object}  model.ErrorResponse
-// @Failure      404  {object}  model.ErrorResponse
-// @Router       /api/v1/roles/{id} [get]
-func (h *UserHandler) GetRoleByID(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
-		return
-	}
-
-	role, err := h.svc.GetRoleByID(id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
-		return
-	}
-
-	c.JSON(http.StatusOK, role)
-}
-
-// GetRoles godoc
-// @Summary      List roles
-// @Description  List all roles for the authenticated user's school.
-// @Tags         Roles
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {array}   model.Role
-// @Failure      401  {object}  model.ErrorResponse
-// @Failure      500  {object}  model.ErrorResponse
-// @Router       /api/v1/roles [get]
-func (h *UserHandler) GetRoles(c *gin.Context) {
-	schoolID, _ := c.Get("school_id")
-
-	roles, err := h.svc.GetRolesBySchoolID(schoolID.(uuid.UUID))
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, roles)
-}
-
-// ─── Permissions ────────────────────────────────────────────────────
-
-// CreatePermission godoc
-// @Summary      Create a permission
-// @Description  Create a new system-level permission.
-// @Tags         Permissions
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        body  body      model.CreatePermissionRequest  true  "Permission details"
-// @Success      201   {object}  model.Permission
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      401   {object}  model.ErrorResponse
-// @Failure      409   {object}  model.ErrorResponse
-// @Router       /api/v1/permissions [post]
-func (h *UserHandler) CreatePermission(c *gin.Context) {
-	var req model.CreatePermissionRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	perm, err := h.svc.CreatePermission(req)
+	user, err := h.svc.UpdateProfileInternal(id, req.Name, req.Email)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusCreated, perm)
+	c.JSON(http.StatusOK, user)
 }
 
-// GetPermissions godoc
-// @Summary      List permissions
-// @Description  List all available permissions.
-// @Tags         Permissions
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200  {array}   model.Permission
-// @Failure      401  {object}  model.ErrorResponse
-// @Failure      500  {object}  model.ErrorResponse
-// @Router       /api/v1/permissions [get]
-func (h *UserHandler) GetPermissions(c *gin.Context) {
-	perms, err := h.svc.GetAllPermissions()
+func (h *UserHandler) DeleteProfileInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
-
-	c.JSON(http.StatusOK, perms)
+	if err := h.svc.DeleteProfileInternal(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
 }
 
-// ─── Role-Permission Assignment ─────────────────────────────────────
-
-// AssignPermission godoc
-// @Summary      Assign permission to role
-// @Description  Assign an existing permission to an existing role.
-// @Tags         Roles
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        body  body      model.AssignPermissionRequest  true  "Role and permission IDs"
-// @Success      201   {object}  model.RolePermission
-// @Failure      400   {object}  model.ErrorResponse
-// @Failure      401   {object}  model.ErrorResponse
-// @Router       /api/v1/roles/assign-permission [post]
-func (h *UserHandler) AssignPermission(c *gin.Context) {
-	var req model.AssignPermissionRequest
+func (h *UserHandler) CreateStudentLoginInternal(c *gin.Context) {
+	var req model.CreateStudentLoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
-	rp, err := h.svc.AssignPermissionToRole(req)
+	user, err := h.svc.CreateStudentLogin(req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
-
-	c.JSON(http.StatusCreated, rp)
-}
-
-// GetRolePermissions godoc
-// @Summary      Get role permissions
-// @Description  List all permissions assigned to a specific role.
-// @Tags         Roles
-// @Produce      json
-// @Security     BearerAuth
-// @Param        id   path      string  true  "Role ID (UUID)"
-// @Success      200  {array}   model.Permission
-// @Failure      400  {object}  model.ErrorResponse
-// @Failure      401  {object}  model.ErrorResponse
-// @Failure      500  {object}  model.ErrorResponse
-// @Router       /api/v1/roles/{id}/permissions [get]
-func (h *UserHandler) GetRolePermissions(c *gin.Context) {
-	id, err := uuid.Parse(c.Param("id"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
-		return
-	}
-
-	perms, err := h.svc.GetPermissionsByRoleID(id)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, perms)
-}
-
-func (h *UserHandler) RemovePermission(c *gin.Context) {
-	roleID, err := uuid.Parse(c.Param("roleId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
-		return
-	}
-	permissionID, err := uuid.Parse(c.Param("permissionId"))
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid permission id"})
-		return
-	}
-
-	if err := h.svc.RemovePermissionFromRole(roleID, permissionID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "permission removed from role"})
+	c.JSON(http.StatusCreated, user)
 }

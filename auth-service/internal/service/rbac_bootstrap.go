@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/Archiit19/School-management/user-service/internal/model"
-	"github.com/Archiit19/School-management/user-service/internal/rbacdata"
+	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// BootstrapSchoolRoles creates or updates template roles for a school and attaches permissions from role_templates.json.
-// Returns the super_admin role ID for linking the first admin user at registration.
-func (s *UserService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error) {
+func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error) {
 	templates, err := rbacdata.LoadRoleTemplates()
 	if err != nil {
 		return uuid.Nil, err
@@ -36,11 +34,7 @@ func (s *UserService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 			if !errors.Is(err, gorm.ErrRecordNotFound) {
 				return uuid.Nil, fmt.Errorf("lookup role %q: %w", t.Name, err)
 			}
-			nr := &model.Role{
-				SchoolID:    schoolID,
-				Name:        t.Name,
-				Description: t.Description,
-			}
+			nr := &model.Role{SchoolID: schoolID, Name: t.Name, Description: t.Description}
 			if err := s.repo.CreateRole(nr); err != nil {
 				return uuid.Nil, fmt.Errorf("create role %q: %w", t.Name, err)
 			}
@@ -51,7 +45,6 @@ func (s *UserService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 
 		var permIDs []uuid.UUID
 		if len(t.Permissions) == 1 && t.Permissions[0] == "*" {
-			permIDs = make([]uuid.UUID, 0, len(allPerms))
 			for _, p := range allPerms {
 				permIDs = append(permIDs, p.ID)
 			}
@@ -80,8 +73,7 @@ func (s *UserService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 	return admin.ID, nil
 }
 
-// SyncTemplateRolesForAllSchools applies role_templates.json to every school that already has roles (startup backfill).
-func (s *UserService) SyncTemplateRolesForAllSchools() error {
+func (s *RBACService) SyncTemplateRolesForAllSchools() error {
 	ids, err := s.repo.ListDistinctSchoolIDsFromRoles()
 	if err != nil {
 		return err

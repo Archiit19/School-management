@@ -143,7 +143,7 @@ func (s *StudentService) provisionStudentLogin(student *model.Student, email, pa
 		return fmt.Errorf("encode login request: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/internal/users/from-student", s.cfg.AuthServiceURL)
+	url := fmt.Sprintf("%s/internal/users/from-student", s.cfg.UserServiceURL)
 	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build login request: %w", err)
@@ -153,7 +153,7 @@ func (s *StudentService) provisionStudentLogin(student *model.Student, email, pa
 
 	resp, err := s.httpClient.Do(httpReq)
 	if err != nil {
-		return fmt.Errorf("auth-service unreachable: %w", err)
+		return fmt.Errorf("user-service unreachable: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -165,9 +165,9 @@ func (s *StudentService) provisionStudentLogin(student *model.Student, email, pa
 		Error string `json:"error"`
 	}
 	if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
-		return fmt.Errorf("auth-service rejected login (status %d): %s", resp.StatusCode, errResp.Error)
+		return fmt.Errorf("user-service rejected login (status %d): %s", resp.StatusCode, errResp.Error)
 	}
-	return fmt.Errorf("auth-service rejected login (status %d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	return fmt.Errorf("user-service rejected login (status %d): %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 }
 
 func (s *StudentService) GetStudents(
@@ -308,13 +308,13 @@ type authUserResponse struct {
 }
 
 func (s *StudentService) validateParent(authHeader string, parentID, schoolID uuid.UUID) error {
-	url := fmt.Sprintf("%s/users/%s", s.cfg.AuthServiceURL, parentID.String())
+	url := fmt.Sprintf("%s/users/%s", s.cfg.UserServiceURL, parentID.String())
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return errors.New("failed to validate parent user with auth-service")
+		return errors.New("failed to validate parent user with user-service")
 	}
 	defer resp.Body.Close()
 
