@@ -228,3 +228,27 @@ func (c *authClient) StudentRoleID(schoolID uuid.UUID) (uuid.UUID, error) {
 	}
 	return uuid.Parse(role.ID)
 }
+
+type fieldDefinition struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options,omitempty"`
+}
+
+func (c *authClient) GetRoleFields(roleID uuid.UUID) ([]fieldDefinition, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/api/v1/roles/%s/fields", c.baseURL, roleID.String()))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, nil
+	}
+	var fields []fieldDefinition
+	if err := json.NewDecoder(resp.Body).Decode(&fields); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}

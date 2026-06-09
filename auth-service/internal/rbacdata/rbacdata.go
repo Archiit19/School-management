@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-//go:embed predefined_permissions.json role_templates.json
+//go:embed predefined_permissions.json role_templates.json role_field_templates.json
 var fs embed.FS
 
 type PermissionEntry struct {
@@ -42,4 +42,24 @@ func LoadRoleTemplates() ([]RoleTemplate, error) {
 		return nil, fmt.Errorf("parse role_templates.json: %w", err)
 	}
 	return list, nil
+}
+
+func LoadRoleFieldTemplates() (map[string][]FieldDefinitionEntry, error) {
+	raw, err := fs.ReadFile("role_field_templates.json")
+	if err != nil {
+		return nil, fmt.Errorf("read role_field_templates.json: %w", err)
+	}
+	var m map[string][]FieldDefinitionEntry
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("parse role_field_templates.json: %w", err)
+	}
+	return m, nil
+}
+
+type FieldDefinitionEntry struct {
+	Key      string   `json:"key"`
+	Label    string   `json:"label"`
+	Type     string   `json:"type"`
+	Required bool     `json:"required"`
+	Options  []string `json:"options,omitempty"`
 }

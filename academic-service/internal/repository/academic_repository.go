@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"errors"
+
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -195,4 +197,43 @@ func (r *AcademicRepository) GetSubmissionsForStudent(
 		Order("created_at desc").
 		Find(&submissions).Error
 	return submissions, err
+}
+
+func (r *AcademicRepository) UpsertEnrollment(enrollment *model.StudentEnrollment) error {
+	var existing model.StudentEnrollment
+	err := r.db.Where("school_id = ? AND user_id = ?", enrollment.SchoolID, enrollment.UserID).First(&existing).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return r.db.Create(enrollment).Error
+		}
+		return err
+	}
+	existing.ClassID = enrollment.ClassID
+	existing.SectionID = enrollment.SectionID
+	existing.IsActive = enrollment.IsActive
+	return r.db.Save(&existing).Error
+}
+
+func (r *AcademicRepository) GetEnrollmentByUserAndSchool(userID, schoolID uuid.UUID) (*model.StudentEnrollment, error) {
+	var enrollment model.StudentEnrollment
+	err := r.db.Where("user_id = ? AND school_id = ? AND is_active = ?", userID, schoolID, true).First(&enrollment).Error
+	return &enrollment, err
+}
+
+func (r *AcademicRepository) ListEnrollmentsByClassSection(
+	schoolID uuid.UUID,
+	classID uuid.UUID,
+	sectionID *uuid.UUID,
+) ([]model.StudentEnrollment, error) {
+	q := r.db.Where("school_id = ? AND class_id = ? AND is_active = ?", schoolID, classID, true)
+	if sectionID != nil && *sectionID != uuid.Nil {
+		q = q.Where("section_id = ?", *sectionID)
+	}
+	var rows []model.StudentEnrollment
+	err := q.Order("created_at asc").Find(&rows).Error
+	return rows, err
+}
+
+func (r *AcademicRepository) DeleteEnrollment(userID, schoolID uuid.UUID) error {
+	return r.db.Where("user_id = ? AND school_id = ?", userID, schoolID).Delete(&model.StudentEnrollment{}).Error
 }

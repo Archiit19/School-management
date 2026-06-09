@@ -62,24 +62,14 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
-  # PostgreSQL for Student Service
+  # DynamoDB Local (user role profiles)
   # ──────────────────────────────────────
-  student-db:
-    image: postgres:16-alpine
-    container_name: student-db
-    environment:
-      POSTGRES_USER: student_user
-      POSTGRES_PASSWORD: student_pass
-      POSTGRES_DB: student_db
+  dynamodb-local:
+    image: amazon/dynamodb-local:latest
+    container_name: dynamodb-local
+    command: "-jar DynamoDBLocal.jar -sharedDb -inMemory"
     ports:
-      - "5436:5432"
-    volumes:
-      - student_db_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U student_user -d student_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      - "8000:8000"
 
   # ──────────────────────────────────────
   # PostgreSQL for Attendance Service
@@ -179,7 +169,6 @@ services:
       DB_NAME: auth_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
-      STUDENT_SERVICE_URL: http://student-service:8084
       SCHOOL_SERVICE_URL: http://school-service:8088
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8081
@@ -206,11 +195,17 @@ services:
       JWT_SECRET: super-secret-jwt-key-change-in-production
       AUTH_SERVICE_URL: http://auth-service:8081
       SCHOOL_SERVICE_URL: http://school-service:8088
+      ACADEMIC_SERVICE_URL: http://academic-service:8083
+      DYNAMODB_ENDPOINT: http://dynamodb-local:8000
+      DYNAMODB_TABLE: user_profiles
+      AWS_REGION: us-east-1
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8082
     depends_on:
       user-db:
         condition: service_healthy
+      dynamodb-local:
+        condition: service_started
 
   # ──────────────────────────────────────
   # Academic Service
@@ -230,41 +225,11 @@ services:
       DB_NAME: academic_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
-      STUDENT_SERVICE_URL: http://student-service:8084
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8083
     depends_on:
       academic-db:
         condition: service_healthy
-
-  # ──────────────────────────────────────
-  # Student Service
-  # ──────────────────────────────────────
-  student-service:
-    build:
-      context: ./student-service
-      dockerfile: Dockerfile
-    container_name: student-service
-    ports:
-      - "8084:8084"
-    environment:
-      DB_HOST: student-db
-      DB_PORT: 5432
-      DB_USER: student_user
-      DB_PASSWORD: student_pass
-      DB_NAME: student_db
-      JWT_SECRET: super-secret-jwt-key-change-in-production
-      USER_SERVICE_URL: http://user-service:8082
-      ACADEMIC_SERVICE_URL: http://academic-service:8083
-      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
-      PORT: 8084
-    depends_on:
-      student-db:
-        condition: service_healthy
-      user-service:
-        condition: service_started
-      academic-service:
-        condition: service_started
 
   # ──────────────────────────────────────
   # Attendance Service
@@ -309,7 +274,8 @@ services:
       DB_PASSWORD: exam_pass
       DB_NAME: exam_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
-      STUDENT_SERVICE_URL: http://student-service:8084
+      ACADEMIC_SERVICE_URL: http://academic-service:8083
+      USER_SERVICE_URL: http://user-service:8082
       PORT: 8086
     depends_on:
       exam-db:
@@ -365,7 +331,6 @@ volumes:
   auth_db_data:
   user_db_data:
   academic_db_data:
-  student_db_data:
   attendance_db_data:
   exam_db_data:
   finance_db_data:

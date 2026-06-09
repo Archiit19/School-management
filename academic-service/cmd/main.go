@@ -45,6 +45,7 @@ func main() {
 		&model.TeacherAssignment{},
 		&model.Assignment{},
 		&model.Submission{},
+		&model.StudentEnrollment{},
 	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
@@ -54,6 +55,7 @@ func main() {
 	httpClient := &http.Client{Timeout: 8 * time.Second}
 	svc := service.NewAcademicService(repo, cfg, httpClient)
 	h := handler.NewAcademicHandler(svc)
+	eh := handler.NewEnrollmentHandler(svc)
 
 	r := gin.Default()
 
@@ -72,12 +74,22 @@ func main() {
 		protected.POST("/teacher-assignments", middleware.RequirePermission("assign_teacher"), h.CreateTeacherAssignment)
 		protected.GET("/teacher-assignments", middleware.RequirePermission("view_academic"), h.GetTeacherAssignments)
 		protected.GET("/academic/me", middleware.RequirePermission("view_own_profile"), h.GetMyAcademicProfile)
+		protected.GET("/enrollments/me", middleware.RequirePermission("view_own_profile"), eh.GetMyEnrollment)
+		protected.GET("/enrollments", middleware.RequireAnyPermission("view_students", "mark_attendance", "view_academic", "enter_marks"), eh.ListEnrollments)
 		protected.POST("/assignments", middleware.RequirePermission("create_assignment"), h.CreateAssignment)
 		protected.GET("/assignments/me", middleware.RequirePermission("view_own_assignments"), h.GetMyAssignments)
 		protected.GET("/assignments", middleware.RequirePermission("view_assignments"), h.GetAssignments)
 		protected.GET("/submissions/me", middleware.RequirePermission("view_own_submissions"), h.GetMySubmissions)
 		protected.POST("/submissions/me", middleware.RequirePermission("submit_own_assignment"), h.CreateMySubmission)
 		protected.POST("/submissions", middleware.RequirePermission("submit_assignment"), h.CreateSubmission)
+	}
+
+	internal := r.Group("/internal")
+	internal.Use(middleware.RequireInternalToken(cfg.InternalServiceToken))
+	{
+		internal.POST("/enrollments", eh.UpsertEnrollmentInternal)
+		internal.GET("/enrollments/:userId", eh.GetEnrollmentInternal)
+		internal.DELETE("/enrollments/:userId", eh.DeleteEnrollmentInternal)
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)

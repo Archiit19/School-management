@@ -1,0 +1,18 @@
+{
+  "student": [
+    {"key": "class_id", "label": "Class", "type": "uuid", "required": true},
+    {"key": "section_id", "label": "Section", "type": "uuid", "required": false},
+    {"key": "parent_name", "label": "Parent Name", "type": "text", "required": false},
+    {"key": "contact_number", "label": "Contact Number", "type": "text", "required": false},
+    {"key": "parent_user_id", "label": "Parent User ID", "type": "uuid", "required": false},
+    {"key": "student_code", "label": "Student Code", "type": "text", "required": false}
+  ],
+  "teacher": [
+    {"key": "employee_id", "label": "Employee ID", "type": "text", "required": false},
+    {"key": "department", "label": "Department", "type": "text", "required": false}
+  ],
+  "parent": [
+    {"key": "contact_number", "label": "Contact Number", "type": "text", "required": false},
+    {"key": "address", "label": "Address", "type": "text", "required": false}
+  ]
+}

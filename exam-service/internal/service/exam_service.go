@@ -163,7 +163,7 @@ func (s *ExamService) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]mod
 }
 
 // GetMyExams returns exams scheduled for the pupil's own class only.
-// It resolves the pupil's class_id and section_id by calling student-service /students/me
+// It resolves the pupil's class_id and section_id by calling user-service /users/me
 // with the pupil's JWT, so spoofing another student is impossible.
 func (s *ExamService) GetMyExams(
 	schoolID, studentID uuid.UUID,
@@ -173,7 +173,7 @@ func (s *ExamService) GetMyExams(
 	if strings.TrimSpace(authHeader) == "" {
 		return nil, errors.New("missing authorization header")
 	}
-	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
+	url := strings.TrimRight(s.cfg.AcademicServiceURL, "/") + "/enrollments/me"
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -182,27 +182,29 @@ func (s *ExamService) GetMyExams(
 
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return nil, errors.New("failed to resolve student profile from student-service")
+		return nil, errors.New("failed to resolve pupil enrollment from academic-service")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
+		return nil, fmt.Errorf("academic-service /enrollments/me returned status %d", resp.StatusCode)
 	}
 
-	var st struct {
-		ID        uuid.UUID  `json:"id"`
+	var enrollment struct {
+		UserID    uuid.UUID  `json:"user_id"`
 		ClassID   uuid.UUID  `json:"class_id"`
 		SectionID *uuid.UUID `json:"section_id,omitempty"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
-		return nil, errors.New("failed to decode student profile response")
+	if err := json.NewDecoder(resp.Body).Decode(&enrollment); err != nil {
+		return nil, errors.New("failed to decode enrollment response")
 	}
-	if st.ID != studentID {
-		return nil, errors.New("student profile mismatch")
+	if enrollment.UserID != studentID {
+		return nil, errors.New("pupil profile mismatch")
 	}
 
+	var pupilSectionID *uuid.UUID = enrollment.SectionID
+
 	query := model.ExamQuery{
-		ClassID:  st.ClassID.String(),
+		ClassID:  enrollment.ClassID.String(),
 		Upcoming: upcoming,
 	}
 	exams, err := s.repo.GetExams(schoolID, query)
@@ -210,10 +212,9 @@ func (s *ExamService) GetMyExams(
 		return nil, fmt.Errorf("failed to fetch exams: %w", err)
 	}
 
-	// Keep only exams that target the student's section (or are class-wide).
 	filtered := make([]model.Exam, 0, len(exams))
 	for _, e := range exams {
-		if e.SectionID == nil || st.SectionID == nil || *e.SectionID == *st.SectionID {
+		if e.SectionID == nil || pupilSectionID == nil || *e.SectionID == *pupilSectionID {
 			filtered = append(filtered, e)
 		}
 	}

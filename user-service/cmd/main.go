@@ -41,8 +41,14 @@ func main() {
 	}
 	log.Println("Database migrated")
 
+	profileRepo, err := repository.NewProfileRepository(cfg)
+	if err != nil {
+		log.Fatalf("failed to connect to DynamoDB: %v", err)
+	}
+	log.Println("Connected to DynamoDB")
+
 	repo := repository.NewUserRepository(db)
-	svc := service.NewUserService(repo, cfg)
+	svc := service.NewUserService(repo, profileRepo, cfg)
 	h := handler.NewUserHandler(svc)
 
 	r := gin.Default()
@@ -57,19 +63,20 @@ func main() {
 	{
 		internal.POST("/users", h.CreateProfileInternal)
 		internal.GET("/users/by-email", h.GetUserByEmailInternal)
+		internal.GET("/users/:id/profile", h.GetUserProfileInternal)
 		internal.GET("/users/:id", h.GetUserInternal)
 		internal.PATCH("/users/:id", h.UpdateProfileInternal)
 		internal.DELETE("/users/:id", h.DeleteProfileInternal)
-		internal.POST("/users/from-student", h.CreateStudentLoginInternal)
 	}
 
 	users := r.Group("/users")
 	users.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
-		users.POST("", middleware.RequirePermission("create_user"), h.CreateUser)
-		users.GET("", middleware.RequirePermission("view_users"), h.GetUsers)
+		users.POST("", middleware.RequireAnyPermission("create_user", "admit_student"), h.CreateUser)
+		users.GET("", middleware.RequireAnyPermission("view_users", "view_students", "admit_student"), h.GetUsers)
+		users.GET("/me", middleware.RequirePermission("view_own_profile"), h.GetUserMe)
 		users.GET("/:id", middleware.RequirePermission("view_users"), h.GetUserByID)
-		users.PATCH("/:id", middleware.RequirePermission("update_user"), h.UpdateUser)
+		users.PATCH("/:id", middleware.RequireAnyPermission("update_user", "update_student"), h.UpdateUser)
 		users.DELETE("/:id", middleware.RequirePermission("delete_user"), h.DeleteUser)
 	}
 

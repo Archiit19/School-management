@@ -14,7 +14,6 @@ type Config struct {
 	JWTSecret            string
 	Port                 string
 	UserServiceURL       string
-	StudentServiceURL    string
 	InternalServiceToken string
 }
 
@@ -28,7 +27,6 @@ func Load() *Config {
 		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
 		Port:                 getEnv("PORT", "8083"),
 		UserServiceURL:       getEnv("USER_SERVICE_URL", "http://user-service:8082"),
-		StudentServiceURL:    getEnv("STUDENT_SERVICE_URL", "http://student-service:8084"),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }

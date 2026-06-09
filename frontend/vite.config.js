@@ -26,11 +26,6 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api\/academic/, ""),
       },
-      "/api/students": {
-        target: "http://localhost:8084",
-        changeOrigin: true,
-        rewrite: (p) => p.replace(/^\/api\/students/, ""),
-      },
       "/api/attendance": {
         target: "http://localhost:8085",
         changeOrigin: true,

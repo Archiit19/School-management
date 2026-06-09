@@ -156,3 +156,37 @@ type ClassTeacher struct {
 	SubjectID     uuid.UUID `json:"subject_id"`
 	SubjectName   string    `json:"subject_name"`
 }
+
+// StudentEnrollment maps a pupil (user_id) to class/section for efficient lookups.
+type StudentEnrollment struct {
+	ID        uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	SchoolID  uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;uniqueIndex:idx_enrollment_school_user"`
+	UserID    uuid.UUID  `json:"user_id" gorm:"type:uuid;not null;uniqueIndex:idx_enrollment_school_user;index"`
+	ClassID   uuid.UUID  `json:"class_id" gorm:"type:uuid;not null;index:idx_enrollment_class_section,priority:1"`
+	SectionID *uuid.UUID `json:"section_id,omitempty" gorm:"type:uuid;index:idx_enrollment_class_section,priority:2"`
+	IsActive  bool       `json:"is_active" gorm:"default:true"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+type EnrollmentQuery struct {
+	ClassID   string `form:"class_id" binding:"required,uuid"`
+	SectionID string `form:"section_id" binding:"omitempty,uuid"`
+}
+
+type EnrollmentListResponse struct {
+	Enrollments []StudentEnrollment `json:"enrollments"`
+	Total       int64               `json:"total"`
+}
+
+type UpsertEnrollmentRequest struct {
+	UserID    string `json:"user_id" binding:"required,uuid"`
+	SchoolID  string `json:"school_id" binding:"required,uuid"`
+	ClassID   string `json:"class_id" binding:"required,uuid"`
+	SectionID string `json:"section_id" binding:"omitempty,uuid"`
+}
+
+type UpdateEnrollmentRequest struct {
+	ClassID   string `json:"class_id" binding:"required,uuid"`
+	SectionID string `json:"section_id" binding:"omitempty,uuid"`
+}

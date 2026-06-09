@@ -14,7 +14,11 @@ type Config struct {
 	JWTSecret            string
 	AuthServiceURL       string
 	SchoolServiceURL     string
+	AcademicServiceURL   string
 	InternalServiceToken string
+	DynamoEndpoint       string
+	DynamoTable          string
+	DynamoRegion         string
 	Port                 string
 }
 
@@ -28,7 +32,11 @@ func Load() *Config {
 		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
 		AuthServiceURL:       getEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
 		SchoolServiceURL:     getEnv("SCHOOL_SERVICE_URL", "http://localhost:8088"),
+		AcademicServiceURL:   getEnv("ACADEMIC_SERVICE_URL", "http://localhost:8083"),
 		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
+		DynamoEndpoint:       getEnv("DYNAMODB_ENDPOINT", "http://localhost:8000"),
+		DynamoTable:          getEnv("DYNAMODB_TABLE", "user_profiles"),
+		DynamoRegion:         getEnv("AWS_REGION", "us-east-1"),
 		Port:                 getEnv("PORT", "8082"),
 	}
 }

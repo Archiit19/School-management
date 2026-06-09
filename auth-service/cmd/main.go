@@ -57,6 +57,7 @@ func main() {
 		&model.Role{},
 		&model.Permission{},
 		&model.RolePermission{},
+		&model.RoleField{},
 	); err != nil {
 		log.Fatalf("failed to migrate database: %v", err)
 	}
@@ -112,6 +113,7 @@ func main() {
 		api.GET("/internal/roles/by-name", rbacHandler.GetRoleByNameAndSchoolInternal)
 		api.GET("/roles/:id", rbacHandler.GetRoleByID)
 		api.GET("/roles/:id/permissions", rbacHandler.GetRolePermissions)
+		api.GET("/roles/:id/fields", rbacHandler.GetRoleFields)
 	}
 
 	protected := api.Group("")
@@ -119,6 +121,7 @@ func main() {
 	{
 		protected.POST("/roles", middleware.RequirePermission("create_role"), rbacHandler.CreateRole)
 		protected.GET("/roles", rbacHandler.GetRoles)
+		protected.PUT("/roles/:id/fields", middleware.RequirePermission("create_role"), rbacHandler.UpdateRoleFields)
 		protected.POST("/roles/assign-permission", middleware.RequirePermission("manage_permissions"), rbacHandler.AssignPermission)
 		protected.DELETE("/roles/:id/permissions/:permissionId", middleware.RequirePermission("manage_permissions"), rbacHandler.RemovePermissionFromRole)
 		protected.GET("/permissions", rbacHandler.GetPermissions)

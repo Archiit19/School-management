@@ -64,6 +64,10 @@ func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 				return uuid.Nil, fmt.Errorf("assign permission to role %q: %w", t.Name, err)
 			}
 		}
+
+		if err := s.bootstrapRoleFields(role.ID, t.Name); err != nil {
+			log.Printf("rbac bootstrap: role fields for %q: %v", t.Name, err)
+		}
 	}
 
 	admin, err := s.repo.GetRoleByNameAndSchool("super_admin", schoolID)
@@ -84,4 +88,29 @@ func (s *RBACService) SyncTemplateRolesForAllSchools() error {
 		}
 	}
 	return nil
+}
+
+func (s *RBACService) bootstrapRoleFields(roleID uuid.UUID, roleName string) error {
+	templates, err := rbacdata.LoadRoleFieldTemplates()
+	if err != nil {
+		return err
+	}
+	defs, ok := templates[roleName]
+	if !ok || len(defs) == 0 {
+		return nil
+	}
+	if _, err := s.repo.GetRoleFields(roleID); err == nil {
+		return nil
+	}
+	fields := make([]model.FieldDefinition, len(defs))
+	for i, d := range defs {
+		fields[i] = model.FieldDefinition{
+			Key:      d.Key,
+			Label:    d.Label,
+			Type:     d.Type,
+			Required: d.Required,
+			Options:  d.Options,
+		}
+	}
+	return s.saveRoleFields(roleID, fields)
 }
