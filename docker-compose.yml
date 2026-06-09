@@ -249,12 +249,15 @@ services:
       DB_NAME: attendance_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
+      ACADEMIC_SERVICE_URL: http://academic-service:8083
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8085
     depends_on:
       attendance-db:
         condition: service_healthy
       user-service:
+        condition: service_started
+      academic-service:
         condition: service_started
 
   # ──────────────────────────────────────

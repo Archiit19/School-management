@@ -46,6 +46,98 @@ type authUserInternal struct {
 	RoleName string `json:"role_name"`
 }
 
+type teacherAssignmentRow struct {
+	TeacherUserID string `json:"teacher_user_id"`
+	ClassID       string `json:"class_id"`
+	SubjectID     string `json:"subject_id"`
+}
+
+func (s *AttendanceService) fetchTeacherAssignments(
+	teacherUserID uuid.UUID,
+	authHeader string,
+) ([]teacherAssignmentRow, error) {
+	base := strings.TrimRight(s.cfg.AcademicServiceURL, "/")
+	url := fmt.Sprintf("%s/teacher-assignments?teacher_user_id=%s", base, teacherUserID.String())
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build academic request: %w", err)
+	}
+	if strings.TrimSpace(authHeader) != "" {
+		req.Header.Set("Authorization", authHeader)
+	}
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return nil, apierrors.ServiceUnavailable("academic-service unreachable for teacher assignment check")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusUnauthorized {
+		return nil, apierrors.Forbidden("cannot verify teacher assignments")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, apierrors.ServiceUnavailable("academic-service teacher assignment lookup failed")
+	}
+
+	var rows []teacherAssignmentRow
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		return nil, apierrors.ServiceUnavailable("invalid response from academic-service")
+	}
+	return rows, nil
+}
+
+func (s *AttendanceService) assertTeacherAssignedToClassSubject(
+	roleName string,
+	teacherUserID uuid.UUID,
+	classID uuid.UUID,
+	subjectID *uuid.UUID,
+	authHeader string,
+) error {
+	if roleName == "super_admin" || roleName != "teacher" {
+		return nil
+	}
+	if subjectID == nil {
+		return apierrors.Forbidden("subject_id is required for teachers")
+	}
+
+	assignments, err := s.fetchTeacherAssignments(teacherUserID, authHeader)
+	if err != nil {
+		return err
+	}
+
+	classStr := classID.String()
+	subjectStr := subjectID.String()
+	for _, a := range assignments {
+		if a.ClassID == classStr && a.SubjectID == subjectStr {
+			return nil
+		}
+	}
+	return apierrors.Forbidden("you are not assigned to this class and subject")
+}
+
+func (s *AttendanceService) enforceTeacherAttendanceQuery(
+	roleName string,
+	teacherUserID uuid.UUID,
+	classID, subjectID string,
+	authHeader string,
+) error {
+	if roleName == "super_admin" || roleName != "teacher" {
+		return nil
+	}
+	if strings.TrimSpace(classID) == "" || strings.TrimSpace(subjectID) == "" {
+		return apierrors.Forbidden("teachers must filter by class_id and subject_id")
+	}
+	parsedClass, err := uuid.Parse(classID)
+	if err != nil {
+		return errors.New("invalid class_id")
+	}
+	parsedSubject, err := uuid.Parse(subjectID)
+	if err != nil {
+		return errors.New("invalid subject_id")
+	}
+	return s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, parsedClass, &parsedSubject, authHeader)
+}
+
 func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID) error {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and USER_SERVICE_URL)")
@@ -89,7 +181,7 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 func (s *AttendanceService) CreateAttendance(
 	req model.CreateAttendanceRequest,
 	schoolID, teacherUserID uuid.UUID,
-	roleName string,
+	roleName, authHeader string,
 ) (*model.Attendance, error) {
 	studentID, err := uuid.Parse(req.StudentID)
 	if err != nil {
@@ -128,6 +220,10 @@ func (s *AttendanceService) CreateAttendance(
 		return nil, errors.New("invalid status, allowed: present, absent, late, excused")
 	}
 
+	if err := s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
+		return nil, err
+	}
+
 	_, err = s.repo.GetAttendanceByComposite(schoolID, studentID, classID, sectionID, subjectID, attendanceDate)
 	if err == nil {
 		return nil, errors.New("attendance already marked for this student and date")
@@ -160,6 +256,8 @@ func (s *AttendanceService) CreateAttendance(
 func (s *AttendanceService) GetAttendance(
 	schoolID uuid.UUID,
 	query model.AttendanceQuery,
+	requestingUserID uuid.UUID,
+	roleName, authHeader string,
 ) (*model.AttendanceListResponse, error) {
 	if query.Page < 1 {
 		query.Page = 1
@@ -172,6 +270,10 @@ func (s *AttendanceService) GetAttendance(
 		if _, err := time.Parse("2006-01-02", query.Date); err != nil {
 			return nil, errors.New("invalid date format, use YYYY-MM-DD")
 		}
+	}
+
+	if err := s.enforceTeacherAttendanceQuery(roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
+		return nil, err
 	}
 
 	records, total, err := s.repo.GetAttendance(schoolID, query)
@@ -191,7 +293,7 @@ func (s *AttendanceService) UpdateAttendance(
 	id uuid.UUID,
 	req model.UpdateAttendanceRequest,
 	schoolID, requestingUserID uuid.UUID,
-	roleName string,
+	roleName, authHeader string,
 ) (*model.Attendance, error) {
 	record, err := s.repo.GetAttendanceByIDAndSchool(id, schoolID)
 	if err != nil {
@@ -201,7 +303,11 @@ func (s *AttendanceService) UpdateAttendance(
 		return nil, fmt.Errorf("failed to fetch attendance: %w", err)
 	}
 
-	if roleName != "super_admin" && record.TeacherUserID != requestingUserID {
+	if roleName == "teacher" {
+		if err := s.assertTeacherAssignedToClassSubject(roleName, requestingUserID, record.ClassID, record.SubjectID, authHeader); err != nil {
+			return nil, err
+		}
+	} else if roleName != "super_admin" && record.TeacherUserID != requestingUserID {
 		return nil, apierrors.Forbidden("you can edit only your own attendance entries")
 	}
 
@@ -227,7 +333,7 @@ func (s *AttendanceService) UpdateAttendance(
 func (s *AttendanceService) BulkCreateAttendance(
 	req model.BulkCreateAttendanceRequest,
 	schoolID, teacherUserID uuid.UUID,
-	roleName string,
+	roleName, authHeader string,
 ) (*model.BulkAttendanceResponse, error) {
 	classID, err := uuid.Parse(req.ClassID)
 	if err != nil {
@@ -250,6 +356,10 @@ func (s *AttendanceService) BulkCreateAttendance(
 			return nil, errors.New("invalid subject_id")
 		}
 		subjectID = &parsed
+	}
+
+	if err := s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
+		return nil, err
 	}
 
 	attendanceDate, err := time.Parse("2006-01-02", req.Date)
@@ -559,7 +669,13 @@ func (s *AttendanceService) UpdateTeacherAttendance(
 func (s *AttendanceService) GetAttendanceStats(
 	schoolID uuid.UUID,
 	query model.AttendanceStatsQuery,
+	requestingUserID uuid.UUID,
+	roleName, authHeader string,
 ) (*model.AttendanceStatsResponse, error) {
+	if err := s.enforceTeacherAttendanceQuery(roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
+		return nil, err
+	}
+
 	startDate, endDate, err := s.parseDateRange(query.StartDate, query.EndDate)
 	if err != nil {
 		return nil, err
