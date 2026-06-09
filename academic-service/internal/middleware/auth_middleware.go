@@ -96,6 +96,35 @@ func RequirePermission(required string) gin.HandlerFunc {
 	}
 }
 
+func RequireAnyPermission(required ...string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		roleName, _ := c.Get("role_name")
+		if roleName == "super_admin" {
+			c.Next()
+			return
+		}
+		perms, exists := c.Get("permissions")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "no permissions found"})
+			return
+		}
+		permList, ok := perms.([]string)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid permissions data"})
+			return
+		}
+		for _, required := range required {
+			for _, p := range permList {
+				if p == required {
+					c.Next()
+					return
+				}
+			}
+		}
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "permission denied"})
+	}
+}
+
 func parsePermissions(claims jwt.MapClaims) []string {
 	raw, ok := claims["permissions"]
 	if !ok || raw == nil {

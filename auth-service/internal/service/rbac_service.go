@@ -1,6 +1,7 @@
 package service
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -29,6 +30,11 @@ func (s *RBACService) CreateRole(req model.CreateRoleRequest, schoolID uuid.UUID
 	}
 	if err := s.repo.CreateRole(role); err != nil {
 		return nil, fmt.Errorf("failed to create role: %w", err)
+	}
+	if len(req.Fields) > 0 {
+		if err := s.saveRoleFields(role.ID, req.Fields); err != nil {
+			return nil, err
+		}
 	}
 	return role, nil
 }
@@ -122,4 +128,34 @@ func (s *RBACService) RolePermissionNames(roleID uuid.UUID) []string {
 		names[i] = p.Name
 	}
 	return names
+}
+
+func (s *RBACService) saveRoleFields(roleID uuid.UUID, fields []model.FieldDefinition) error {
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return fmt.Errorf("marshal role fields: %w", err)
+	}
+	return s.repo.UpsertRoleFields(&model.RoleField{RoleID: roleID, Fields: raw})
+}
+
+func (s *RBACService) GetRoleFields(roleID uuid.UUID) ([]model.FieldDefinition, error) {
+	rf, err := s.repo.GetRoleFields(roleID)
+	if err != nil {
+		return nil, err
+	}
+	var fields []model.FieldDefinition
+	if len(rf.Fields) == 0 {
+		return fields, nil
+	}
+	if err := json.Unmarshal(rf.Fields, &fields); err != nil {
+		return nil, fmt.Errorf("parse role fields: %w", err)
+	}
+	return fields, nil
+}
+
+func (s *RBACService) UpdateRoleFields(roleID uuid.UUID, fields []model.FieldDefinition) error {
+	if _, err := s.repo.GetRoleByID(roleID); err != nil {
+		return errors.New("role not found")
+	}
+	return s.saveRoleFields(roleID, fields)
 }

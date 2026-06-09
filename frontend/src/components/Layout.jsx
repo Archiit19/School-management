@@ -11,9 +11,8 @@ const SCHOOL_NAV = [
   { to: "/", icon: "grid", label: "Dashboard" },
   { to: "/me", icon: "user-check", label: "My Portal", perms: ["view_own_profile", "view_own_attendance", "view_own_exams", "view_own_results", "view_own_assignments", "view_own_dues"] },
   { to: "/roles", icon: "shield", label: "Roles & Permissions", perms: ["create_role", "manage_permissions"] },
-  { to: "/users", icon: "users", label: "Users", perms: ["create_user", "view_users"] },
+  { to: "/users", icon: "users", label: "Users & Students", perms: ["create_user", "view_users", "admit_student", "view_students"] },
   { to: "/academic", icon: "book-open", label: "Academic Structure", perms: ["create_class", "create_section", "create_subject", "view_academic"] },
-  { to: "/students", icon: "graduation-cap", label: "Students", perms: ["admit_student", "view_students"] },
   { to: "/teacher-assignments", icon: "user-check", label: "Teacher Assign", perms: ["assign_teacher"] },
   { to: "/attendance", icon: "calendar-check", label: "Attendance", perms: ["mark_attendance", "view_attendance", "mark_teacher_attendance", "view_teacher_attendance", "mark_own_teacher_attendance"] },
   { to: "/assignments", icon: "file-text", label: "Assignments", perms: ["create_assignment", "view_assignments", "submit_assignment"] },
@@ -49,7 +48,7 @@ export default function Layout() {
 
   const visibleNav = navSource.filter((item) => {
     if (item.to === "/me") {
-      return user?.role_name === "student" || !!user?.student_id;
+      return user?.role_name === "student";
     }
     if (!item.perms) return true;
     return item.perms.some((p) => hasPerm(p));

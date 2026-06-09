@@ -287,12 +287,14 @@ func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string,
 	if ctx.RoleID != nil && *ctx.RoleID != uuid.Nil {
 		claims["role_id"] = ctx.RoleID.String()
 	}
-	if user.StudentID != nil {
-		claims["student_id"] = user.StudentID.String()
-		if student := s.fetchStudentDetails(*user.StudentID); student != nil {
-			claims["class_id"] = student.ClassID
-			if student.SectionID != "" {
-				claims["section_id"] = student.SectionID
+	if strings.EqualFold(ctx.RoleName, "student") {
+		claims["student_id"] = user.ID.String()
+		if profile := s.fetchUserProfile(user.ID); profile != nil {
+			if classID, ok := profile["class_id"].(string); ok && classID != "" {
+				claims["class_id"] = classID
+			}
+			if sectionID, ok := profile["section_id"].(string); ok && sectionID != "" {
+				claims["section_id"] = sectionID
 			}
 		}
 	}
@@ -300,22 +302,24 @@ func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string,
 	return token.SignedString([]byte(s.cfg.JWTSecret))
 }
 
-type studentInfo struct {
-	ClassID   string `json:"class_id"`
-	SectionID string `json:"section_id"`
-}
-
-func (s *AuthService) fetchStudentDetails(studentID uuid.UUID) *studentInfo {
-	url := fmt.Sprintf("%s/internal/students/%s", s.cfg.StudentServiceURL, studentID.String())
+func (s *AuthService) fetchUserProfile(userID uuid.UUID) map[string]interface{} {
+	url := fmt.Sprintf("%s/internal/users/%s/profile", s.cfg.UserServiceURL, userID.String())
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get(url)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil
+	}
+	if s.cfg.InternalServiceToken != "" {
+		req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
+	}
+	resp, err := client.Do(req)
 	if err != nil || resp.StatusCode != http.StatusOK {
 		return nil
 	}
 	defer resp.Body.Close()
-	var student studentInfo
-	if err := json.NewDecoder(resp.Body).Decode(&student); err != nil {
+	var profile map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil
 	}
-	return &student
+	return profile
 }

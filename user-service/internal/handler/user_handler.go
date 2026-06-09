@@ -62,6 +62,17 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+func (h *UserHandler) GetUserMe(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	schoolID, _ := c.Get("school_id")
+	user, err := h.svc.GetUserMe(userID.(uuid.UUID), schoolID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, user)
+}
+
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {
@@ -134,6 +145,20 @@ func (h *UserHandler) GetUserInternal(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+func (h *UserHandler) GetUserProfileInternal(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+		return
+	}
+	profile, err := h.svc.GetUserProfileInternal(id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, profile)
+}
+
 func (h *UserHandler) GetUserByEmailInternal(c *gin.Context) {
 	email := c.Query("email")
 	if email == "" {
@@ -181,18 +206,4 @@ func (h *UserHandler) DeleteProfileInternal(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
-}
-
-func (h *UserHandler) CreateStudentLoginInternal(c *gin.Context) {
-	var req model.CreateStudentLoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-	user, err := h.svc.CreateStudentLogin(req)
-	if err != nil {
-		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusCreated, user)
 }

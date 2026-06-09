@@ -18,7 +18,8 @@ export default function RolesPage() {
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [roleForm, setRoleForm] = useState({ name: "", description: "" });
+  const [roleForm, setRoleForm] = useState({ name: "", description: "", fields: [] });
+  const [newField, setNewField] = useState({ key: "", label: "", type: "text", required: false });
   const [assignForm, setAssignForm] = useState({ role_id: "", permission_id: "" });
   const [rolePerms, setRolePerms] = useState({});
   const [editingRoleId, setEditingRoleId] = useState(null);
@@ -38,8 +39,19 @@ export default function RolesPage() {
 
   async function createRole(e) {
     e.preventDefault(); setError(""); setBusy(true);
-    try { await rolesApi.create(roleForm); msg("Role created."); setRoleForm({ name: "", description: "" }); loadRoles(); }
+    try { await rolesApi.create(roleForm); msg("Role created."); setRoleForm({ name: "", description: "", fields: [] }); loadRoles(); }
     catch (err) { setError(err.message); } finally { setBusy(false); }
+  }
+
+  function addFieldToRole(e) {
+    e.preventDefault();
+    if (!newField.key || !newField.label) return;
+    setRoleForm((p) => ({ ...p, fields: [...(p.fields || []), { ...newField }] }));
+    setNewField({ key: "", label: "", type: "text", required: false });
+  }
+
+  function removeField(idx) {
+    setRoleForm((p) => ({ ...p, fields: p.fields.filter((_, i) => i !== idx) }));
   }
 
   async function assignPerm(e) {
@@ -129,6 +141,33 @@ export default function RolesPage() {
                 <div className="grid-2">
                   <div className="form-group"><label>Name</label><input name="name" required value={roleForm.name} onChange={(e) => setRoleForm((p) => ({ ...p, name: e.target.value }))} placeholder="teacher" /></div>
                   <div className="form-group"><label>Description</label><input name="description" value={roleForm.description} onChange={(e) => setRoleForm((p) => ({ ...p, description: e.target.value }))} placeholder="Teacher role" /></div>
+                </div>
+                <div style={{ marginTop: 16 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Profile fields (shown when creating users with this role)</div>
+                  {roleForm.fields?.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+                      {roleForm.fields.map((f, i) => (
+                        <span key={i} className="perm-chip">
+                          {f.label} ({f.key}){f.required ? " *" : ""}
+                          <button type="button" title="Remove" onClick={() => removeField(i)}>&times;</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="grid-4">
+                    <div className="form-group"><label>Field key</label><input value={newField.key} onChange={(e) => setNewField((p) => ({ ...p, key: e.target.value }))} placeholder="class_id" /></div>
+                    <div className="form-group"><label>Label</label><input value={newField.label} onChange={(e) => setNewField((p) => ({ ...p, label: e.target.value }))} placeholder="Class" /></div>
+                    <div className="form-group">
+                      <label>Type</label>
+                      <select value={newField.type} onChange={(e) => setNewField((p) => ({ ...p, type: e.target.value }))}>
+                        {["text", "number", "email", "uuid", "select", "date"].map((t) => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ display: "flex", alignItems: "flex-end", gap: 8 }}>
+                      <label><input type="checkbox" checked={newField.required} onChange={(e) => setNewField((p) => ({ ...p, required: e.target.checked }))} /> Required</label>
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={addFieldToRole}>Add field</button>
+                    </div>
+                  </div>
                 </div>
                 <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Role</button></div>
               </form>

@@ -165,3 +165,35 @@ func (h *RBACHandler) RemovePermissionFromRole(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "permission removed from role"})
 }
+
+func (h *RBACHandler) GetRoleFields(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
+		return
+	}
+	fields, err := h.svc.GetRoleFields(id)
+	if err != nil {
+		c.JSON(http.StatusOK, []model.FieldDefinition{})
+		return
+	}
+	c.JSON(http.StatusOK, fields)
+}
+
+func (h *RBACHandler) UpdateRoleFields(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
+		return
+	}
+	var req model.UpdateRoleFieldsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.svc.UpdateRoleFields(id, req.Fields); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"fields": req.Fields})
+}

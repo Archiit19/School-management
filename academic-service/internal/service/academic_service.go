@@ -307,81 +307,29 @@ func (s *AcademicService) GetAssignments(
 	return assignments, nil
 }
 
-// GetMyAssignments resolves the pupil's class via student-service then lists assignments for that class only.
+// GetMyAssignments resolves the pupil's class via user-service then lists assignments for that class only.
 func (s *AcademicService) GetMyAssignments(
 	schoolID, studentID uuid.UUID,
 	authHeader string,
 ) ([]model.Assignment, error) {
-	if strings.TrimSpace(authHeader) == "" {
-		return nil, errors.New("missing authorization header")
-	}
-	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	st, err := s.resolvePupilProfile(studentID, schoolID)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", authHeader)
-
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, errors.New("failed to resolve student profile from student-service")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
-	}
-
-	var st struct {
-		ID      uuid.UUID `json:"id"`
-		ClassID uuid.UUID `json:"class_id"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
-		return nil, errors.New("failed to decode student profile response")
-	}
-	if st.ID != studentID {
-		return nil, errors.New("student profile mismatch with authenticated session")
-	}
-
 	return s.GetAssignments(schoolID, model.AssignmentQuery{ClassID: st.ClassID.String()})
 }
 
 // GetMyAcademicProfile returns the pupil's class, section, subjects, and the
 // teachers assigned to that class. Class/section are resolved by calling
-// student-service /students/me with the pupil's JWT; teacher names are resolved
+// user-service /users/me with the pupil's JWT; teacher names are resolved
 // via auth-service's internal /internal/users/:id endpoint.
 func (s *AcademicService) GetMyAcademicProfile(
 	schoolID, studentID uuid.UUID,
 	authHeader string,
 ) (*model.MyAcademicProfile, error) {
-	if strings.TrimSpace(authHeader) == "" {
-		return nil, errors.New("missing authorization header")
-	}
-
-	// 1. Resolve the pupil's class_id + section_id via student-service.
-	url := strings.TrimRight(s.cfg.StudentServiceURL, "/") + "/students/me"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	st, err := s.resolvePupilProfile(studentID, schoolID)
 	if err != nil {
 		return nil, err
-	}
-	req.Header.Set("Authorization", authHeader)
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return nil, errors.New("failed to resolve student profile from student-service")
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("student-service /students/me returned status %d", resp.StatusCode)
-	}
-	var st struct {
-		ID        uuid.UUID  `json:"id"`
-		ClassID   uuid.UUID  `json:"class_id"`
-		SectionID *uuid.UUID `json:"section_id,omitempty"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
-		return nil, errors.New("failed to decode student profile response")
-	}
-	if st.ID != studentID {
-		return nil, errors.New("student profile mismatch with authenticated session")
 	}
 
 	profile := &model.MyAcademicProfile{
@@ -612,4 +560,108 @@ func (s *AcademicService) validateTeacher(
 	}
 
 	return nil
+}
+
+type pupilProfile struct {
+	ID        uuid.UUID
+	ClassID   uuid.UUID
+	SectionID *uuid.UUID
+}
+
+func (s *AcademicService) resolvePupilProfile(studentID, schoolID uuid.UUID) (*pupilProfile, error) {
+	enrollment, err := s.repo.GetEnrollmentByUserAndSchool(studentID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("pupil enrollment not found")
+		}
+		return nil, fmt.Errorf("failed to load enrollment: %w", err)
+	}
+	return &pupilProfile{
+		ID:        enrollment.UserID,
+		ClassID:   enrollment.ClassID,
+		SectionID: enrollment.SectionID,
+	}, nil
+}
+
+func (s *AcademicService) ListEnrollments(schoolID uuid.UUID, query model.EnrollmentQuery) (*model.EnrollmentListResponse, error) {
+	classID, err := uuid.Parse(query.ClassID)
+	if err != nil {
+		return nil, errors.New("invalid class_id")
+	}
+	var sectionID *uuid.UUID
+	if query.SectionID != "" {
+		parsed, err := uuid.Parse(query.SectionID)
+		if err != nil {
+			return nil, errors.New("invalid section_id")
+		}
+		sectionID = &parsed
+	}
+	if _, err := s.repo.GetClassByIDAndSchool(classID, schoolID); err != nil {
+		return nil, errors.New("class not found")
+	}
+	if sectionID != nil {
+		if _, err := s.repo.GetSectionByIDAndSchool(*sectionID, schoolID); err != nil {
+			return nil, errors.New("section not found")
+		}
+	}
+	rows, err := s.repo.ListEnrollmentsByClassSection(schoolID, classID, sectionID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list enrollments: %w", err)
+	}
+	return &model.EnrollmentListResponse{Enrollments: rows, Total: int64(len(rows))}, nil
+}
+
+func (s *AcademicService) GetEnrollmentByUser(userID, schoolID uuid.UUID) (*model.StudentEnrollment, error) {
+	enrollment, err := s.repo.GetEnrollmentByUserAndSchool(userID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("enrollment not found")
+		}
+		return nil, err
+	}
+	return enrollment, nil
+}
+
+func (s *AcademicService) UpsertEnrollment(req model.UpsertEnrollmentRequest) (*model.StudentEnrollment, error) {
+	userID, err := uuid.Parse(req.UserID)
+	if err != nil {
+		return nil, errors.New("invalid user_id")
+	}
+	schoolID, err := uuid.Parse(req.SchoolID)
+	if err != nil {
+		return nil, errors.New("invalid school_id")
+	}
+	classID, err := uuid.Parse(req.ClassID)
+	if err != nil {
+		return nil, errors.New("invalid class_id")
+	}
+	if _, err := s.repo.GetClassByIDAndSchool(classID, schoolID); err != nil {
+		return nil, errors.New("class not found")
+	}
+	var sectionID *uuid.UUID
+	if req.SectionID != "" {
+		parsed, err := uuid.Parse(req.SectionID)
+		if err != nil {
+			return nil, errors.New("invalid section_id")
+		}
+		if _, err := s.repo.GetSectionByIDAndSchool(parsed, schoolID); err != nil {
+			return nil, errors.New("section not found")
+		}
+		sectionID = &parsed
+	}
+	row := &model.StudentEnrollment{
+		SchoolID:  schoolID,
+		UserID:    userID,
+		ClassID:   classID,
+		SectionID: sectionID,
+		IsActive:  true,
+	}
+	if err := s.repo.UpsertEnrollment(row); err != nil {
+		return nil, fmt.Errorf("failed to save enrollment: %w", err)
+	}
+	return s.repo.GetEnrollmentByUserAndSchool(userID, schoolID)
+}
+
+func (s *AcademicService) DeleteEnrollment(userID, schoolID uuid.UUID) error {
+	return s.repo.DeleteEnrollment(userID, schoolID)
 }

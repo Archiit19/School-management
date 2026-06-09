@@ -64,6 +64,37 @@ async function request(service, path, { method = "GET", body, query } = {}) {
   return data;
 }
 
+/** Flatten role_data onto user records for pages that expect legacy student fields. */
+function normalizeStudentUser(user) {
+  const roleData = user.role_data || {};
+  const fullName = (user.name || "").trim();
+  const parts = fullName.split(/\s+/).filter(Boolean);
+  return {
+    ...user,
+    class_id: roleData.class_id ?? user.class_id,
+    section_id: roleData.section_id ?? user.section_id,
+    first_name: roleData.first_name || parts[0] || fullName || "—",
+    last_name: roleData.last_name || parts.slice(1).join(" ") || "",
+    student_code: roleData.student_code || user.student_code || "",
+    parent_name: roleData.parent_name || "",
+    contact_number: roleData.contact_number || "",
+  };
+}
+
+/** Map user-service pupil records to the shape attendance/exams pages expect. */
+function normalizeStudentRecord(user, enrollments) {
+  const enrollment = enrollments.find((e) => String(e.user_id) === String(user.id));
+  const merged = {
+    ...user,
+    role_data: { ...(user.role_data || {}) },
+  };
+  if (enrollment) {
+    merged.role_data.class_id = enrollment.class_id;
+    if (enrollment.section_id) merged.role_data.section_id = enrollment.section_id;
+  }
+  return normalizeStudentUser(merged);
+}
+
 export const authApi = {
   signup: (body) => request("auth", "/auth/signup", { method: "POST", body }),
   registerSchool: (body) => request("auth", "/auth/register-school", { method: "POST", body }),
@@ -87,6 +118,8 @@ export const rolesApi = {
   create: (body) => request("auth", "/api/v1/roles", { method: "POST", body }),
   list: () => request("auth", "/api/v1/roles"),
   getById: (id) => request("auth", `/api/v1/roles/${id}`),
+  getFields: (id) => request("auth", `/api/v1/roles/${id}/fields`),
+  updateFields: (id, fields) => request("auth", `/api/v1/roles/${id}/fields`, { method: "PUT", body: { fields } }),
   health: () => request("auth", "/health"),
 };
 
@@ -104,6 +137,7 @@ export const academicApi = {
   createSection: (body) => request("academic", "/sections", { method: "POST", body }),
   createSubject: (body) => request("academic", "/subjects", { method: "POST", body }),
   getClasses: () => request("academic", "/classes"),
+  getEnrollments: (query) => request("academic", "/enrollments", { query }),
   createTeacherAssignment: (body) => request("academic", "/teacher-assignments", { method: "POST", body }),
   getTeacherAssignments: (query) => request("academic", "/teacher-assignments", { query }),
   createAssignment: (body) => request("academic", "/assignments", { method: "POST", body }),
@@ -113,15 +147,31 @@ export const academicApi = {
   getMySubmissions: () => request("academic", "/submissions/me"),
   submitMine: (body) => request("academic", "/submissions/me", { method: "POST", body }),
   getMyAcademic: () => request("academic", "/academic/me"),
+  getMyEnrollment: () => request("academic", "/enrollments/me"),
   health: () => request("academic", "/health"),
 };
 
 export const studentApi = {
-  create: (body) => request("students", "/students", { method: "POST", body }),
-  list: (query) => request("students", "/students", { query }),
-  update: (id, body) => request("students", `/students/${id}`, { method: "PATCH", body }),
-  getMe: () => request("students", "/students/me"),
-  health: () => request("students", "/health"),
+  async list(query) {
+    const enrollRes = await academicApi.getEnrollments({
+      class_id: query.class_id,
+      section_id: query.section_id || undefined,
+    });
+    const enrollments = enrollRes.enrollments || [];
+    if (enrollments.length === 0) {
+      return { students: [], users: [], total: 0 };
+    }
+    const ids = enrollments.map((e) => e.user_id).join(",");
+    const res = await request("users", "/users", {
+      query: { ids, limit: query.limit || 200, page: 1 },
+    });
+    const users = (res.users || []).map((u) => normalizeStudentRecord(u, enrollments));
+    return { students: users, users, total: res.total || users.length };
+  },
+  create: (body) => request("users", "/users", { method: "POST", body }),
+  update: (id, body) => request("users", `/users/${id}`, { method: "PATCH", body }),
+  getMe: async () => normalizeStudentUser(await request("users", "/users/me")),
+  health: () => request("users", "/health"),
 };
 
 export const attendanceApi = {

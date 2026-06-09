@@ -93,3 +93,13 @@ func (r *RBACRepository) RemovePermissionFromRole(roleID, permissionID uuid.UUID
 		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
 		Delete(&model.RolePermission{}).Error
 }
+
+func (r *RBACRepository) UpsertRoleFields(rf *model.RoleField) error {
+	return r.db.Save(rf).Error
+}
+
+func (r *RBACRepository) GetRoleFields(roleID uuid.UUID) (*model.RoleField, error) {
+	var rf model.RoleField
+	err := r.db.Where("role_id = ?", roleID).First(&rf).Error
+	return &rf, err
+}

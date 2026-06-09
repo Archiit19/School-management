@@ -7,6 +7,7 @@ import {
   examApi,
   academicApi,
   financeApi,
+  rolesApi,
 } from "../api/client";
 import PermTabBar from "../components/PermTabBar";
 import { usePermTabs } from "../hooks/usePermTabs";
@@ -36,9 +37,44 @@ function fmtMoney(n) {
   return Number(n).toFixed(2);
 }
 
+function formatRoleFieldValue(key, value, fieldDef, academic) {
+  if (value == null || String(value).trim() === "") return "—";
+  if (key === "class_id") return academic?.class?.name || String(value);
+  if (key === "section_id") return academic?.section?.name || String(value);
+  if (fieldDef?.type === "uuid") return String(value);
+  return String(value);
+}
+
+function roleDetailRows(user, fields, academic) {
+  const data = user?.role_data || {};
+  const keys = fields?.length ? fields.map((f) => f.key) : Object.keys(data);
+  const rows = [];
+  const seen = new Set();
+  for (const key of keys) {
+    if (seen.has(key) || !(key in data)) continue;
+    seen.add(key);
+    const fieldDef = fields?.find((f) => f.key === key);
+    rows.push({
+      key,
+      label: fieldDef?.label || key.replace(/_/g, " "),
+      value: formatRoleFieldValue(key, data[key], fieldDef, academic),
+    });
+  }
+  for (const [key, value] of Object.entries(data)) {
+    if (seen.has(key)) continue;
+    rows.push({
+      key,
+      label: key.replace(/_/g, " "),
+      value: formatRoleFieldValue(key, value, null, academic),
+    });
+  }
+  return rows;
+}
+
 export default function MyPortalPage() {
   const { user } = useAuth();
   const { visibleTabs, tab, setTab } = usePermTabs(TABS, "profile");
+  const isStudent = user?.role_name === "student";
 
   if (visibleTabs.length === 0) {
     return <Navigate to="/" replace />;
@@ -49,7 +85,10 @@ export default function MyPortalPage() {
       <div className="page-header">
         <h1>My Portal</h1>
         <p>
-          Welcome, {user?.name}. Here's everything tied to your student record.
+          Welcome, {user?.name}.{" "}
+          {isStudent
+            ? "Here's your profile, class details, and school information."
+            : "View your account and school information."}
         </p>
       </div>
 
@@ -133,6 +172,7 @@ function ExamsTab() {
 function ProfileTab() {
   const { user } = useAuth();
   const [me, setMe] = useState(null);
+  const [roleFields, setRoleFields] = useState([]);
   const [academic, setAcademic] = useState(null);
   const [loading, setLoading] = useState(true);
   const [academicLoading, setAcademicLoading] = useState(true);
@@ -144,15 +184,28 @@ function ProfileTab() {
     setLoading(true);
     setAcademicLoading(true);
     setShowAcademic(true);
+    setRoleFields([]);
 
-    studentApi.getMe()
-      .then(setMe)
+    studentApi
+      .getMe()
+      .then(async (profile) => {
+        setMe(profile);
+        if (profile?.role_id) {
+          try {
+            const res = await rolesApi.getFields(profile.role_id);
+            setRoleFields(res?.fields || []);
+          } catch {
+            setRoleFields([]);
+          }
+        }
+      })
       .catch((e) => {
         if (!isAccessDenied(e)) setError(e.message);
       })
       .finally(() => setLoading(false));
 
-    academicApi.getMyAcademic()
+    academicApi
+      .getMyAcademic()
       .then(setAcademic)
       .catch((e) => {
         if (isAccessDenied(e)) {
@@ -164,60 +217,90 @@ function ProfileTab() {
       .finally(() => setAcademicLoading(false));
   }, []);
 
-  if (loading) return <div className="empty">Loading student profile...</div>;
+  if (loading) return <div className="empty">Loading profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!me) return null;
 
-  const fullName = `${me.first_name || ""} ${me.last_name || ""}`.trim();
   const school = user?.school || {};
-  const className = academic?.class?.name || (academicLoading ? "(loading…)" : (me.class_id ? `Class ID: ${me.class_id.substring(0, 8)}...` : "—"));
-  const sectionName = academic?.section?.name || (academicLoading ? "(loading…)" : (me.section_id ? `Section ID: ${me.section_id.substring(0, 8)}...` : "—"));
+  const roleRows = roleDetailRows(me, roleFields, academic).filter(
+    (row) => !(me.role_name === "student" && (row.key === "class_id" || row.key === "section_id"))
+  );
+  const className =
+    academic?.class?.name ||
+    (academicLoading && me.class_id ? "(loading…)" : "—");
+  const sectionName =
+    academic?.section?.name ||
+    (academicLoading && me.section_id ? "(loading…)" : "—");
 
   return (
     <>
       <div className="card">
         <div className="card-title">
-          Student Details <span className="badge badge-get">GET /students/me</span>
+          My Account <span className="badge badge-get">GET /users/me</span>
         </div>
         <div className="grid-3">
           <div className="form-group">
-            <label>Student Name</label>
-            <input readOnly value={fullName} />
+            <label>Full Name</label>
+            <input readOnly value={me.name || "—"} />
           </div>
           <div className="form-group">
-            <label>Class</label>
-            <input readOnly value={className} />
+            <label>Email</label>
+            <input readOnly value={me.email || "—"} />
           </div>
           <div className="form-group">
-            <label>Section</label>
-            <input readOnly value={sectionName} />
-          </div>
-          <div className="form-group">
-            <label>Parent / Guardian Name</label>
-            <input readOnly value={me.parent_name || "—"} />
-          </div>
-          <div className="form-group">
-            <label>Contact Number</label>
-            <input readOnly value={me.contact_number || "—"} />
+            <label>Role</label>
+            <input readOnly value={me.role_name || "—"} />
           </div>
           <div className="form-group">
             <label>Status</label>
             <input readOnly value={me.is_active ? "Active" : "Inactive"} />
           </div>
           <div className="form-group">
-            <label>Admitted</label>
+            <label>Member Since</label>
             <input readOnly value={fmtDate(me.created_at)} />
           </div>
           <div className="form-group">
-            <label>Student Code</label>
-            <input readOnly className="mono" value={me.student_code || "—"} style={{ fontWeight: 600 }} />
-          </div>
-          <div className="form-group">
-            <label>School ID</label>
-            <input readOnly className="mono" value={me.school_id || ""} />
+            <label>User ID</label>
+            <input readOnly className="mono" value={me.id || "—"} />
           </div>
         </div>
       </div>
+
+      {(me.role_name === "student" || roleRows.length > 0) && (
+        <div className="card">
+          <div className="card-title">
+            {me.role_name === "student" ? "Student Details" : "Role Information"}
+          </div>
+          <div className="grid-3">
+            {me.role_name === "student" && (
+              <>
+                <div className="form-group">
+                  <label>Class</label>
+                  <input readOnly value={className} />
+                </div>
+                <div className="form-group">
+                  <label>Section</label>
+                  <input readOnly value={sectionName} />
+                </div>
+              </>
+            )}
+            {roleRows.map((row) => (
+              <div className="form-group" key={row.key}>
+                <label style={{ textTransform: "capitalize" }}>{row.label}</label>
+                <input
+                  readOnly
+                  className={row.key === "student_code" ? "mono" : undefined}
+                  value={row.value}
+                  style={row.key === "student_code" ? { fontWeight: 600 } : undefined}
+                />
+              </div>
+            ))}
+            {roleRows.length === 0 && me.role_name !== "student" && (
+              <div className="empty">No role-specific information on file.</div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-title">
@@ -239,7 +322,7 @@ function ProfileTab() {
         </div>
       </div>
 
-      {showAcademic && (
+      {showAcademic && me.role_name === "student" && (
       <div className="card">
         <div className="card-title">
           Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
