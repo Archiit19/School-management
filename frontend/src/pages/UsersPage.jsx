@@ -13,6 +13,8 @@ export default function UsersPage() {
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role_id: "" });
+  const [editingUser, setEditingUser] = useState(null);
+  const [editForm, setEditForm] = useState({ name: "", role_id: "", is_active: true });
 
   const load = useCallback(async () => {
     try {
@@ -53,6 +55,45 @@ export default function UsersPage() {
       load();
     } catch (err) { setError(err.message); }
   }
+
+  function openEdit(user) {
+    setEditingUser(user);
+    setEditForm({
+      name: user.name || "",
+      role_id: user.role_id || "",
+      is_active: user.is_active !== false,
+    });
+    setError("");
+    setSuccess("");
+  }
+
+  function closeEdit() {
+    setEditingUser(null);
+  }
+
+  async function handleUpdate(e) {
+    e.preventDefault();
+    if (!editingUser) return;
+    setError("");
+    setSuccess("");
+    setBusy(true);
+    try {
+      await userMgmtApi.update(editingUser.id, {
+        name: editForm.name,
+        role_id: editForm.role_id || undefined,
+        is_active: editForm.is_active,
+      });
+      setSuccess("User updated.");
+      closeEdit();
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const editableRoles = roles.filter((r) => r.name && r.name.toLowerCase() !== "student");
 
   return (
     <>
@@ -130,9 +171,14 @@ export default function UsersPage() {
                   <td><span className={`status ${u.is_active ? "status-active" : "status-inactive"}`}>{u.is_active ? "Active" : "Inactive"}</span></td>
                   <td><span className="mono truncate">{u.id}</span></td>
                   <td>
-                    {hasPerm("delete_user") && (
-                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)}>Delete</button>
-                    )}
+                    <div className="btn-row" style={{ flexWrap: "nowrap" }}>
+                      {hasPerm("update_user") && (
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => openEdit(u)}>Edit</button>
+                      )}
+                      {hasPerm("delete_user") && (
+                        <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDelete(u.id)}>Delete</button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -147,6 +193,58 @@ export default function UsersPage() {
           </div>
         )}
       </div>
+
+      {editingUser && hasPerm("update_user") && (
+        <div className="modal-overlay" onClick={closeEdit}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit User</h3>
+              <button type="button" className="modal-close" onClick={closeEdit} aria-label="Close">&times;</button>
+            </div>
+            <form onSubmit={handleUpdate}>
+              <div className="form-group">
+                <label>Full Name</label>
+                <input
+                  required
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                />
+              </div>
+              <div className="form-group">
+                <label>Email</label>
+                <input type="email" value={editingUser.email} disabled />
+              </div>
+              <div className="form-group">
+                <label>Role</label>
+                <select
+                  required
+                  value={editForm.role_id}
+                  onChange={(e) => setEditForm((p) => ({ ...p, role_id: e.target.value }))}
+                >
+                  <option value="">Select role…</option>
+                  {editableRoles.map((r) => (
+                    <option key={r.id} value={r.id}>{r.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={editForm.is_active}
+                    onChange={(e) => setEditForm((p) => ({ ...p, is_active: e.target.checked }))}
+                  />{" "}
+                  Active
+                </label>
+              </div>
+              <div className="btn-row">
+                <button type="button" className="btn btn-ghost" onClick={closeEdit}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>{busy ? "Saving…" : "Save"}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 }

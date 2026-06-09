@@ -80,7 +80,7 @@ func (s *StudentService) CreateStudent(
 	}
 
 	admissionYear := time.Now().Year()
-	studentCode, err := s.generateStudentCode(schoolID, classID, sectionUUID, classInfo.Name, sectionInfo, admissionYear)
+	studentCode, err := s.generateStudentCode(schoolID, classInfo.Name, sectionInfo, admissionYear)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate student code: %w", err)
 	}
@@ -425,29 +425,43 @@ func (s *StudentService) validateClassSection(
 }
 
 func (s *StudentService) generateStudentCode(
-	schoolID, classID uuid.UUID,
-	sectionID *uuid.UUID,
+	schoolID uuid.UUID,
 	className string,
 	section *sectionInfo,
 	admissionYear int,
 ) (string, error) {
 	classNum := extractClassNumber(className)
-	sectionLetter := "X"
-	if section != nil {
-		sectionLetter = strings.ToUpper(strings.TrimSpace(section.Name))
-		if sectionLetter == "" {
-			sectionLetter = "X"
-		}
-	}
+	sectionLetter := extractSectionLetter(section)
 
-	count, err := s.repo.CountStudentsForEnrollment(schoolID, classID, sectionID, admissionYear)
+	codePrefix := fmt.Sprintf("%04d%s%s", admissionYear, classNum, sectionLetter)
+	maxUsed, err := s.repo.MaxEnrollmentForCodePrefix(codePrefix)
 	if err != nil {
 		return "", err
 	}
-	enrollmentNum := count + 1
+	enrollmentNum := maxUsed + 1
 
-	code := fmt.Sprintf("%04d%s%s%02d", admissionYear, classNum, sectionLetter, enrollmentNum)
-	return code, nil
+	return fmt.Sprintf("%s%02d", codePrefix, enrollmentNum), nil
+}
+
+func extractSectionLetter(section *sectionInfo) string {
+	if section == nil {
+		return "X"
+	}
+	name := strings.ToUpper(strings.TrimSpace(section.Name))
+	if name == "" {
+		return "X"
+	}
+	if len(name) == 1 {
+		return name
+	}
+	parts := strings.Fields(name)
+	if len(parts) > 0 {
+		last := parts[len(parts)-1]
+		if len(last) == 1 {
+			return last
+		}
+	}
+	return string([]rune(name)[0])
 }
 
 func extractClassNumber(className string) string {

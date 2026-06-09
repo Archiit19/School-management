@@ -280,3 +280,23 @@ func (h *UserHandler) GetRolePermissions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, perms)
 }
+
+func (h *UserHandler) RemovePermission(c *gin.Context) {
+	roleID, err := uuid.Parse(c.Param("roleId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid role id"})
+		return
+	}
+	permissionID, err := uuid.Parse(c.Param("permissionId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid permission id"})
+		return
+	}
+
+	if err := h.svc.RemovePermissionFromRole(roleID, permissionID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "permission removed from role"})
+}

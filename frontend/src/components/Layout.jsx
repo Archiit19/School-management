@@ -10,8 +10,8 @@ const PLATFORM_NAV = [
 const SCHOOL_NAV = [
   { to: "/", icon: "grid", label: "Dashboard" },
   { to: "/me", icon: "user-check", label: "My Portal", perms: ["view_own_profile", "view_own_attendance", "view_own_exams", "view_own_results", "view_own_assignments", "view_own_dues"] },
-  { to: "/users", icon: "users", label: "Users", perms: ["create_user", "view_users"] },
   { to: "/roles", icon: "shield", label: "Roles & Permissions", perms: ["create_role", "manage_permissions"] },
+  { to: "/users", icon: "users", label: "Users", perms: ["create_user", "view_users"] },
   { to: "/academic", icon: "book-open", label: "Academic Structure", perms: ["create_class", "create_section", "create_subject", "view_academic"] },
   { to: "/students", icon: "graduation-cap", label: "Students", perms: ["admit_student", "view_students"] },
   { to: "/teacher-assignments", icon: "user-check", label: "Teacher Assign", perms: ["assign_teacher"] },

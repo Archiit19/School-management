@@ -107,6 +107,7 @@ func main() {
 		protected.POST("/roles", middleware.RequirePermission("create_role"), h.CreateRole)
 		protected.GET("/roles", h.GetRoles)
 		protected.POST("/roles/assign-permission", middleware.RequirePermission("manage_permissions"), h.AssignPermission)
+		protected.DELETE("/roles/:roleId/permissions/:permissionId", middleware.RequirePermission("manage_permissions"), h.RemovePermission)
 
 		// Permissions (predefined, read-only)
 		protected.GET("/permissions", h.GetPermissions)

@@ -99,3 +99,9 @@ func (r *UserRepository) GetPermissionsByRoleID(roleID uuid.UUID) ([]model.Permi
 		Find(&perms).Error
 	return perms, err
 }
+
+func (r *UserRepository) RemovePermissionFromRole(roleID, permissionID uuid.UUID) error {
+	return r.db.
+		Where("role_id = ? AND permission_id = ?", roleID, permissionID).
+		Delete(&model.RolePermission{}).Error
+}
