@@ -24,7 +24,7 @@ func Load() *Config {
 		JWTSecret:            pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
 		Port:                 pkgconfig.GetEnv("PORT", "8087"),
 		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
-		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", "dev-internal-token-change-in-production"),
 	}
 }
 

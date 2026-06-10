@@ -26,7 +26,7 @@ func Load() *Config {
 		Port:               pkgconfig.GetEnv("PORT", "8086"),
 		AcademicServiceURL:   pkgconfig.GetEnv("ACADEMIC_SERVICE_URL", "http://academic-service:8083"),
 		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
-		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", "dev-internal-token-change-in-production"),
 	}
 }
 

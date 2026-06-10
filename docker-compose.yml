@@ -279,7 +279,7 @@ services:
       JWT_SECRET: super-secret-jwt-key-change-in-production
       ACADEMIC_SERVICE_URL: http://academic-service:8083
       USER_SERVICE_URL: http://user-service:8082
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8086
     depends_on:
       exam-db:
@@ -303,7 +303,7 @@ services:
       DB_NAME: finance_db
       JWT_SECRET: super-secret-jwt-key-change-in-production
       USER_SERVICE_URL: http://user-service:8082
-      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-dev-internal-token}
+      INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8087
     depends_on:
       finance-db:
