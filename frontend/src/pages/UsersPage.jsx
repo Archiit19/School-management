@@ -4,7 +4,7 @@ import PermGate from "../components/PermGate";
 import ParentUserField from "../components/ParentUserField";
 import { useAuth } from "../context/AuthContext";
 
-const FIELD_TYPES = ["text", "number", "email", "uuid", "select", "date"];
+const FIELD_TYPES = ["text", "number", "email", "uuid", "select", "date", "list"];
 
 export default function UsersPage() {
   const { hasPerm } = useAuth();

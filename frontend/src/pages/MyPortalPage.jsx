@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, createContext, useContext } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -35,6 +35,56 @@ function fmtDate(s) {
 function fmtMoney(n) {
   if (n === null || n === undefined) return "—";
   return Number(n).toFixed(2);
+}
+
+const PortalChildContext = createContext({
+  isParent: false,
+  children: [],
+  selectedChildId: "",
+  setSelectedChildId: () => {},
+});
+
+function usePortalChild() {
+  return useContext(PortalChildContext);
+}
+
+function ChildSelector() {
+  const { isParent, children, selectedChildId, setSelectedChildId } = usePortalChild();
+  if (!isParent) return null;
+
+  if (children.length === 0) {
+    return (
+      <div className="alert alert-error" style={{ marginBottom: 16 }}>
+        No students are linked to your account yet. Ask the school to assign your children when admitting students.
+      </div>
+    );
+  }
+
+  const selected = children.find((c) => c.id === selectedChildId);
+
+  return (
+    <div className="card" style={{ marginBottom: 16 }}>
+      <div className="card-title">Viewing information for</div>
+      <div className="form-group" style={{ maxWidth: 360, marginBottom: 0 }}>
+        <select
+          value={selectedChildId}
+          onChange={(e) => setSelectedChildId(e.target.value)}
+        >
+          {children.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+              {c.role_data?.student_code ? ` (${c.role_data.student_code})` : ""}
+            </option>
+          ))}
+        </select>
+        {selected && (
+          <p className="text-sm" style={{ marginTop: 8, color: "var(--clr-muted)" }}>
+            Attendance, exams, assignments, and dues below are for {selected.name}.
+          </p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 function formatRoleFieldValue(key, value, fieldDef, academic) {
@@ -75,22 +125,52 @@ export default function MyPortalPage() {
   const { user } = useAuth();
   const { visibleTabs, tab, setTab } = usePermTabs(TABS, "profile");
   const isStudent = user?.role_name === "student";
+  const isParent = user?.role_name === "parent";
+  const [children, setChildren] = useState([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [childrenLoading, setChildrenLoading] = useState(isParent);
+
+  useEffect(() => {
+    if (!isParent) return;
+    setChildrenLoading(true);
+    studentApi
+      .getMyChildren()
+      .then((res) => {
+        const list = res?.children || [];
+        setChildren(list);
+        if (list.length > 0) setSelectedChildId(list[0].id);
+      })
+      .catch(() => setChildren([]))
+      .finally(() => setChildrenLoading(false));
+  }, [isParent]);
 
   if (visibleTabs.length === 0) {
     return <Navigate to="/" replace />;
   }
 
+  const portalChildValue = {
+    isParent,
+    children,
+    selectedChildId,
+    setSelectedChildId,
+  };
+
   return (
-    <>
+    <PortalChildContext.Provider value={portalChildValue}>
       <div className="page-header">
         <h1>My Portal</h1>
         <p>
           Welcome, {user?.name}.{" "}
           {isStudent
             ? "Here's your profile, class details, and school information."
-            : "View your account and school information."}
+            : isParent
+              ? "Select a child to view their school information."
+              : "View your account and school information."}
         </p>
       </div>
+
+      {isParent && childrenLoading && <div className="empty">Loading linked students…</div>}
+      {!childrenLoading && <ChildSelector />}
 
       <PermTabBar tabs={visibleTabs} active={tab} onChange={setTab} />
 
@@ -100,27 +180,29 @@ export default function MyPortalPage() {
       {tab === "results" && <ResultsTab />}
       {tab === "assignments" && <AssignmentsTab />}
       {tab === "dues" && <DuesTab />}
-    </>
+    </PortalChildContext.Provider>
   );
 }
 
 function ExamsTab() {
+  const { isParent, selectedChildId } = usePortalChild();
   const [exams, setExams] = useState([]);
   const [upcoming, setUpcoming] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (isParent && !selectedChildId) return;
     setError(""); setLoading(true);
     try {
-      const data = await examApi.getMyExams({ upcoming });
+      const data = await examApi.getMyExams({ upcoming }, isParent ? selectedChildId : undefined);
       setExams(data || []);
     } catch (e) {
       if (!isAccessDenied(e)) setError(e.message);
     } finally {
       setLoading(false);
     }
-  }, [upcoming]);
+  }, [upcoming, isParent, selectedChildId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -171,7 +253,9 @@ function ExamsTab() {
 
 function ProfileTab() {
   const { user } = useAuth();
+  const { isParent, selectedChildId } = usePortalChild();
   const [me, setMe] = useState(null);
+  const [childProfile, setChildProfile] = useState(null);
   const [roleFields, setRoleFields] = useState([]);
   const [academic, setAcademic] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -182,8 +266,6 @@ function ProfileTab() {
 
   useEffect(() => {
     setLoading(true);
-    setAcademicLoading(true);
-    setShowAcademic(true);
     setRoleFields([]);
 
     studentApi
@@ -203,9 +285,41 @@ function ProfileTab() {
         if (!isAccessDenied(e)) setError(e.message);
       })
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    if (isParent && !selectedChildId) {
+      setChildProfile(null);
+      setAcademic(null);
+      setAcademicLoading(false);
+      return;
+    }
+
+    setAcademicLoading(true);
+    setShowAcademic(true);
+    setAcademicError("");
+
+    const pupilId = isParent ? selectedChildId : undefined;
+    const profilePromise = isParent
+      ? studentApi.getChild(selectedChildId)
+      : Promise.resolve(null);
+
+    profilePromise
+      .then(async (profile) => {
+        setChildProfile(profile);
+        if (isParent && profile?.role_id) {
+          try {
+            const res = await rolesApi.getFields(profile.role_id);
+            setRoleFields(res?.fields || []);
+          } catch {
+            setRoleFields([]);
+          }
+        }
+      })
+      .catch(() => setChildProfile(null));
 
     academicApi
-      .getMyAcademic()
+      .getMyAcademic(pupilId)
       .then(setAcademic)
       .catch((e) => {
         if (isAccessDenied(e)) {
@@ -215,64 +329,89 @@ function ProfileTab() {
         setAcademicError(e.message || "Failed to load academic details");
       })
       .finally(() => setAcademicLoading(false));
-  }, []);
+  }, [isParent, selectedChildId]);
 
   if (loading) return <div className="empty">Loading profile...</div>;
   if (error) return <div className="alert alert-error">{error}</div>;
   if (!me) return null;
 
   const school = user?.school || {};
-  const roleRows = roleDetailRows(me, roleFields, academic).filter(
-    (row) => !(me.role_name === "student" && (row.key === "class_id" || row.key === "section_id"))
+  const displayProfile = isParent && childProfile ? childProfile : me;
+  const displayRole = displayProfile?.role_name || me.role_name;
+  const roleRows = roleDetailRows(displayProfile, roleFields, academic).filter(
+    (row) =>
+      !(displayRole === "student" && (row.key === "class_id" || row.key === "section_id")) &&
+      !(isParent && row.key === "children")
   );
   const className =
     academic?.class?.name ||
-    (academicLoading && me.class_id ? "(loading…)" : "—");
+    (academicLoading && displayProfile.class_id ? "(loading…)" : "—");
   const sectionName =
     academic?.section?.name ||
-    (academicLoading && me.section_id ? "(loading…)" : "—");
+    (academicLoading && displayProfile.section_id ? "(loading…)" : "—");
 
   return (
     <>
+      {isParent && (
+        <div className="card">
+          <div className="card-title">Parent Account</div>
+          <div className="grid-3">
+            <div className="form-group">
+              <label>Your Name</label>
+              <input readOnly value={me.name || "—"} />
+            </div>
+            <div className="form-group">
+              <label>Your Email</label>
+              <input readOnly value={me.email || "—"} />
+            </div>
+            <div className="form-group">
+              <label>Role</label>
+              <input readOnly value={me.role_name || "—"} />
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="card">
         <div className="card-title">
-          My Account <span className="badge badge-get">GET /users/me</span>
+          {isParent ? "Student Profile" : "My Account"}{" "}
+          <span className="badge badge-get">{isParent ? "GET /users/me/children/:id" : "GET /users/me"}</span>
         </div>
         <div className="grid-3">
           <div className="form-group">
             <label>Full Name</label>
-            <input readOnly value={me.name || "—"} />
+            <input readOnly value={displayProfile.name || "—"} />
           </div>
           <div className="form-group">
             <label>Email</label>
-            <input readOnly value={me.email || "—"} />
+            <input readOnly value={displayProfile.email || "—"} />
           </div>
           <div className="form-group">
             <label>Role</label>
-            <input readOnly value={me.role_name || "—"} />
+            <input readOnly value={displayProfile.role_name || "—"} />
           </div>
           <div className="form-group">
             <label>Status</label>
-            <input readOnly value={me.is_active ? "Active" : "Inactive"} />
+            <input readOnly value={displayProfile.is_active ? "Active" : "Inactive"} />
           </div>
           <div className="form-group">
             <label>Member Since</label>
-            <input readOnly value={fmtDate(me.created_at)} />
+            <input readOnly value={fmtDate(displayProfile.created_at)} />
           </div>
           <div className="form-group">
             <label>User ID</label>
-            <input readOnly className="mono" value={me.id || "—"} />
+            <input readOnly className="mono" value={displayProfile.id || "—"} />
           </div>
         </div>
       </div>
 
-      {(me.role_name === "student" || roleRows.length > 0) && (
+      {(displayRole === "student" || roleRows.length > 0) && (
         <div className="card">
           <div className="card-title">
-            {me.role_name === "student" ? "Student Details" : "Role Information"}
+            {displayRole === "student" ? "Student Details" : "Role Information"}
           </div>
           <div className="grid-3">
-            {me.role_name === "student" && (
+            {displayRole === "student" && (
               <>
                 <div className="form-group">
                   <label>Class</label>
@@ -295,7 +434,7 @@ function ProfileTab() {
                 />
               </div>
             ))}
-            {roleRows.length === 0 && me.role_name !== "student" && (
+            {roleRows.length === 0 && displayRole !== "student" && (
               <div className="empty">No role-specific information on file.</div>
             )}
           </div>
@@ -322,7 +461,7 @@ function ProfileTab() {
         </div>
       </div>
 
-      {showAcademic && me.role_name === "student" && (
+      {showAcademic && displayRole === "student" && (
       <div className="card">
         <div className="card-title">
           Subjects & Teachers <span className="badge badge-get">GET /academic/me</span>
@@ -385,6 +524,7 @@ function ProfileTab() {
 }
 
 function AttendanceTab() {
+  const { isParent, selectedChildId } = usePortalChild();
   const today = new Date().toISOString().slice(0, 10);
   const monthStart = today.slice(0, 8) + "01";
   const [range, setRange] = useState({ start_date: monthStart, end_date: today });
@@ -393,18 +533,20 @@ function AttendanceTab() {
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
+    if (isParent && !selectedChildId) return;
     setError("");
+    const pupilId = isParent ? selectedChildId : undefined;
     try {
       const [att, st] = await Promise.all([
-        attendanceApi.getMine({ start_date: range.start_date, end_date: range.end_date, limit: 100 }),
-        attendanceApi.myStats({ start_date: range.start_date, end_date: range.end_date }),
+        attendanceApi.getMine({ start_date: range.start_date, end_date: range.end_date, limit: 100 }, pupilId),
+        attendanceApi.myStats({ start_date: range.start_date, end_date: range.end_date }, pupilId),
       ]);
       setList(att?.attendance || []);
       setStats(st?.stats?.[0] || { total_days: 0, present_days: 0, absent_days: 0, late_days: 0, excused_days: 0, attendance_rate: 0 });
     } catch (e) {
       if (!isAccessDenied(e)) setError(e.message);
     }
-  }, [range.start_date, range.end_date]);
+  }, [range.start_date, range.end_date, isParent, selectedChildId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -465,14 +607,17 @@ function AttendanceTab() {
 }
 
 function ResultsTab() {
+  const { isParent, selectedChildId } = usePortalChild();
   const [results, setResults] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    examApi.getMyResults()
+    if (isParent && !selectedChildId) return;
+    examApi
+      .getMyResults({}, isParent ? selectedChildId : undefined)
       .then((r) => setResults(r?.results || r || []))
       .catch((e) => { if (!isAccessDenied(e)) setError(e.message); });
-  }, []);
+  }, [isParent, selectedChildId]);
 
   return (
     <div className="card">
@@ -503,8 +648,9 @@ function ResultsTab() {
 }
 
 function AssignmentsTab() {
-  const { hasPerm } = useAuth();
-  const canSubmit = hasPerm("submit_own_assignment");
+  const { hasPerm, user } = useAuth();
+  const { isParent, selectedChildId } = usePortalChild();
+  const canSubmit = hasPerm("submit_own_assignment") && user?.role_name === "student";
 
   const [assignments, setAssignments] = useState([]);
   const [submissions, setSubmissions] = useState([]);
@@ -515,18 +661,20 @@ function AssignmentsTab() {
   const [draft, setDraft] = useState({ content: "", material_url: "" });
 
   const load = useCallback(async () => {
+    if (isParent && !selectedChildId) return;
     setError("");
+    const pupilId = isParent ? selectedChildId : undefined;
     try {
       const [a, s] = await Promise.all([
-        academicApi.getMyAssignments(),
-        academicApi.getMySubmissions(),
+        academicApi.getMyAssignments(pupilId),
+        academicApi.getMySubmissions(pupilId),
       ]);
       setAssignments(a || []);
       setSubmissions(s || []);
     } catch (e) {
       if (!isAccessDenied(e)) setError(e.message);
     }
-  }, []);
+  }, [isParent, selectedChildId]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -629,14 +777,17 @@ function AssignmentsTab() {
 }
 
 function DuesTab() {
+  const { isParent, selectedChildId } = usePortalChild();
   const [dues, setDues] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    financeApi.getMyDues()
+    if (isParent && !selectedChildId) return;
+    financeApi
+      .getMyDues(isParent ? selectedChildId : undefined)
       .then((d) => setDues(d?.dues || d || []))
       .catch((e) => { if (!isAccessDenied(e)) setError(e.message); });
-  }, []);
+  }, [isParent, selectedChildId]);
 
   const totalBalance = dues.reduce((sum, d) => sum + Number(d.balance || 0), 0);
 

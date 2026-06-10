@@ -5,16 +5,19 @@ import (
 
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/pupil"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type ExamHandler struct {
-	svc *service.ExamService
+	svc   *service.ExamService
+	users *userclient.Client
 }
 
-func NewExamHandler(svc *service.ExamService) *ExamHandler {
-	return &ExamHandler{svc: svc}
+func NewExamHandler(svc *service.ExamService, users *userclient.Client) *ExamHandler {
+	return &ExamHandler{svc: svc, users: users}
 }
 
 // CreateExam godoc
@@ -176,12 +179,11 @@ func (h *ExamHandler) GetExams(c *gin.Context) {
 // @Failure      403       {object}  model.ErrorResponse
 // @Router       /exams/me [get]
 func (h *ExamHandler) GetMyExams(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
@@ -211,12 +213,11 @@ func (h *ExamHandler) GetMyExams(c *gin.Context) {
 // @Failure      403       {object}  model.ErrorResponse
 // @Router       /results/me [get]
 func (h *ExamHandler) GetMyResults(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 
 	var query model.ResultQuery
 	if err := c.ShouldBindQuery(&query); err != nil {

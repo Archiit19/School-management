@@ -13,6 +13,12 @@ function getToken() {
   return localStorage.getItem("token") || "";
 }
 
+function pupilQuery(query, studentId) {
+  const q = { ...(query || {}) };
+  if (studentId) q.student_id = studentId;
+  return q;
+}
+
 export class ApiError extends Error {
   constructor(message, status, data) {
     super(message);
@@ -145,11 +151,15 @@ export const academicApi = {
   createAssignment: (body) => request("academic", "/assignments", { method: "POST", body }),
   getAssignments: (query) => request("academic", "/assignments", { query }),
   createSubmission: (body) => request("academic", "/submissions", { method: "POST", body }),
-  getMyAssignments: () => request("academic", "/assignments/me"),
-  getMySubmissions: () => request("academic", "/submissions/me"),
+  getMyAssignments: (studentId) =>
+    request("academic", "/assignments/me", { query: pupilQuery({}, studentId) }),
+  getMySubmissions: (studentId) =>
+    request("academic", "/submissions/me", { query: pupilQuery({}, studentId) }),
   submitMine: (body) => request("academic", "/submissions/me", { method: "POST", body }),
-  getMyAcademic: () => request("academic", "/academic/me"),
-  getMyEnrollment: () => request("academic", "/enrollments/me"),
+  getMyAcademic: (studentId) =>
+    request("academic", "/academic/me", { query: pupilQuery({}, studentId) }),
+  getMyEnrollment: (studentId) =>
+    request("academic", "/enrollments/me", { query: pupilQuery({}, studentId) }),
   health: () => request("academic", "/health"),
 };
 
@@ -173,6 +183,8 @@ export const studentApi = {
   create: (body) => request("users", "/users", { method: "POST", body }),
   update: (id, body) => request("users", `/users/${id}`, { method: "PATCH", body }),
   getMe: async () => normalizeStudentUser(await request("users", "/users/me")),
+  getMyChildren: () => request("users", "/users/me/children"),
+  getChild: (id) => request("users", `/users/me/children/${id}`),
   health: () => request("users", "/health"),
 };
 
@@ -190,21 +202,23 @@ export const attendanceApi = {
   updateTeacher: (id, body) =>
     request("attendance", `/teacher-attendance/${id}`, { method: "PATCH", body }),
   statsTeacher: (query) => request("attendance", "/teacher-attendance/stats", { query }),
-  getMine: (query) => request("attendance", "/attendance/me", { query }),
-  myStats: (query) => request("attendance", "/attendance/me/stats", { query }),
+  getMine: (query, studentId) =>
+    request("attendance", "/attendance/me", { query: pupilQuery(query, studentId) }),
+  myStats: (query, studentId) =>
+    request("attendance", "/attendance/me/stats", { query: pupilQuery(query, studentId) }),
   health: () => request("attendance", "/health"),
 };
 
 export const examApi = {
-  getExams: (query) => request("exams", "/exams", { query }),
-  getMyExams: () => request("exams", "/exams/me"),
   createExam: (body) => request("exams", "/exams", { method: "POST", body }),
   getExams: (query) => request("exams", "/exams", { query }),
-  getMyExams: (query) => request("exams", "/exams/me", { query }),
+  getMyExams: (query, studentId) =>
+    request("exams", "/exams/me", { query: pupilQuery(query, studentId) }),
   enterMarks: (body) => request("exams", "/marks", { method: "POST", body }),
   publish: (body) => request("exams", "/results/publish", { method: "POST", body }),
   getResults: (query) => request("exams", "/results", { query }),
-  getMyResults: (query) => request("exams", "/results/me", { query }),
+  getMyResults: (query, studentId) =>
+    request("exams", "/results/me", { query: pupilQuery(query, studentId) }),
   health: () => request("exams", "/health"),
 };
 
@@ -224,6 +238,6 @@ export const financeApi = {
   createFee: (body) => request("finance", "/fees", { method: "POST", body }),
   recordPayment: (body) => request("finance", "/payments", { method: "POST", body }),
   getDues: (query) => request("finance", "/dues", { query }),
-  getMyDues: () => request("finance", "/dues/me"),
+  getMyDues: (studentId) => request("finance", "/dues/me", { query: pupilQuery({}, studentId) }),
   health: () => request("finance", "/health"),
 };

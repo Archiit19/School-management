@@ -48,7 +48,7 @@ export default function Layout() {
 
   const visibleNav = navSource.filter((item) => {
     if (item.to === "/me") {
-      return user?.role_name === "student";
+      return user?.role_name === "student" || user?.role_name === "parent";
     }
     if (!item.perms) return true;
     return item.perms.some((p) => hasPerm(p));

@@ -6,16 +6,19 @@ import (
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"
 	"github.com/Archiit19/School-management/pkg/httputil"
+	"github.com/Archiit19/School-management/pkg/pupil"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type AttendanceHandler struct {
-	svc *service.AttendanceService
+	svc    *service.AttendanceService
+	users  *userclient.Client
 }
 
-func NewAttendanceHandler(svc *service.AttendanceService) *AttendanceHandler {
-	return &AttendanceHandler{svc: svc}
+func NewAttendanceHandler(svc *service.AttendanceService, users *userclient.Client) *AttendanceHandler {
+	return &AttendanceHandler{svc: svc, users: users}
 }
 
 // CreateAttendance godoc
@@ -134,12 +137,11 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 // @Failure      403        {object}  model.ErrorResponse
 // @Router       /attendance/me [get]
 func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 
 	var query model.AttendanceQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
@@ -170,12 +172,11 @@ func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
 // @Failure      403        {object}  model.ErrorResponse
 // @Router       /attendance/me/stats [get]
 func (h *AttendanceHandler) GetMyAttendanceStats(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 
 	var query model.AttendanceStatsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {

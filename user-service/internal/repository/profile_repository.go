@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Archiit19/School-management/user-service/internal/config"
@@ -169,4 +170,99 @@ func (r *ProfileRepository) BatchGet(userIDs []uuid.UUID) (map[uuid.UUID]*UserPr
 		}
 	}
 	return result, nil
+}
+
+// ParseChildrenIDs normalizes the children list stored in role profile data.
+func ParseChildrenIDs(raw interface{}) []string {
+	if raw == nil {
+		return []string{}
+	}
+	switch v := raw.(type) {
+	case []string:
+		return append([]string{}, v...)
+	case []interface{}:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			s := strings.TrimSpace(fmt.Sprint(item))
+			if s != "" && s != "<nil>" {
+				out = append(out, s)
+			}
+		}
+		return out
+	default:
+		s := strings.TrimSpace(fmt.Sprint(v))
+		if s == "" || s == "<nil>" {
+			return []string{}
+		}
+		return []string{s}
+	}
+}
+
+func (r *ProfileRepository) HasChild(parentID, childID uuid.UUID) (bool, error) {
+	doc, err := r.Get(parentID)
+	if err != nil {
+		return false, err
+	}
+	childStr := childID.String()
+	for _, id := range ParseChildrenIDs(doc.Data["children"]) {
+		if id == childStr {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (r *ProfileRepository) AppendChild(parentID, childID uuid.UUID) error {
+	doc, err := r.Get(parentID)
+	if err != nil {
+		return err
+	}
+	if doc.Data == nil {
+		doc.Data = map[string]interface{}{}
+	}
+	children := ParseChildrenIDs(doc.Data["children"])
+	childStr := childID.String()
+	for _, id := range children {
+		if id == childStr {
+			return nil
+		}
+	}
+	children = append(children, childStr)
+	list := make([]interface{}, len(children))
+	for i, id := range children {
+		list[i] = id
+	}
+	doc.Data["children"] = list
+	schoolID, _ := uuid.Parse(doc.SchoolID)
+	roleID, _ := uuid.Parse(doc.RoleID)
+	return r.Save(parentID, roleID, schoolID, doc.Data)
+}
+
+func (r *ProfileRepository) RemoveChild(parentID, childID uuid.UUID) error {
+	doc, err := r.Get(parentID)
+	if err != nil {
+		return err
+	}
+	if doc.Data == nil {
+		return nil
+	}
+	childStr := childID.String()
+	children := ParseChildrenIDs(doc.Data["children"])
+	next := make([]string, 0, len(children))
+	for _, id := range children {
+		if id != childStr {
+			next = append(next, id)
+		}
+	}
+	if len(next) == len(children) {
+		return nil
+	}
+	list := make([]interface{}, len(next))
+	for i, id := range next {
+		list[i] = id
+	}
+	doc.Data["children"] = list
+	schoolID, _ := uuid.Parse(doc.SchoolID)
+	roleID, _ := uuid.Parse(doc.RoleID)
+	return r.Save(parentID, roleID, schoolID, doc.Data)
 }

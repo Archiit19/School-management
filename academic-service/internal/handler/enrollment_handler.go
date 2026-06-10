@@ -5,16 +5,19 @@ import (
 
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/pupil"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type EnrollmentHandler struct {
-	svc *service.AcademicService
+	svc   *service.AcademicService
+	users *userclient.Client
 }
 
-func NewEnrollmentHandler(svc *service.AcademicService) *EnrollmentHandler {
-	return &EnrollmentHandler{svc: svc}
+func NewEnrollmentHandler(svc *service.AcademicService, users *userclient.Client) *EnrollmentHandler {
+	return &EnrollmentHandler{svc: svc, users: users}
 }
 
 func (h *EnrollmentHandler) ListEnrollments(c *gin.Context) {
@@ -34,8 +37,12 @@ func (h *EnrollmentHandler) ListEnrollments(c *gin.Context) {
 
 func (h *EnrollmentHandler) GetMyEnrollment(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	userID := c.MustGet("user_id").(uuid.UUID)
-	enrollment, err := h.svc.GetEnrollmentByUser(userID, schoolID)
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
+		return
+	}
+	enrollment, err := h.svc.GetEnrollmentByUser(studentID, schoolID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return

@@ -8,8 +8,10 @@ type Config struct {
 	DBUser     string
 	DBPassword string
 	DBName     string
-	JWTSecret  string
-	Port       string
+	JWTSecret            string
+	Port                 string
+	UserServiceURL       string
+	InternalServiceToken string
 }
 
 func Load() *Config {
@@ -19,8 +21,10 @@ func Load() *Config {
 		DBUser:     pkgconfig.GetEnv("DB_USER", "finance_user"),
 		DBPassword: pkgconfig.GetEnv("DB_PASSWORD", "finance_pass"),
 		DBName:     pkgconfig.GetEnv("DB_NAME", "finance_db"),
-		JWTSecret:  pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		Port:       pkgconfig.GetEnv("PORT", "8087"),
+		JWTSecret:            pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
+		Port:                 pkgconfig.GetEnv("PORT", "8087"),
+		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
 

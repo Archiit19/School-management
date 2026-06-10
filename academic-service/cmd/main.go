@@ -9,6 +9,7 @@ import (
 	"github.com/Archiit19/School-management/academic-service/internal/config"
 	"github.com/Archiit19/School-management/academic-service/internal/handler"
 	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/repository"
 	"github.com/Archiit19/School-management/academic-service/internal/service"
@@ -54,8 +55,9 @@ func main() {
 	repo := repository.NewAcademicRepository(db)
 	httpClient := &http.Client{Timeout: 8 * time.Second}
 	svc := service.NewAcademicService(repo, cfg, httpClient)
-	h := handler.NewAcademicHandler(svc)
-	eh := handler.NewEnrollmentHandler(svc)
+	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
+	h := handler.NewAcademicHandler(svc, users)
+	eh := handler.NewEnrollmentHandler(svc, users)
 
 	r := gin.Default()
 

@@ -11,6 +11,7 @@
     {"key": "department", "label": "Department", "type": "text", "required": false}
   ],
   "parent": [
+    {"key": "children", "label": "Children", "type": "list", "required": false},
     {"key": "contact_number", "label": "Contact Number", "type": "text", "required": false},
     {"key": "address", "label": "Address", "type": "text", "required": false}
   ]
