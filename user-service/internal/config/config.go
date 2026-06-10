@@ -1,9 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"os"
-)
+import pkgconfig "github.com/Archiit19/School-management/pkg/config"
 
 type Config struct {
 	DBHost               string
@@ -24,33 +21,29 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		DBHost:     getEnv("DB_HOST", "localhost"),
-		DBPort:     getEnv("DB_PORT", "5434"),
-		DBUser:     getEnv("DB_USER", "user_user"),
-		DBPassword: getEnv("DB_PASSWORD", "user_pass"),
-		DBName:     getEnv("DB_NAME", "user_db"),
-		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		AuthServiceURL:       getEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
-		SchoolServiceURL:     getEnv("SCHOOL_SERVICE_URL", "http://localhost:8088"),
-		AcademicServiceURL:   getEnv("ACADEMIC_SERVICE_URL", "http://localhost:8083"),
-		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
-		DynamoEndpoint:       getEnv("DYNAMODB_ENDPOINT", "http://localhost:8000"),
-		DynamoTable:          getEnv("DYNAMODB_TABLE", "user_profiles"),
-		DynamoRegion:         getEnv("AWS_REGION", "us-east-1"),
-		Port:                 getEnv("PORT", "8082"),
+		DBHost:               pkgconfig.GetEnv("DB_HOST", "localhost"),
+		DBPort:               pkgconfig.GetEnv("DB_PORT", "5434"),
+		DBUser:               pkgconfig.GetEnv("DB_USER", "user_user"),
+		DBPassword:           pkgconfig.GetEnv("DB_PASSWORD", "user_pass"),
+		DBName:               pkgconfig.GetEnv("DB_NAME", "user_db"),
+		JWTSecret:            pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
+		AuthServiceURL:       pkgconfig.GetEnv("AUTH_SERVICE_URL", "http://localhost:8081"),
+		SchoolServiceURL:     pkgconfig.GetEnv("SCHOOL_SERVICE_URL", "http://localhost:8088"),
+		AcademicServiceURL:   pkgconfig.GetEnv("ACADEMIC_SERVICE_URL", "http://localhost:8083"),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
+		DynamoEndpoint:       pkgconfig.GetEnv("DYNAMODB_ENDPOINT", "http://localhost:8000"),
+		DynamoTable:          pkgconfig.GetEnv("DYNAMODB_TABLE", "user_profiles"),
+		DynamoRegion:         pkgconfig.GetEnv("AWS_REGION", "us-east-1"),
+		Port:                 pkgconfig.GetEnv("PORT", "8082"),
 	}
 }
 
 func (c *Config) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName,
-	)
-}
-
-func getEnv(key, fallback string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return fallback
+	return pkgconfig.Postgres{
+		Host:     c.DBHost,
+		Port:     c.DBPort,
+		User:     c.DBUser,
+		Password: c.DBPassword,
+		Name:     c.DBName,
+	}.DSN()
 }

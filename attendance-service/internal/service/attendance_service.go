@@ -8,7 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Archiit19/School-management/attendance-service/internal/apierrors"
+	"github.com/Archiit19/School-management/pkg/apierrors"
+	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
@@ -259,12 +260,10 @@ func (s *AttendanceService) GetAttendance(
 	requestingUserID uuid.UUID,
 	roleName, authHeader string,
 ) (*model.AttendanceListResponse, error) {
-	if query.Page < 1 {
-		query.Page = 1
-	}
-	if query.Limit < 1 || query.Limit > 100 {
-		query.Limit = 20
-	}
+	params := pagination.Params{Page: query.Page, Limit: query.Limit}
+	pagination.Normalize(&params, pagination.Options{})
+	query.Page = params.Page
+	query.Limit = params.Limit
 
 	if strings.TrimSpace(query.Date) != "" {
 		if _, err := time.Parse("2006-01-02", query.Date); err != nil {
@@ -595,12 +594,10 @@ func (s *AttendanceService) GetTeacherAttendance(
 	perms []string,
 	query model.TeacherAttendanceQuery,
 ) (*model.TeacherAttendanceListResponse, error) {
-	if query.Page < 1 {
-		query.Page = 1
-	}
-	if query.Limit < 1 || query.Limit > 100 {
-		query.Limit = 20
-	}
+	params := pagination.Params{Page: query.Page, Limit: query.Limit}
+	pagination.Normalize(&params, pagination.Options{})
+	query.Page = params.Page
+	query.Limit = params.Limit
 
 	if strings.TrimSpace(query.Date) != "" {
 		if _, err := time.Parse("2006-01-02", query.Date); err != nil {

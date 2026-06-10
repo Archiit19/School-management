@@ -8,7 +8,7 @@ import (
 
 	"github.com/Archiit19/School-management/exam-service/internal/config"
 	"github.com/Archiit19/School-management/exam-service/internal/handler"
-	"github.com/Archiit19/School-management/exam-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/repository"
 	"github.com/Archiit19/School-management/exam-service/internal/service"
@@ -55,7 +55,10 @@ func main() {
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	protected := r.Group("")
-	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
+	protected.Use(middleware.JWTAuth(cfg.JWTSecret,
+		middleware.WithUUIDClaim("class_id"),
+		middleware.WithUUIDClaim("section_id"),
+	))
 	{
 		protected.GET("/exams/me", middleware.RequirePermission("view_own_exams"), h.GetMyExams)
 		protected.GET("/exams", middleware.RequirePermission("view_exams"), h.GetExams)

@@ -1,24 +1,14 @@
 package handler
 
 import (
-	"errors"
 	"net/http"
 
-	"github.com/Archiit19/School-management/attendance-service/internal/apierrors"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/httputil"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
-
-func writeErr(c *gin.Context, err error) {
-	var he *apierrors.HTTP
-	if errors.As(err, &he) {
-		c.JSON(he.Status, gin.H{"error": he.Error()})
-		return
-	}
-	c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-}
 
 type AttendanceHandler struct {
 	svc *service.AttendanceService
@@ -52,7 +42,7 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 
 	record, err := h.svc.CreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -83,7 +73,7 @@ func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 
 	resp, err := h.svc.BulkCreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -119,7 +109,7 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	roleName := c.MustGet("role_name").(string)
 	resp, err := h.svc.GetAttendance(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -161,7 +151,7 @@ func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	resp, err := h.svc.GetAttendance(schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
@@ -197,7 +187,7 @@ func (h *AttendanceHandler) GetMyAttendanceStats(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	resp, err := h.svc.GetAttendanceStats(schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, resp)
@@ -234,7 +224,7 @@ func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 
 	record, err := h.svc.UpdateAttendance(id, req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -277,7 +267,7 @@ func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
 
 	record, err := h.svc.CreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -308,7 +298,7 @@ func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
 
 	resp, err := h.svc.BulkCreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -337,7 +327,7 @@ func (h *AttendanceHandler) GetTeacherAttendance(c *gin.Context) {
 
 	resp, err := h.svc.GetTeacherAttendance(schoolID, userID, roleName, permissionsFromContext(c), query)
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -375,7 +365,7 @@ func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
 
 	record, err := h.svc.UpdateTeacherAttendance(id, req, schoolID, userID, roleName)
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -410,7 +400,7 @@ func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
 
 	resp, err := h.svc.GetAttendanceStats(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 
@@ -442,7 +432,7 @@ func (h *AttendanceHandler) GetTeacherAttendanceStats(c *gin.Context) {
 
 	resp, err := h.svc.GetTeacherAttendanceStats(schoolID, userID, roleName, permissionsFromContext(c), query)
 	if err != nil {
-		writeErr(c, err)
+		httputil.WriteError(c, err)
 		return
 	}
 

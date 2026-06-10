@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/google/uuid"
 )
 
@@ -21,26 +21,15 @@ type schoolMembership struct {
 }
 
 type schoolClient struct {
-	baseURL string
-	token   string
-	client  *http.Client
+	*httpclient.Client
 }
 
 func newSchoolClient(cfg *config.Config) *schoolClient {
-	return &schoolClient{
-		baseURL: strings.TrimRight(cfg.SchoolServiceURL, "/"),
-		token:   cfg.InternalServiceToken,
-		client:  &http.Client{Timeout: 8 * time.Second},
-	}
+	return &schoolClient{Client: httpclient.New(cfg.SchoolServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *schoolClient) enabled() bool {
-	return c.baseURL != "" && strings.TrimSpace(c.token) != ""
-}
-
-func (c *schoolClient) do(req *http.Request) (*http.Response, error) {
-	req.Header.Set("X-Internal-Token", c.token)
-	return c.client.Do(req)
+	return c.BaseURL != "" && strings.TrimSpace(c.Token) != ""
 }
 
 func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phone, email string) (*model.School, error) {
@@ -60,13 +49,13 @@ func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phon
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/internal/schools/with-admin", bytes.NewBuffer(body))
+	req, err := http.NewRequest(http.MethodPost, c.URL("/internal/schools/with-admin"), bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("school-service unreachable: %w", err)
 	}
@@ -92,13 +81,13 @@ func (c *schoolClient) GetSchoolByEmail(email string) (*model.School, error) {
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/by-email?email=%s", c.baseURL, email)
+	url := c.URL(fmt.Sprintf("/internal/schools/by-email?email=%s", email))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -123,13 +112,13 @@ func (c *schoolClient) GetSchoolByID(id uuid.UUID) (*model.School, error) {
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/%s", c.baseURL, id.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/%s", id.String()))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -155,13 +144,13 @@ func (c *schoolClient) ListSchoolsForUser(userID uuid.UUID) ([]model.School, err
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/by-user/%s", c.baseURL, userID.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/by-user/%s", userID.String()))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -183,13 +172,13 @@ func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]schoolMembers
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/users/%s/memberships", c.baseURL, userID.String())
+	url := c.URL(fmt.Sprintf("/internal/users/%s/memberships", userID.String()))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -211,13 +200,13 @@ func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) (*schoolMembers
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/%s/members/%s", c.baseURL, schoolID.String(), userID.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String()))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -253,13 +242,13 @@ func (c *schoolClient) ListMembersForSchool(schoolID uuid.UUID) ([]schoolMembers
 		return nil, errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/%s/members", c.baseURL, schoolID.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/%s/members", schoolID.String()))
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -289,14 +278,14 @@ func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 		return err
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/%s/members", c.baseURL, schoolID.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/%s/members", schoolID.String()))
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
@@ -314,13 +303,13 @@ func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
 		return errors.New("school service is not configured")
 	}
 
-	url := fmt.Sprintf("%s/internal/schools/%s/members/%s", c.baseURL, schoolID.String(), userID.String())
+	url := c.URL(fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String()))
 	req, err := http.NewRequest(http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}

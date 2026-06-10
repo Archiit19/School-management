@@ -1,85 +1,55 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"strings"
-	"time"
 
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
 type schoolClient struct {
-	baseURL string
-	token   string
-	client  *http.Client
+	*httpclient.Client
 }
 
 func newSchoolClient(cfg *config.Config) *schoolClient {
-	return &schoolClient{
-		baseURL: strings.TrimRight(cfg.SchoolServiceURL, "/"),
-		token:   cfg.InternalServiceToken,
-		client:  &http.Client{Timeout: 8 * time.Second},
-	}
-}
-
-func (c *schoolClient) do(req *http.Request) (*http.Response, error) {
-	if c.token != "" {
-		req.Header.Set("X-Internal-Token", c.token)
-	}
-	return c.client.Do(req)
+	return &schoolClient{Client: httpclient.New(cfg.SchoolServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
-	payload := map[string]string{"user_id": userID.String()}
-	body, _ := json.Marshal(payload)
-	url := fmt.Sprintf("%s/internal/schools/%s/members", c.baseURL, schoolID.String())
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.do(req)
+	path := fmt.Sprintf("/internal/schools/%s/members", schoolID.String())
+	resp, err := c.DoJSON(http.MethodPost, path, map[string]string{"user_id": userID.String()}, nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusCreated {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("school add member status %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
+	return httpclient.CheckStatus(resp, http.StatusCreated, "school add member")
 }
 
 func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
-	url := fmt.Sprintf("%s/internal/schools/%s/members/%s", c.baseURL, schoolID.String(), userID.String())
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	path := fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String())
+	req, err := http.NewRequest(http.MethodDelete, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("school remove member status %d", resp.StatusCode)
-	}
-	return nil
+	return httpclient.CheckStatus(resp, http.StatusOK, "school remove member")
 }
 
 func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
-	url := fmt.Sprintf("%s/internal/schools/%s/members/%s", c.baseURL, schoolID.String(), userID.String())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	path := fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String())
+	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
@@ -87,25 +57,22 @@ func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
 	if resp.StatusCode == http.StatusNotFound {
 		return errors.New("not a member")
 	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("school get member status %d", resp.StatusCode)
-	}
-	return nil
+	return httpclient.CheckStatus(resp, http.StatusOK, "school get member")
 }
 
 func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error) {
-	url := fmt.Sprintf("%s/internal/schools/%s/members", c.baseURL, schoolID.String())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	path := fmt.Sprintf("/internal/schools/%s/members", schoolID.String())
+	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("school list members status %d", resp.StatusCode)
+	if err := httpclient.CheckStatus(resp, http.StatusOK, "school list members"); err != nil {
+		return nil, err
 	}
 	var rows []struct {
 		UserID uuid.UUID `json:"user_id"`
@@ -121,18 +88,18 @@ func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error
 }
 
 func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]uuid.UUID, error) {
-	url := fmt.Sprintf("%s/internal/users/%s/memberships", c.baseURL, userID.String())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	path := fmt.Sprintf("/internal/users/%s/memberships", userID.String())
+	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("school list memberships status %d", resp.StatusCode)
+	if err := httpclient.CheckStatus(resp, http.StatusOK, "school list memberships"); err != nil {
+		return nil, err
 	}
 	var rows []struct {
 		SchoolID uuid.UUID `json:"school_id"`

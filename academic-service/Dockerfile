@@ -1,11 +1,15 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-COPY go.mod go.sum ./
+COPY pkg/go.mod ./pkg/
+COPY pkg/ ./pkg/
+
+COPY academic-service/go.mod academic-service/go.sum ./academic-service/
+WORKDIR /build/academic-service
 RUN go mod download
 
-COPY . .
+COPY academic-service/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /academic-service ./cmd/main.go
 
 FROM alpine:3.19
