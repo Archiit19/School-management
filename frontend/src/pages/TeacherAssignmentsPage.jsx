@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { academicApi, rolesApi, userMgmtApi } from "../api/client";
+import PermGate from "../components/PermGate";
 import { useAuth } from "../context/AuthContext";
 
 function classNodeId(node) {
@@ -340,7 +341,7 @@ export default function TeacherAssignmentsPage() {
 
   async function handleUpdate(e) {
     e.preventDefault();
-    if (!editingAssignment) return;
+    if (!editingAssignment || !canAssignTeacher) return;
     setError("");
     setBusy(true);
     try {
@@ -361,6 +362,7 @@ export default function TeacherAssignmentsPage() {
   }
 
   async function handleRemove(assignment) {
+    if (!canAssignTeacher) return;
     const sub = subjectById.get(assignment.subject_id);
     const teacherName = teacherMap[assignment.teacher_user_id]?.name || "this teacher";
     const subjectName = sub?.name || "this subject";
@@ -618,28 +620,14 @@ export default function TeacherAssignmentsPage() {
               <button type="button" className="modal-close" onClick={closeEdit} aria-label="Close">&times;</button>
             </div>
             <form onSubmit={handleUpdate}>
-              <div className="form-group">
-                <label>Teacher</label>
-                {hasPerm("view_users") && teachers.length > 0 ? (
-                  <select
-                    required
-                    value={editForm.teacher_user_id}
-                    onChange={(e) => setEditForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
-                  >
-                    <option value="">Select teacher…</option>
-                    {teachers.filter((t) => t.is_active !== false).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name} — {t.email}</option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    required
-                    value={editForm.teacher_user_id}
-                    onChange={(e) => setEditForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
-                    placeholder="UUID of teacher user"
-                  />
-                )}
-              </div>
+              <TeacherSelectField
+                label="Teacher"
+                required
+                value={editForm.teacher_user_id}
+                teachers={assignFormTeachers}
+                lockedTeacher={lockedAssignTeacher}
+                onChange={(e) => setEditForm((p) => ({ ...p, teacher_user_id: e.target.value }))}
+              />
               <div className="grid-3">
                 <div className="form-group">
                   <label>Class</label>
