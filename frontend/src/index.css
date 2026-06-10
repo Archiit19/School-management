@@ -712,6 +712,75 @@ pre.json {
   color: #b91c1c;
 }
 
+/* ───────────── Parent picker (student create) ───────────── */
+.parent-picker {
+  position: relative;
+}
+
+.parent-picker-control {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.parent-picker-control input {
+  flex: 1;
+}
+
+.parent-picker-clear {
+  flex-shrink: 0;
+}
+
+.parent-picker-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  background: var(--clr-surface);
+  border: 1px solid var(--clr-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.parent-picker-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+
+.parent-picker-option:hover,
+.parent-picker-option.active {
+  background: #eff6ff;
+}
+
+.parent-picker-option-new {
+  font-weight: 600;
+  color: var(--clr-primary);
+  border-bottom: 1px solid var(--clr-border);
+}
+
+.parent-picker-empty {
+  padding: 12px;
+  color: var(--clr-text-secondary);
+  font-size: 13px;
+}
+
+.parent-picker-add {
+  background: #f8fafc;
+  border: 1px solid var(--clr-border);
+}
+
 /* ───────────── Utilities ───────────── */
 .mt-4 { margin-top: 16px; }
 .mb-4 { margin-bottom: 16px; }

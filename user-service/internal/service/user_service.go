@@ -161,7 +161,43 @@ func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]
 		data["student_code"] = code
 	}
 	data["admission_year"] = time.Now().Year()
+
+	parentIDStr := strings.TrimSpace(fmt.Sprint(data["parent_user_id"]))
+	if parentIDStr == "" || parentIDStr == "<nil>" {
+		return errors.New("parent is required for student role")
+	}
+	parentID, err := uuid.Parse(parentIDStr)
+	if err != nil {
+		return errors.New("invalid parent_user_id")
+	}
+	parentUser, err := s.validateParentUser(parentID, schoolID)
+	if err != nil {
+		return err
+	}
+	data["parent_user_id"] = parentID.String()
+	data["parent_name"] = parentUser.Name
 	return nil
+}
+
+func (s *UserService) validateParentUser(parentID, schoolID uuid.UUID) (*model.User, error) {
+	if err := s.school.GetMembership(schoolID, parentID); err != nil {
+		return nil, errors.New("parent user not found in this school")
+	}
+	parent, err := s.repo.GetByID(parentID)
+	if err != nil {
+		return nil, errors.New("parent user not found")
+	}
+	if !parent.IsActive {
+		return nil, errors.New("parent user account is inactive")
+	}
+	ur, err := s.auth.GetUserRole(parentID, schoolID)
+	if err != nil {
+		return nil, errors.New("parent role not found for user")
+	}
+	if !strings.EqualFold(ur.RoleName, "parent") {
+		return nil, errors.New("linked user must have the parent role")
+	}
+	return parent, nil
 }
 
 func (s *UserService) generateStudentCode(schoolID uuid.UUID, classID string, data map[string]interface{}) (string, error) {
@@ -408,6 +444,11 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 		fieldDefs, _ := s.auth.GetRoleFields(roleID)
 		if err := validateRoleData(fieldDefs, data); err != nil {
 			return nil, err
+		}
+		if strings.EqualFold(user.RoleName, "student") {
+			if err := s.enrichStudentRoleData(schoolID, data); err != nil {
+				return nil, err
+			}
 		}
 		if err := s.profiles.Save(id, roleID, schoolID, data); err != nil {
 			return nil, fmt.Errorf("failed to update role profile: %w", err)
