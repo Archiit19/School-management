@@ -36,8 +36,13 @@ export function AuthProvider({ children }) {
       .me()
       .then((data) => {
         if (cancelled) return;
-        setUser(data);
-        setPermissions(data.permissions || []);
+        const { token: refreshedToken, ...profile } = data;
+        setUser(profile);
+        setPermissions(profile.permissions || []);
+        if (refreshedToken && refreshedToken !== token) {
+          localStorage.setItem("token", refreshedToken);
+          setToken(refreshedToken);
+        }
       })
       .catch(() => {
         if (!cancelled) logout();

@@ -1,8 +1,54 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { attendanceApi, academicApi, studentApi } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 
 const STATUS_OPTIONS = ["present", "absent", "late", "excused"];
+
+function sectionsForAssignedClass(classNode, classId, teacherAssignments, isTeacher) {
+  if (!classNode) return [];
+  const sections = classNode.sections || [];
+  if (!isTeacher) return sections;
+  if (sections.length === 0) return [];
+
+  const subjects = classNode.subjects || [];
+  const assignedIds = new Set(
+    teacherAssignments.filter((ta) => ta.class_id === classId).map((ta) => ta.subject_id),
+  );
+  const hasClassWide = subjects.some((s) => assignedIds.has(s.id) && !s.section_id);
+  if (hasClassWide) return sections;
+
+  const sectionIds = new Set();
+  subjects.forEach((s) => {
+    if (assignedIds.has(s.id) && s.section_id) sectionIds.add(s.section_id);
+  });
+  return sections.filter((sec) => sectionIds.has(sec.id));
+}
+
+function subjectsForClassSection(classNode, classId, sectionId, teacherAssignments, isTeacher) {
+  if (!classNode) return [];
+  const subjects = classNode.subjects || [];
+  const sections = classNode.sections || [];
+  const hasSections = sections.length > 0;
+
+  if (!isTeacher) {
+    if (!hasSections) return subjects.filter((s) => !s.section_id);
+    if (!sectionId) return [];
+    return subjects.filter((s) => !s.section_id || s.section_id === sectionId);
+  }
+
+  const assignedIds = new Set(
+    teacherAssignments.filter((ta) => ta.class_id === classId).map((ta) => ta.subject_id),
+  );
+  return subjects.filter((s) => {
+    if (!assignedIds.has(s.id)) return false;
+    if (hasSections) {
+      if (!sectionId) return false;
+      if (!s.section_id) return true;
+      return s.section_id === sectionId;
+    }
+    return !s.section_id;
+  });
+}
 
 export default function AttendancePage() {
   const { user, hasPerm } = useAuth();
@@ -35,7 +81,7 @@ export default function AttendancePage() {
     <>
       <div className="page-header">
         <h1>Attendance</h1>
-        <p>Manage student and teacher attendance records.</p>
+        <p>Manage student and teacher attendance. Teachers choose class, then section, then subject (filtered to what they teach in that section).</p>
       </div>
 
       {error && <div className="alert alert-error">{error}</div>}
@@ -80,10 +126,20 @@ export default function AttendancePage() {
         />
       )}
       {tab === "history-student" && canStudentAttendance && (
-        <StudentHistoryTab classes={classes} setError={setError} />
+        <StudentHistoryTab
+          classes={classes}
+          teacherAssignments={teacherAssignments}
+          isTeacher={isTeacher}
+          setError={setError}
+        />
       )}
       {tab === "stats-student" && canStudentAttendance && (
-        <StudentStatsTab classes={classes} setError={setError} />
+        <StudentStatsTab
+          classes={classes}
+          teacherAssignments={teacherAssignments}
+          isTeacher={isTeacher}
+          setError={setError}
+        />
       )}
       {tab === "mark-teacher" && canTeacherAttendance && (
         <MarkTeacherAttendanceTab setError={setError} setSuccess={setSuccess} />
@@ -101,6 +157,7 @@ export default function AttendancePage() {
 function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setError, setSuccess }) {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSection, setSelectedSection] = useState("");
+  const [selectedSubject, setSelectedSubject] = useState("");
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [students, setStudents] = useState([]);
   const [statuses, setStatuses] = useState({});
@@ -108,14 +165,32 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
   const [busy, setBusy] = useState(false);
 
   const allClasses = classes.map((c) => c.class || c);
-  const allSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, className: (c.class || c).name })));
+  const classNode = useMemo(
+    () => classes.find((c) => (c.class || c).id === selectedClass),
+    [classes, selectedClass],
+  );
+  const classHasSections = (classNode?.sections || []).length > 0;
+
   const availableClasses = isTeacher
     ? allClasses.filter((c) => teacherAssignments.some((ta) => ta.class_id === c.id))
     : allClasses;
-  const availableSections = selectedClass ? allSections.filter((s) => s.class_id === selectedClass) : [];
+
+  const availableSections = useMemo(
+    () => sectionsForAssignedClass(classNode, selectedClass, teacherAssignments, isTeacher),
+    [classNode, selectedClass, teacherAssignments, isTeacher],
+  );
+
+  const availableSubjects = useMemo(
+    () => subjectsForClassSection(classNode, selectedClass, selectedSection, teacherAssignments, isTeacher),
+    [classNode, selectedClass, selectedSection, teacherAssignments, isTeacher],
+  );
+
+  const canPickSection = selectedClass && classHasSections;
+  const canPickSubject = selectedClass && (!classHasSections || selectedSection);
 
   const loadStudents = useCallback(async () => {
-    if (!selectedClass) return;
+    if (!selectedClass || !selectedSubject) return;
+    if (classHasSections && !selectedSection) return;
     setLoaded(false);
     setError("");
     try {
@@ -133,11 +208,19 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
     } catch (err) {
       setError(err.message);
     }
-  }, [selectedClass, selectedSection, setError]);
+  }, [selectedClass, selectedSection, selectedSubject, classHasSections, setError]);
 
   async function handleSubmit() {
     if (!date) {
       setError("Please select a date.");
+      return;
+    }
+    if (classHasSections && !selectedSection) {
+      setError("Please select a section.");
+      return;
+    }
+    if (!selectedSubject) {
+      setError("Please select a subject.");
       return;
     }
     if (students.length === 0) {
@@ -151,7 +234,7 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
         student_id: s.id,
         status: statuses[s.id] || "present",
       }));
-      const payload = { class_id: selectedClass, date, entries };
+      const payload = { class_id: selectedClass, subject_id: selectedSubject, date, entries };
       if (selectedSection) payload.section_id = selectedSection;
       const res = await attendanceApi.bulkCreate(payload);
       setSuccess(`Attendance saved: ${res.created} marked, ${res.skipped} skipped.`);
@@ -166,15 +249,16 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
   return (
     <>
       <div className="card">
-        <div className="card-title">Step 1: Select Class & Date</div>
-        <div className="grid-3">
+        <div className="card-title">Step 1: Select Class, Section, Subject & Date</div>
+        <div className="grid-4">
           <div className="form-group">
-            <label>Class {isTeacher && <span className="text-muted">(your assigned classes)</span>}</label>
+            <label>Class {isTeacher && <span className="text-muted">(assigned)</span>}</label>
             <select
               value={selectedClass}
               onChange={(e) => {
                 setSelectedClass(e.target.value);
                 setSelectedSection("");
+                setSelectedSubject("");
                 setLoaded(false);
                 setStudents([]);
               }}
@@ -188,19 +272,53 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
             </select>
           </div>
           <div className="form-group">
-            <label>Section (optional)</label>
+            <label>Section {isTeacher && classHasSections && <span className="text-muted">(you teach here)</span>}</label>
             <select
               value={selectedSection}
+              disabled={!canPickSection}
               onChange={(e) => {
                 setSelectedSection(e.target.value);
+                setSelectedSubject("");
                 setLoaded(false);
                 setStudents([]);
               }}
             >
-              <option value="">All sections</option>
+              <option value="">
+                {!selectedClass
+                  ? "Select class first…"
+                  : !classHasSections
+                    ? "No sections"
+                    : availableSections.length === 0
+                      ? "No assigned sections"
+                      : "Select section…"}
+              </option>
               {availableSections.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Subject {isTeacher && <span className="text-muted">(you teach)</span>}</label>
+            <select
+              value={selectedSubject}
+              disabled={!canPickSubject}
+              onChange={(e) => {
+                setSelectedSubject(e.target.value);
+                setLoaded(false);
+                setStudents([]);
+              }}
+            >
+              <option value="">
+                {!canPickSubject
+                  ? classHasSections ? "Select section first…" : "Select class first…"
+                  : availableSubjects.length === 0
+                    ? "No subjects for this section"
+                    : "Select subject…"}
+              </option>
+              {availableSubjects.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.name}
+                  {s.name}{s.code ? ` (${s.code})` : ""}
+                  {!s.section_id ? " — class-wide" : ""}
                 </option>
               ))}
             </select>
@@ -211,7 +329,11 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
           </div>
         </div>
         <div className="btn-row">
-          <button className="btn btn-primary" disabled={!selectedClass} onClick={loadStudents}>
+          <button
+            className="btn btn-primary"
+            disabled={!selectedClass || !selectedSubject || (classHasSections && !selectedSection)}
+            onClick={loadStudents}
+          >
             Load Students
           </button>
         </div>
@@ -295,24 +417,51 @@ function MarkStudentAttendanceTab({ classes, teacherAssignments, isTeacher, setE
   );
 }
 
-function StudentHistoryTab({ classes, setError }) {
+function StudentHistoryTab({ classes, teacherAssignments, isTeacher, setError }) {
   const [records, setRecords] = useState([]);
   const [total, setTotal] = useState(0);
-  const [query, setQuery] = useState({ page: 1, limit: 20, date: "", student_id: "", class_id: "", status: "" });
+  const [query, setQuery] = useState({ page: 1, limit: 20, date: "", student_id: "", class_id: "", section_id: "", subject_id: "", status: "" });
   const [editId, setEditId] = useState(null);
   const [editForm, setEditForm] = useState({ status: "present", remarks: "" });
   const [busy, setBusy] = useState(false);
   const flatClasses = classes.map((c) => c.class || c);
+  const availableClasses = isTeacher
+    ? flatClasses.filter((c) => teacherAssignments.some((ta) => ta.class_id === c.id))
+    : flatClasses;
+  const classNode = classes.find((c) => (c.class || c).id === query.class_id);
+  const classHasSections = (classNode?.sections || []).length > 0;
+  const availableSections = useMemo(
+    () => sectionsForAssignedClass(classNode, query.class_id, teacherAssignments, isTeacher),
+    [classNode, query.class_id, teacherAssignments, isTeacher],
+  );
+  const availableSubjects = useMemo(
+    () => subjectsForClassSection(classNode, query.class_id, query.section_id, teacherAssignments, isTeacher),
+    [classNode, query.class_id, query.section_id, teacherAssignments, isTeacher],
+  );
+  const subjectById = useMemo(() => {
+    const map = new Map();
+    classes.forEach((node) => {
+      (node.subjects || []).forEach((s) => map.set(s.id, s));
+    });
+    return map;
+  }, [classes]);
 
   const load = useCallback(async () => {
+    if (isTeacher && (!query.class_id || !query.subject_id || (classHasSections && !query.section_id))) {
+      setRecords([]);
+      setTotal(0);
+      return;
+    }
     try {
-      const res = await attendanceApi.list(query);
+      const q = { ...query };
+      if (!q.section_id) delete q.section_id;
+      const res = await attendanceApi.list(q);
       setRecords(res.attendance || []);
       setTotal(res.total || 0);
     } catch (err) {
       setError(err.message);
     }
-  }, [query, setError]);
+  }, [query, isTeacher, classHasSections, setError]);
 
   useEffect(() => {
     load();
@@ -334,6 +483,11 @@ function StudentHistoryTab({ classes, setError }) {
 
   return (
     <>
+      {isTeacher && (!query.class_id || !query.subject_id || (classHasSections && !query.section_id)) && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          Select class, section, and subject to view attendance for your assignments.
+        </div>
+      )}
       {editId && (
         <div className="card">
           <div className="card-title">Edit Student Attendance</div>
@@ -387,12 +541,41 @@ function StudentHistoryTab({ classes, setError }) {
           </div>
           <div className="form-group">
             <label>Class</label>
-            <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, page: 1 }))}>
-              <option value="">All</option>
-              {flatClasses.map((c) => (
+            <select
+              value={query.class_id}
+              onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, section_id: "", subject_id: "", page: 1 }))}
+            >
+              <option value="">{isTeacher ? "Select class…" : "All"}</option>
+              {availableClasses.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Section</label>
+            <select
+              value={query.section_id}
+              disabled={!query.class_id || !classHasSections}
+              onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value, subject_id: "", page: 1 }))}
+            >
+              <option value="">{isTeacher ? "Select section…" : "All"}</option>
+              {availableSections.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Subject</label>
+            <select
+              value={query.subject_id}
+              disabled={!query.class_id || (classHasSections && !query.section_id)}
+              onChange={(e) => setQuery((q) => ({ ...q, subject_id: e.target.value, page: 1 }))}
+            >
+              <option value="">{isTeacher ? "Select subject…" : "All"}</option>
+              {availableSubjects.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
           </div>
@@ -414,6 +597,7 @@ function StudentHistoryTab({ classes, setError }) {
               <tr>
                 <th>Date</th>
                 <th>Student ID</th>
+                <th>Subject</th>
                 <th>Status</th>
                 <th>Remarks</th>
                 <th>Teacher ID</th>
@@ -423,7 +607,7 @@ function StudentHistoryTab({ classes, setError }) {
             <tbody>
               {records.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="empty">
+                  <td colSpan={7} className="empty">
                     No records.
                   </td>
                 </tr>
@@ -434,6 +618,7 @@ function StudentHistoryTab({ classes, setError }) {
                   <td>
                     <span className="mono truncate">{r.student_id}</span>
                   </td>
+                  <td>{subjectById.get(r.subject_id)?.name || (r.subject_id ? "—" : "—")}</td>
                   <td>
                     <span className={`status status-${r.status}`}>{r.status}</span>
                   </td>
@@ -702,11 +887,13 @@ function TeacherHistoryTab({ setError }) {
   );
 }
 
-function StudentStatsTab({ classes, setError }) {
+function StudentStatsTab({ classes, teacherAssignments, isTeacher, setError }) {
   const today = new Date();
   const firstOfMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
   const [query, setQuery] = useState({
     class_id: "",
+    section_id: "",
+    subject_id: "",
     student_id: "",
     start_date: firstOfMonth,
     end_date: today.toISOString().split("T")[0],
@@ -715,11 +902,31 @@ function StudentStatsTab({ classes, setError }) {
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [loading, setLoading] = useState(false);
   const flatClasses = classes.map((c) => c.class || c);
+  const availableClasses = isTeacher
+    ? flatClasses.filter((c) => teacherAssignments.some((ta) => ta.class_id === c.id))
+    : flatClasses;
+  const classNode = classes.find((c) => (c.class || c).id === query.class_id);
+  const classHasSections = (classNode?.sections || []).length > 0;
+  const availableSections = useMemo(
+    () => sectionsForAssignedClass(classNode, query.class_id, teacherAssignments, isTeacher),
+    [classNode, query.class_id, teacherAssignments, isTeacher],
+  );
+  const availableSubjects = useMemo(
+    () => subjectsForClassSection(classNode, query.class_id, query.section_id, teacherAssignments, isTeacher),
+    [classNode, query.class_id, query.section_id, teacherAssignments, isTeacher],
+  );
 
   const load = useCallback(async () => {
+    if (isTeacher && (!query.class_id || !query.subject_id || (classHasSections && !query.section_id))) {
+      setStats([]);
+      setDateRange({ start: "", end: "" });
+      return;
+    }
     setLoading(true);
     try {
-      const res = await attendanceApi.stats(query);
+      const q = { ...query };
+      if (!q.section_id) delete q.section_id;
+      const res = await attendanceApi.stats(q);
       setStats(res.stats || []);
       setDateRange({ start: res.start_date, end: res.end_date });
     } catch (err) {
@@ -727,7 +934,7 @@ function StudentStatsTab({ classes, setError }) {
     } finally {
       setLoading(false);
     }
-  }, [query, setError]);
+  }, [query, isTeacher, classHasSections, setError]);
 
   useEffect(() => {
     load();
@@ -736,13 +943,44 @@ function StudentStatsTab({ classes, setError }) {
   return (
     <div className="card">
       <div className="card-title">Student Attendance Statistics</div>
+      {isTeacher && (!query.class_id || !query.subject_id || (classHasSections && !query.section_id)) && (
+        <div className="alert alert-error" style={{ marginBottom: 16 }}>
+          Select class, section, and subject to view stats for your assignments.
+        </div>
+      )}
       <div className="grid-4 mb-4">
         <div className="form-group">
           <label>Class</label>
-          <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value }))}>
-            <option value="">All Classes</option>
-            {flatClasses.map((c) => (
+          <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value, section_id: "", subject_id: "" }))}>
+            <option value="">{isTeacher ? "Select class…" : "All Classes"}</option>
+            {availableClasses.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Section</label>
+          <select
+            value={query.section_id}
+            disabled={!query.class_id || !classHasSections}
+            onChange={(e) => setQuery((q) => ({ ...q, section_id: e.target.value, subject_id: "" }))}
+          >
+            <option value="">{isTeacher ? "Select section…" : "All"}</option>
+            {availableSections.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Subject</label>
+          <select
+            value={query.subject_id}
+            disabled={!query.class_id || (classHasSections && !query.section_id)}
+            onChange={(e) => setQuery((q) => ({ ...q, subject_id: e.target.value }))}
+          >
+            <option value="">{isTeacher ? "Select subject…" : "All"}</option>
+            {availableSubjects.map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
           </select>
         </div>

@@ -58,7 +58,7 @@ export default function App() {
             <Route path="roles" element={<RequirePerm any={["create_role", "manage_permissions"]}><RolesPage /></RequirePerm>} />
             <Route path="academic" element={<RequirePerm any={["create_class", "create_section", "create_subject", "view_academic"]}><AcademicPage /></RequirePerm>} />
             <Route path="students" element={<Navigate to="/users" replace />} />
-            <Route path="teacher-assignments" element={<RequirePerm any={["assign_teacher"]}><TeacherAssignmentsPage /></RequirePerm>} />
+            <Route path="teacher-assignments" element={<RequirePerm any={["assign_teacher", "view_academic"]}><TeacherAssignmentsPage /></RequirePerm>} />
             <Route path="attendance" element={<RequirePerm any={["mark_attendance", "view_attendance", "mark_teacher_attendance", "view_teacher_attendance", "mark_own_teacher_attendance"]}><AttendancePage /></RequirePerm>} />
             <Route path="assignments" element={<RequirePerm any={["create_assignment", "view_assignments", "submit_assignment"]}><AssignmentsPage /></RequirePerm>} />
             <Route path="exams" element={<RequirePerm any={["create_exam", "view_exams", "enter_marks", "publish_results", "view_results"]}><ExamsPage /></RequirePerm>} />
