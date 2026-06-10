@@ -1,14 +1,17 @@
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-COPY go.mod go.sum ./
+COPY pkg/go.mod ./pkg/
+COPY pkg/ ./pkg/
+
+COPY user-service/go.mod user-service/go.sum ./user-service/
+WORKDIR /build/user-service
 RUN go mod download
 
-COPY . .
+COPY user-service/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /user-service ./cmd/main.go
 
-# ─── Runtime ─────────────────────────────────────────────────────────
 FROM alpine:3.19
 
 RUN apk --no-cache add ca-certificates

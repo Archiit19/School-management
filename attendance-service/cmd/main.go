@@ -8,7 +8,7 @@ import (
 
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/handler"
-	"github.com/Archiit19/School-management/attendance-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"

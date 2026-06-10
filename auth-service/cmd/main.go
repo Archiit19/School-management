@@ -6,7 +6,7 @@ import (
 
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/handler"
-	"github.com/Archiit19/School-management/auth-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/auth-service/internal/migrate"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
@@ -97,8 +97,13 @@ func main() {
 		auth.POST("/login", authHandler.Login)
 	}
 
+	jwtAuth := middleware.JWTAuth(cfg.JWTSecret,
+		middleware.WithUUIDClaim("role_id"),
+		middleware.WithStringClaim("email"),
+	)
+
 	authProtected := r.Group("/auth")
-	authProtected.Use(middleware.JWTAuth(cfg.JWTSecret))
+	authProtected.Use(jwtAuth)
 	{
 		authProtected.GET("/me", authHandler.GetMe)
 		authProtected.PATCH("/me", authHandler.UpdateProfile)
@@ -117,7 +122,7 @@ func main() {
 	}
 
 	protected := api.Group("")
-	protected.Use(middleware.JWTAuth(cfg.JWTSecret))
+	protected.Use(jwtAuth)
 	{
 		protected.POST("/roles", middleware.RequirePermission("create_role"), rbacHandler.CreateRole)
 		protected.GET("/roles", rbacHandler.GetRoles)

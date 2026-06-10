@@ -8,7 +8,7 @@ import (
 
 	"github.com/Archiit19/School-management/student-service/internal/config"
 	"github.com/Archiit19/School-management/student-service/internal/handler"
-	"github.com/Archiit19/School-management/student-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/student-service/internal/model"
 	"github.com/Archiit19/School-management/student-service/internal/repository"
 	"github.com/Archiit19/School-management/student-service/internal/service"

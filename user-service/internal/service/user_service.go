@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/Archiit19/School-management/user-service/internal/model"
 	"github.com/Archiit19/School-management/user-service/internal/repository"
@@ -180,19 +181,14 @@ func (s *UserService) generateStudentCode(schoolID uuid.UUID, classID string, da
 }
 
 func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*model.UserListResponse, error) {
-	if query.Page < 1 {
-		query.Page = 1
-	}
-	if query.Limit < 1 {
-		query.Limit = 20
-	}
+	params := pagination.Params{Page: query.Page, Limit: query.Limit}
 	if query.IDs != "" {
-		if query.Limit > 200 {
-			query.Limit = 200
-		}
-	} else if query.Limit > 100 {
-		query.Limit = 100
+		pagination.Normalize(&params, pagination.Options{MaxLimit: 200})
+	} else {
+		pagination.Normalize(&params, pagination.Options{MaxLimit: 100})
 	}
+	query.Page = params.Page
+	query.Limit = params.Limit
 
 	memberIDs, err := s.school.ListMemberUserIDs(schoolID)
 	if err != nil {

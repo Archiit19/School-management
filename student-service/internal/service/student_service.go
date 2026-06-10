@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/student-service/internal/config"
 	"github.com/Archiit19/School-management/student-service/internal/model"
 	"github.com/Archiit19/School-management/student-service/internal/repository"
@@ -174,12 +175,10 @@ func (s *StudentService) GetStudents(
 	schoolID uuid.UUID,
 	query model.StudentListQuery,
 ) (*model.StudentListResponse, error) {
-	if query.Page < 1 {
-		query.Page = 1
-	}
-	if query.Limit < 1 || query.Limit > 100 {
-		query.Limit = 20
-	}
+	params := pagination.Params{Page: query.Page, Limit: query.Limit}
+	pagination.Normalize(&params, pagination.Options{})
+	query.Page = params.Page
+	query.Limit = params.Limit
 
 	students, total, err := s.repo.GetStudentsBySchoolID(schoolID, query)
 	if err != nil {

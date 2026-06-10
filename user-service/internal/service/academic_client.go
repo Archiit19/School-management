@@ -1,30 +1,26 @@
 package service
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
 type academicClient struct {
-	baseURL string
-	token   string
-	client  *http.Client
+	*httpclient.Client
 }
 
 func newAcademicClient(cfg *config.Config, client *http.Client) *academicClient {
-	return &academicClient{
-		baseURL: strings.TrimRight(cfg.AcademicServiceURL, "/"),
-		token:   cfg.InternalServiceToken,
-		client:  client,
+	if client == nil {
+		return &academicClient{Client: httpclient.New(cfg.AcademicServiceURL, cfg.InternalServiceToken)}
 	}
+	return &academicClient{Client: httpclient.NewWithHTTP(cfg.AcademicServiceURL, cfg.InternalServiceToken, client)}
 }
 
 type studentEnrollment struct {
@@ -42,33 +38,21 @@ func (c *academicClient) UpsertEnrollment(userID, schoolID uuid.UUID, classID st
 	if strings.TrimSpace(sectionID) != "" {
 		body["section_id"] = sectionID
 	}
-	raw, _ := json.Marshal(body)
-	req, err := http.NewRequest(http.MethodPost, c.baseURL+"/internal/enrollments", bytes.NewReader(raw))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Internal-Token", c.token)
-	resp, err := c.client.Do(req)
+	resp, err := c.DoJSON(http.MethodPost, "/internal/enrollments", body, nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("academic upsert enrollment status %d: %s", resp.StatusCode, string(b))
-	}
-	return nil
+	return httpclient.CheckStatus(resp, http.StatusOK, "academic upsert enrollment")
 }
 
 func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnrollment, error) {
-	u := fmt.Sprintf("%s/internal/enrollments/%s?school_id=%s", c.baseURL, userID.String(), url.QueryEscape(schoolID.String()))
-	req, err := http.NewRequest(http.MethodGet, u, nil)
+	path := fmt.Sprintf("/internal/enrollments/%s?school_id=%s", userID.String(), url.QueryEscape(schoolID.String()))
+	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("X-Internal-Token", c.token)
-	resp, err := c.client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -76,8 +60,8 @@ func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnro
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
 	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("academic get enrollment status %d", resp.StatusCode)
+	if err := httpclient.CheckStatus(resp, http.StatusOK, "academic get enrollment"); err != nil {
+		return nil, err
 	}
 	var row studentEnrollment
 	if err := json.NewDecoder(resp.Body).Decode(&row); err != nil {
@@ -87,19 +71,15 @@ func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnro
 }
 
 func (c *academicClient) DeleteEnrollment(userID, schoolID uuid.UUID) error {
-	u := fmt.Sprintf("%s/internal/enrollments/%s?school_id=%s", c.baseURL, userID.String(), url.QueryEscape(schoolID.String()))
-	req, err := http.NewRequest(http.MethodDelete, u, nil)
+	path := fmt.Sprintf("/internal/enrollments/%s?school_id=%s", userID.String(), url.QueryEscape(schoolID.String()))
+	req, err := http.NewRequest(http.MethodDelete, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("X-Internal-Token", c.token)
-	resp, err := c.client.Do(req)
+	resp, err := c.Do(req)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusNotFound {
-		return fmt.Errorf("academic delete enrollment status %d", resp.StatusCode)
-	}
-	return nil
+	return httpclient.CheckStatusAny(resp, "academic delete enrollment", http.StatusOK, http.StatusNotFound)
 }

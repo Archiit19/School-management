@@ -6,7 +6,7 @@ import (
 
 	"github.com/Archiit19/School-management/finance-service/internal/config"
 	"github.com/Archiit19/School-management/finance-service/internal/handler"
-	"github.com/Archiit19/School-management/finance-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/repository"
 	"github.com/Archiit19/School-management/finance-service/internal/service"

@@ -9,7 +9,37 @@ import (
 	"github.com/google/uuid"
 )
 
-func JWTAuth(jwtSecret string) gin.HandlerFunc {
+const InternalTokenHeader = "X-Internal-Token"
+
+// JWTOption configures optional JWT claim extraction.
+type JWTOption func(*jwtSettings)
+
+type jwtSettings struct {
+	uuidClaims   []string
+	stringClaims []string
+}
+
+// WithUUIDClaim parses claim as UUID and stores it in gin context under the same key.
+func WithUUIDClaim(claim string) JWTOption {
+	return func(s *jwtSettings) {
+		s.uuidClaims = append(s.uuidClaims, claim)
+	}
+}
+
+// WithStringClaim copies a string claim into gin context under the same key.
+func WithStringClaim(claim string) JWTOption {
+	return func(s *jwtSettings) {
+		s.stringClaims = append(s.stringClaims, claim)
+	}
+}
+
+// JWTAuth validates Bearer JWT and injects standard claims into context.
+func JWTAuth(jwtSecret string, opts ...JWTOption) gin.HandlerFunc {
+	settings := jwtSettings{}
+	for _, opt := range opts {
+		opt(&settings)
+	}
+
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -23,8 +53,7 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 			return
 		}
 
-		tokenStr := parts[1]
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (interface{}, error) {
+		token, err := jwt.Parse(parts[1], func(t *jwt.Token) (interface{}, error) {
 			if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrSignatureInvalid
 			}
@@ -52,76 +81,28 @@ func JWTAuth(jwtSecret string) gin.HandlerFunc {
 		c.Set("school_id", schoolID)
 		c.Set("role_name", roleName)
 		c.Set("permissions", parsePermissions(claims))
+
 		if sidStr, ok := claims["student_id"].(string); ok && sidStr != "" {
 			if sid, err := uuid.Parse(sidStr); err == nil {
 				c.Set("student_id", sid)
 			}
 		}
-		c.Next()
-	}
-}
 
-// RequirePermission checks that the user's role has the required permission.
-// super_admin bypasses all permission checks.
-func RequirePermission(required string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		roleName, _ := c.Get("role_name")
-		if roleName == "super_admin" {
-			c.Next()
-			return
-		}
-
-		perms, exists := c.Get("permissions")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "no permissions found"})
-			return
-		}
-
-		permList, ok := perms.([]string)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid permissions data"})
-			return
-		}
-
-		for _, p := range permList {
-			if p == required {
-				c.Next()
-				return
-			}
-		}
-
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "permission denied, requires: " + required,
-		})
-	}
-}
-
-func RequireAnyPermission(required ...string) gin.HandlerFunc {
-	return func(c *gin.Context) {
-		roleName, _ := c.Get("role_name")
-		if roleName == "super_admin" {
-			c.Next()
-			return
-		}
-		perms, exists := c.Get("permissions")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "no permissions found"})
-			return
-		}
-		permList, ok := perms.([]string)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "invalid permissions data"})
-			return
-		}
-		for _, required := range required {
-			for _, p := range permList {
-				if p == required {
-					c.Next()
-					return
+		for _, claim := range settings.uuidClaims {
+			if val, ok := claims[claim].(string); ok && val != "" {
+				if id, err := uuid.Parse(val); err == nil {
+					c.Set(claim, id)
 				}
 			}
 		}
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "permission denied"})
+
+		for _, claim := range settings.stringClaims {
+			if val, ok := claims[claim].(string); ok {
+				c.Set(claim, val)
+			}
+		}
+
+		c.Next()
 	}
 }
 

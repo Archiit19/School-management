@@ -1,11 +1,15 @@
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-COPY go.mod go.sum ./
+COPY pkg/go.mod ./pkg/
+COPY pkg/ ./pkg/
+
+COPY attendance-service/go.mod attendance-service/go.sum ./attendance-service/
+WORKDIR /build/attendance-service
 RUN go mod download
 
-COPY . .
+COPY attendance-service/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -o /attendance-service ./cmd/main.go
 
 FROM alpine:3.19

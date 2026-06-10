@@ -8,7 +8,8 @@ import (
 	"github.com/Archiit19/School-management/school-service/internal/config"
 	"github.com/Archiit19/School-management/school-service/internal/handler"
 	"github.com/Archiit19/School-management/school-service/internal/migrate"
-	"github.com/Archiit19/School-management/school-service/internal/middleware"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/school-service/internal/middleware/schoolmw"
 	"github.com/Archiit19/School-management/school-service/internal/model"
 	"github.com/Archiit19/School-management/school-service/internal/repository"
 	"github.com/Archiit19/School-management/school-service/internal/service"
@@ -77,7 +78,7 @@ func main() {
 		protected.PATCH("/schools/me", middleware.RequirePermission("manage_school"), h.UpdateMySchool)
 
 		adminSchool := protected.Group("/schools/:id")
-		adminSchool.Use(middleware.RequireSchoolAdmin(svc))
+		adminSchool.Use(schoolmw.RequireSchoolAdmin(svc))
 		{
 			adminSchool.GET("", middleware.RequirePermission("view_school"), h.GetSchool)
 			adminSchool.PATCH("", middleware.RequirePermission("manage_school"), h.UpdateSchool)

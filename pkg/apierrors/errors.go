@@ -34,3 +34,11 @@ func NotFound(msg string) error {
 func ServiceUnavailable(msg string) error {
 	return &HTTP{Status: http.StatusServiceUnavailable, Msg: msg}
 }
+
+func Unauthorized(msg string) error {
+	return &HTTP{Status: http.StatusUnauthorized, Msg: msg}
+}
+
+func Internal(msg string) error {
+	return &HTTP{Status: http.StatusInternalServerError, Msg: msg}
+}

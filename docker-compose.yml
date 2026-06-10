@@ -156,8 +156,8 @@ services:
   # ──────────────────────────────────────
   auth-service:
     build:
-      context: ./auth-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: auth-service/Dockerfile
     container_name: auth-service
     ports:
       - "8081:8081"
@@ -181,8 +181,8 @@ services:
   # ──────────────────────────────────────
   user-service:
     build:
-      context: ./user-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: user-service/Dockerfile
     container_name: user-service
     ports:
       - "8082:8082"
@@ -212,8 +212,8 @@ services:
   # ──────────────────────────────────────
   academic-service:
     build:
-      context: ./academic-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: academic-service/Dockerfile
     container_name: academic-service
     ports:
       - "8083:8083"
@@ -236,8 +236,8 @@ services:
   # ──────────────────────────────────────
   attendance-service:
     build:
-      context: ./attendance-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: attendance-service/Dockerfile
     container_name: attendance-service
     ports:
       - "8085:8085"
@@ -265,8 +265,8 @@ services:
   # ──────────────────────────────────────
   exam-service:
     build:
-      context: ./exam-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: exam-service/Dockerfile
     container_name: exam-service
     ports:
       - "8086:8086"
@@ -289,8 +289,8 @@ services:
   # ──────────────────────────────────────
   finance-service:
     build:
-      context: ./finance-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: finance-service/Dockerfile
     container_name: finance-service
     ports:
       - "8087:8087"
@@ -311,8 +311,8 @@ services:
   # ──────────────────────────────────────
   school-service:
     build:
-      context: ./school-service
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: school-service/Dockerfile
     container_name: school-service
     ports:
       - "8088:8088"

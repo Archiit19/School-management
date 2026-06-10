@@ -1,9 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"os"
-)
+import pkgconfig "github.com/Archiit19/School-management/pkg/config"
 
 type Config struct {
 	DBHost               string
@@ -19,28 +16,24 @@ type Config struct {
 
 func Load() *Config {
 	return &Config{
-		DBHost:               getEnv("DB_HOST", "localhost"),
-		DBPort:               getEnv("DB_PORT", "5435"),
-		DBUser:               getEnv("DB_USER", "academic_user"),
-		DBPassword:           getEnv("DB_PASSWORD", "academic_pass"),
-		DBName:               getEnv("DB_NAME", "academic_db"),
-		JWTSecret:            getEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
-		Port:                 getEnv("PORT", "8083"),
-		UserServiceURL:       getEnv("USER_SERVICE_URL", "http://user-service:8082"),
-		InternalServiceToken: getEnv("INTERNAL_SERVICE_TOKEN", ""),
+		DBHost:               pkgconfig.GetEnv("DB_HOST", "localhost"),
+		DBPort:               pkgconfig.GetEnv("DB_PORT", "5435"),
+		DBUser:               pkgconfig.GetEnv("DB_USER", "academic_user"),
+		DBPassword:           pkgconfig.GetEnv("DB_PASSWORD", "academic_pass"),
+		DBName:               pkgconfig.GetEnv("DB_NAME", "academic_db"),
+		JWTSecret:            pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
+		Port:                 pkgconfig.GetEnv("PORT", "8083"),
+		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
 
 func (c *Config) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		c.DBHost, c.DBPort, c.DBUser, c.DBPassword, c.DBName,
-	)
-}
-
-func getEnv(key, fallback string) string {
-	if val := os.Getenv(key); val != "" {
-		return val
-	}
-	return fallback
+	return pkgconfig.Postgres{
+		Host:     c.DBHost,
+		Port:     c.DBPort,
+		User:     c.DBUser,
+		Password: c.DBPassword,
+		Name:     c.DBName,
+	}.DSN()
 }
