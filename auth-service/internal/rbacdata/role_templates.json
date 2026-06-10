@@ -29,7 +29,7 @@
   },
   {
     "name": "parent",
-    "description": "Parent / guardian — view and submit for their children",
+    "description": "Parent / guardian — view their children's school information via My Portal",
     "permissions": [
       "view_own_profile",
       "view_own_attendance",
@@ -37,12 +37,7 @@
       "view_own_results",
       "view_own_assignments",
       "view_own_submissions",
-      "submit_own_assignment",
-      "view_own_dues",
-      "view_assignments",
-      "submit_assignment",
-      "view_results",
-      "view_students"
+      "view_own_dues"
     ]
   },
   {

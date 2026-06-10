@@ -65,6 +65,25 @@ func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 			}
 		}
 
+		if !(len(t.Permissions) == 1 && t.Permissions[0] == "*") {
+			desired := make(map[uuid.UUID]struct{}, len(permIDs))
+			for _, pid := range permIDs {
+				desired[pid] = struct{}{}
+			}
+			current, err := s.repo.GetPermissionsByRoleID(role.ID)
+			if err != nil {
+				return uuid.Nil, fmt.Errorf("list permissions for role %q: %w", t.Name, err)
+			}
+			for _, p := range current {
+				if _, ok := desired[p.ID]; ok {
+					continue
+				}
+				if err := s.repo.RemovePermissionFromRole(role.ID, p.ID); err != nil {
+					return uuid.Nil, fmt.Errorf("remove stale permission from role %q: %w", t.Name, err)
+				}
+			}
+		}
+
 		if err := s.bootstrapRoleFields(role.ID, t.Name); err != nil {
 			log.Printf("rbac bootstrap: role fields for %q: %v", t.Name, err)
 		}

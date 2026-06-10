@@ -20,6 +20,11 @@ const SCHOOL_NAV = [
   { to: "/finance", icon: "dollar-sign", label: "Finance", perms: ["create_fee", "record_payment", "view_dues"] },
 ];
 
+const PARENT_NAV = [
+  { to: "/", icon: "grid", label: "Dashboard" },
+  { to: "/me", icon: "user-check", label: "My Portal" },
+];
+
 function Icon({ name }) {
   return <span className="nav-icon" data-icon={name} />;
 }
@@ -44,11 +49,13 @@ export default function Layout() {
   }
 
   const showPlatformNav = !loading && isPlatformAdmin;
-  const navSource = showPlatformNav ? PLATFORM_NAV : SCHOOL_NAV;
+  const isParent = user?.role_name === "parent";
+  const navSource = showPlatformNav ? PLATFORM_NAV : isParent ? PARENT_NAV : SCHOOL_NAV;
 
   const visibleNav = navSource.filter((item) => {
+    if (isParent) return true;
     if (item.to === "/me") {
-      return user?.role_name === "student" || user?.role_name === "parent";
+      return user?.role_name === "student";
     }
     if (!item.perms) return true;
     return item.perms.some((p) => hasPerm(p));
