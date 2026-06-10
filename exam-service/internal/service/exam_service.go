@@ -173,7 +173,11 @@ func (s *ExamService) GetMyExams(
 	if strings.TrimSpace(authHeader) == "" {
 		return nil, errors.New("missing authorization header")
 	}
-	url := strings.TrimRight(s.cfg.AcademicServiceURL, "/") + "/enrollments/me"
+	url := fmt.Sprintf(
+		"%s/enrollments/me?student_id=%s",
+		strings.TrimRight(s.cfg.AcademicServiceURL, "/"),
+		studentID.String(),
+	)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
