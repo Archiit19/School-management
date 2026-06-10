@@ -73,6 +73,8 @@ func main() {
 		protected.GET("/classes", middleware.RequirePermission("view_academic"), h.GetClasses)
 		protected.POST("/teacher-assignments", middleware.RequirePermission("assign_teacher"), h.CreateTeacherAssignment)
 		protected.GET("/teacher-assignments", middleware.RequirePermission("view_academic"), h.GetTeacherAssignments)
+		protected.PATCH("/teacher-assignments/:id", middleware.RequirePermission("assign_teacher"), h.UpdateTeacherAssignment)
+		protected.DELETE("/teacher-assignments/:id", middleware.RequirePermission("assign_teacher"), h.DeleteTeacherAssignment)
 		protected.GET("/academic/me", middleware.RequirePermission("view_own_profile"), h.GetMyAcademicProfile)
 		protected.GET("/enrollments/me", middleware.RequirePermission("view_own_profile"), eh.GetMyEnrollment)
 		protected.GET("/enrollments", middleware.RequireAnyPermission("view_students", "mark_attendance", "view_academic", "enter_marks"), eh.ListEnrollments)

@@ -100,6 +100,12 @@ type CreateTeacherAssignmentRequest struct {
 	SubjectID     string `json:"subject_id" binding:"required,uuid"`
 }
 
+type UpdateTeacherAssignmentRequest struct {
+	TeacherUserID *string `json:"teacher_user_id" binding:"omitempty,uuid"`
+	ClassID       *string `json:"class_id" binding:"omitempty,uuid"`
+	SubjectID     *string `json:"subject_id" binding:"omitempty,uuid"`
+}
+
 type TeacherAssignmentQuery struct {
 	TeacherUserID string `form:"teacher_user_id"`
 	ClassID       string `form:"class_id"`

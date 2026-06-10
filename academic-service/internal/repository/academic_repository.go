@@ -142,6 +142,22 @@ func (r *AcademicRepository) GetTeacherAssignments(
 	return assignments, err
 }
 
+func (r *AcademicRepository) GetTeacherAssignmentByIDAndSchool(
+	id, schoolID uuid.UUID,
+) (*model.TeacherAssignment, error) {
+	var assignment model.TeacherAssignment
+	err := r.db.Where("id = ? AND school_id = ?", id, schoolID).First(&assignment).Error
+	return &assignment, err
+}
+
+func (r *AcademicRepository) UpdateTeacherAssignment(assignment *model.TeacherAssignment) error {
+	return r.db.Save(assignment).Error
+}
+
+func (r *AcademicRepository) DeleteTeacherAssignment(id, schoolID uuid.UUID) error {
+	return r.db.Where("id = ? AND school_id = ?", id, schoolID).Delete(&model.TeacherAssignment{}).Error
+}
+
 func (r *AcademicRepository) CreateAssignment(assignment *model.Assignment) error {
 	return r.db.Create(assignment).Error
 }

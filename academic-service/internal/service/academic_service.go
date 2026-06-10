@@ -233,6 +233,108 @@ func (s *AcademicService) GetTeacherAssignments(
 	return assignments, nil
 }
 
+func (s *AcademicService) UpdateTeacherAssignment(
+	id uuid.UUID,
+	req model.UpdateTeacherAssignmentRequest,
+	schoolID uuid.UUID,
+	authHeader string,
+) (*model.TeacherAssignment, error) {
+	assignment, err := s.repo.GetTeacherAssignmentByIDAndSchool(id, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("teacher assignment not found")
+		}
+		return nil, fmt.Errorf("failed to fetch teacher assignment: %w", err)
+	}
+
+	teacherUserID := assignment.TeacherUserID
+	classID := assignment.ClassID
+	subjectID := assignment.SubjectID
+
+	if req.TeacherUserID != nil && strings.TrimSpace(*req.TeacherUserID) != "" {
+		parsed, err := uuid.Parse(*req.TeacherUserID)
+		if err != nil {
+			return nil, errors.New("invalid teacher_user_id")
+		}
+		teacherUserID = parsed
+	}
+	if req.ClassID != nil && strings.TrimSpace(*req.ClassID) != "" {
+		parsed, err := uuid.Parse(*req.ClassID)
+		if err != nil {
+			return nil, errors.New("invalid class_id")
+		}
+		classID = parsed
+	}
+	if req.SubjectID != nil && strings.TrimSpace(*req.SubjectID) != "" {
+		parsed, err := uuid.Parse(*req.SubjectID)
+		if err != nil {
+			return nil, errors.New("invalid subject_id")
+		}
+		subjectID = parsed
+	}
+
+	if req.TeacherUserID == nil && req.ClassID == nil && req.SubjectID == nil {
+		return nil, errors.New("at least one field must be provided to update")
+	}
+
+	_, err = s.repo.GetClassByIDAndSchool(classID, schoolID)
+	if err != nil {
+		return nil, errors.New("class not found")
+	}
+
+	subject, err := s.repo.GetSubjectByIDAndSchool(subjectID, schoolID)
+	if err != nil {
+		return nil, errors.New("subject not found")
+	}
+	if subject.ClassID != classID {
+		return nil, errors.New("subject does not belong to the selected class")
+	}
+
+	if err := s.validateTeacher(authHeader, teacherUserID, schoolID); err != nil {
+		return nil, err
+	}
+
+	existingBySubject, err := s.repo.GetTeacherAssignmentByClassSubject(schoolID, classID, subjectID)
+	if err == nil && existingBySubject.ID != id {
+		return nil, errors.New("this subject already has a teacher assigned for this class")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate subject assignment: %w", err)
+	}
+
+	existingComposite, err := s.repo.GetTeacherAssignmentByComposite(schoolID, teacherUserID, classID, subjectID)
+	if err == nil && existingComposite.ID != id {
+		return nil, errors.New("teacher assignment already exists")
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to validate assignment uniqueness: %w", err)
+	}
+
+	assignment.TeacherUserID = teacherUserID
+	assignment.ClassID = classID
+	assignment.SubjectID = subjectID
+
+	if err := s.repo.UpdateTeacherAssignment(assignment); err != nil {
+		return nil, fmt.Errorf("failed to update teacher assignment: %w", err)
+	}
+
+	return assignment, nil
+}
+
+func (s *AcademicService) DeleteTeacherAssignment(id, schoolID uuid.UUID) error {
+	_, err := s.repo.GetTeacherAssignmentByIDAndSchool(id, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("teacher assignment not found")
+		}
+		return fmt.Errorf("failed to fetch teacher assignment: %w", err)
+	}
+	if err := s.repo.DeleteTeacherAssignment(id, schoolID); err != nil {
+		return fmt.Errorf("failed to delete teacher assignment: %w", err)
+	}
+	return nil
+}
+
 func (s *AcademicService) CreateAssignment(
 	req model.CreateAssignmentRequest,
 	schoolID, requestingUserID uuid.UUID,
