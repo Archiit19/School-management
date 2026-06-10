@@ -7,6 +7,7 @@ import (
 	"github.com/Archiit19/School-management/finance-service/internal/config"
 	"github.com/Archiit19/School-management/finance-service/internal/handler"
 	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/repository"
 	"github.com/Archiit19/School-management/finance-service/internal/service"
@@ -43,7 +44,8 @@ func main() {
 
 	repo := repository.NewFinanceRepository(db)
 	svc := service.NewFinanceService(repo)
-	h := handler.NewFinanceHandler(svc)
+	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
+	h := handler.NewFinanceHandler(svc, users)
 
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {

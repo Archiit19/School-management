@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { userMgmtApi, rolesApi, academicApi } from "../api/client";
 import PermGate from "../components/PermGate";
+import ParentUserField from "../components/ParentUserField";
 import { useAuth } from "../context/AuthContext";
 
-const FIELD_TYPES = ["text", "number", "email", "uuid", "select", "date"];
+const FIELD_TYPES = ["text", "number", "email", "uuid", "select", "date", "list"];
 
 export default function UsersPage() {
   const { hasPerm } = useAuth();
@@ -11,7 +12,7 @@ export default function UsersPage() {
   const [roles, setRoles] = useState([]);
   const [roleFields, setRoleFields] = useState([]);
   const [total, setTotal] = useState(0);
-  const [query, setQuery] = useState({ page: 1, limit: 20, search: "" });
+  const [query, setQuery] = useState({ page: 1, limit: 20, search: "", role_id: "" });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [busy, setBusy] = useState(false);
@@ -62,6 +63,7 @@ export default function UsersPage() {
   );
 
   const flatClasses = classes.map((c) => c.class || c);
+  const parentRole = roles.find((r) => r.name === "parent");
   const classNameById = Object.fromEntries(flatClasses.map((c) => [c.id, c.name]));
   const sectionNameById = Object.fromEntries(
     flatSections.map((s) => [s.id, `${s.className || ""} — ${s.name}`.trim()])
@@ -75,17 +77,55 @@ export default function UsersPage() {
     setForm((p) => ({ ...p, role_data: { ...p.role_data, [key]: value } }));
   }
 
+  function selectParentForForm(parentId, parent) {
+    setForm((p) => ({
+      ...p,
+      role_data: {
+        ...p.role_data,
+        parent_user_id: parentId || "",
+        parent_name: parent?.name || "",
+      },
+    }));
+  }
+
+  function selectParentForEdit(parentId, parent) {
+    setEditForm((p) => ({
+      ...p,
+      role_data: {
+        ...p.role_data,
+        parent_user_id: parentId || "",
+        parent_name: parent?.name || "",
+      },
+    }));
+  }
+
   function editRoleDataField(key, value) {
     setEditForm((p) => ({ ...p, role_data: { ...p.role_data, [key]: value } }));
+  }
+
+  function visibleRoleFields(fields) {
+    return fields.filter((f) => f.key !== "parent_name");
+  }
+
+  function handleParentCreated(parent) {
+    setSuccess(`Parent "${parent.name}" created and linked to this student.`);
+    setQuery((q) => ({ ...q, page: 1, search: "" }));
   }
 
   async function handleCreate(e) {
     e.preventDefault();
     setError(""); setSuccess(""); setBusy(true);
+    const studentRole = roles.find((r) => r.name === "student");
+    if (studentRole && form.role_id === studentRole.id && !form.role_data?.parent_user_id) {
+      setError("Please select or create a parent for this student.");
+      setBusy(false);
+      return;
+    }
     try {
       await userMgmtApi.create(form);
       setSuccess("User created.");
       setForm({ name: "", email: "", password: "", role_id: "", role_data: {} });
+      setRoleFields([]);
       load();
     } catch (err) { setError(err.message); }
     finally { setBusy(false); }
@@ -148,10 +188,14 @@ export default function UsersPage() {
     return `${filled.length} field${filled.length > 1 ? "s" : ""}`;
   }
 
-  function formatRoleFieldValue(key, value, fieldDef) {
+  function formatRoleFieldValue(key, value, fieldDef, roleData) {
     if (value == null || String(value).trim() === "") return "—";
     if (key === "class_id") return classNameById[String(value)] || String(value);
     if (key === "section_id") return sectionNameById[String(value)] || String(value);
+    if (key === "parent_user_id") {
+      const name = roleData?.parent_name;
+      return name ? name : String(value);
+    }
     if (fieldDef?.type === "uuid") return String(value);
     return String(value);
   }
@@ -170,7 +214,7 @@ export default function UsersPage() {
       rows.push({
         key,
         label: fieldDef?.label || key.replace(/_/g, " "),
-        value: formatRoleFieldValue(key, data[key], fieldDef),
+        value: formatRoleFieldValue(key, data[key], fieldDef, data),
       });
     }
     for (const [key, value] of Object.entries(data)) {
@@ -178,7 +222,7 @@ export default function UsersPage() {
       rows.push({
         key,
         label: key.replace(/_/g, " "),
-        value: formatRoleFieldValue(key, value),
+        value: formatRoleFieldValue(key, value, null, data),
       });
     }
     return rows;
@@ -207,7 +251,19 @@ export default function UsersPage() {
     }
   }
 
-  function renderRoleField(f, value, onChange) {
+  function renderRoleField(f, value, onChange, { mode = "create" } = {}) {
+    if (f.key === "parent_user_id") {
+      const onSelect = mode === "edit" ? selectParentForEdit : selectParentForForm;
+      return (
+        <ParentUserField
+          required={f.required}
+          parentRoleId={parentRole?.id}
+          value={value || ""}
+          onSelect={onSelect}
+          onParentCreated={mode === "create" ? handleParentCreated : undefined}
+        />
+      );
+    }
     if (f.key === "class_id") {
       const flatClasses = classes.map((c) => c.class || c);
       return (
@@ -287,12 +343,12 @@ export default function UsersPage() {
               </select>
             </div>
           </div>
-          {roleFields.length > 0 && (
+          {visibleRoleFields(roleFields).length > 0 && (
             <div className="grid-4" style={{ marginTop: 16 }}>
-              {roleFields.map((f) => (
-                <div className="form-group" key={f.key}>
+              {visibleRoleFields(roleFields).map((f) => (
+                <div className="form-group" key={f.key} style={f.key === "parent_user_id" ? { gridColumn: "1 / -1" } : undefined}>
                   <label>{f.label}{f.required ? " *" : ""}</label>
-                  {renderRoleField(f, form.role_data[f.key], roleDataField)}
+                  {renderRoleField(f, form.role_data[f.key], roleDataField, { mode: "create" })}
                 </div>
               ))}
             </div>
@@ -313,6 +369,18 @@ export default function UsersPage() {
           <div className="form-group">
             <label>Search</label>
             <input placeholder="Name or email..." value={query.search} onChange={(e) => setQuery((q) => ({ ...q, search: e.target.value, page: 1 }))} />
+          </div>
+          <div className="form-group">
+            <label>Role</label>
+            <select
+              value={query.role_id || ""}
+              onChange={(e) => setQuery((q) => ({ ...q, role_id: e.target.value, page: 1 }))}
+            >
+              <option value="">All roles</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>{r.name}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="table-wrap">
@@ -467,10 +535,10 @@ export default function UsersPage() {
                   ))}
                 </select>
               </div>
-              {editRoleFields.length > 0 && editRoleFields.map((f) => (
-                <div className="form-group" key={f.key}>
+              {visibleRoleFields(editRoleFields).length > 0 && visibleRoleFields(editRoleFields).map((f) => (
+                <div className="form-group" key={f.key} style={f.key === "parent_user_id" ? { gridColumn: "1 / -1" } : undefined}>
                   <label>{f.label}{f.required ? " *" : ""}</label>
-                  {renderRoleField(f, editForm.role_data[f.key], editRoleDataField)}
+                  {renderRoleField(f, editForm.role_data[f.key], editRoleDataField, { mode: "edit" })}
                 </div>
               ))}
               <div className="form-group">

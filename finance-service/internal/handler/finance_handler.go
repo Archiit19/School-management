@@ -5,16 +5,19 @@ import (
 
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/pupil"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type FinanceHandler struct {
-	svc *service.FinanceService
+	svc   *service.FinanceService
+	users *userclient.Client
 }
 
-func NewFinanceHandler(svc *service.FinanceService) *FinanceHandler {
-	return &FinanceHandler{svc: svc}
+func NewFinanceHandler(svc *service.FinanceService, users *userclient.Client) *FinanceHandler {
+	return &FinanceHandler{svc: svc, users: users}
 }
 
 // CreateFee godoc
@@ -118,12 +121,11 @@ func (h *FinanceHandler) GetDues(c *gin.Context) {
 // @Failure      403         {object}  model.ErrorResponse
 // @Router       /dues/me [get]
 func (h *FinanceHandler) GetMyDues(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 
 	var query model.DueQuery
 	if err := c.ShouldBindQuery(&query); err != nil {

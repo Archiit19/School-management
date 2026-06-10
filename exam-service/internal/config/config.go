@@ -8,10 +8,11 @@ type Config struct {
 	DBUser             string
 	DBPassword         string
 	DBName             string
-	JWTSecret          string
-	Port               string
-	AcademicServiceURL string
-	UserServiceURL     string
+	JWTSecret            string
+	Port                 string
+	AcademicServiceURL   string
+	UserServiceURL       string
+	InternalServiceToken string
 }
 
 func Load() *Config {
@@ -23,8 +24,9 @@ func Load() *Config {
 		DBName:             pkgconfig.GetEnv("DB_NAME", "exam_db"),
 		JWTSecret:          pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
 		Port:               pkgconfig.GetEnv("PORT", "8086"),
-		AcademicServiceURL: pkgconfig.GetEnv("ACADEMIC_SERVICE_URL", "http://academic-service:8083"),
-		UserServiceURL:     pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
+		AcademicServiceURL:   pkgconfig.GetEnv("ACADEMIC_SERVICE_URL", "http://academic-service:8083"),
+		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
+		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", "dev-internal-token-change-in-production"),
 	}
 }
 

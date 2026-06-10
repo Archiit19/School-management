@@ -9,6 +9,7 @@ import (
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/handler"
 	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"
@@ -66,7 +67,8 @@ ON attendances (
 	repo := repository.NewAttendanceRepository(db)
 	httpClient := &http.Client{Timeout: 8 * time.Second}
 	svc := service.NewAttendanceService(repo, cfg, httpClient)
-	h := handler.NewAttendanceHandler(svc)
+	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
+	h := handler.NewAttendanceHandler(svc, users)
 
 	r := gin.Default()
 

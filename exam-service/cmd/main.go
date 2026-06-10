@@ -9,6 +9,7 @@ import (
 	"github.com/Archiit19/School-management/exam-service/internal/config"
 	"github.com/Archiit19/School-management/exam-service/internal/handler"
 	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/repository"
 	"github.com/Archiit19/School-management/exam-service/internal/service"
@@ -46,7 +47,8 @@ func main() {
 	repo := repository.NewExamRepository(db)
 	httpClient := &http.Client{Timeout: 8 * time.Second}
 	svc := service.NewExamService(repo, cfg, httpClient)
-	h := handler.NewExamHandler(svc)
+	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
+	h := handler.NewExamHandler(svc, users)
 
 	r := gin.Default()
 	r.GET("/health", func(c *gin.Context) {

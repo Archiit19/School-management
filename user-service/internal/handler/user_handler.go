@@ -73,6 +73,56 @@ func (h *UserHandler) GetUserMe(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+func (h *UserHandler) GetMyChildren(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	schoolID, _ := c.Get("school_id")
+	children, err := h.svc.GetMyChildren(userID.(uuid.UUID), schoolID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"children": children})
+}
+
+func (h *UserHandler) GetChildForParent(c *gin.Context) {
+	parentID, _ := c.Get("user_id")
+	schoolID, _ := c.Get("school_id")
+	childID, err := uuid.Parse(c.Param("childId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid child id"})
+		return
+	}
+	child, err := h.svc.GetChildForParent(parentID.(uuid.UUID), childID, schoolID.(uuid.UUID))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, child)
+}
+
+func (h *UserHandler) ParentHasChildInternal(c *gin.Context) {
+	parentID, err := uuid.Parse(c.Param("parentId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid parent id"})
+		return
+	}
+	childID, err := uuid.Parse(c.Param("childId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid child id"})
+		return
+	}
+	ok, err := h.svc.ParentHasChild(parentID, childID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "child not linked to parent"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"linked": true})
+}
+
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	id, err := uuid.Parse(c.Param("id"))
 	if err != nil {

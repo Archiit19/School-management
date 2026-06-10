@@ -89,6 +89,9 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 			return nil, err
 		}
 	}
+	if strings.EqualFold(roleName, "parent") {
+		enrichParentRoleData(roleData)
+	}
 
 	user := &model.User{Name: req.Name, Email: req.Email, IsActive: true}
 	if err := s.repo.Create(user); err != nil {
@@ -120,6 +123,13 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 			s.rollbackCreate(user.ID, &schoolID)
 			return nil, fmt.Errorf("failed to enroll student: %w", err)
 		}
+		if parentID, err := parseParentUserID(roleData); err != nil {
+			s.rollbackCreate(user.ID, &schoolID)
+			return nil, err
+		} else if err := s.profiles.AppendChild(parentID, user.ID); err != nil {
+			s.rollbackCreate(user.ID, &schoolID)
+			return nil, fmt.Errorf("failed to link student to parent: %w", err)
+		}
 	}
 
 	user.SchoolID = &schoolID
@@ -135,11 +145,34 @@ func validateRoleData(defs []fieldDefinition, data map[string]interface{}) error
 			continue
 		}
 		val, ok := data[f.Key]
+		if f.Type == "list" {
+			if !ok || val == nil {
+				return fmt.Errorf("required field missing: %s", f.Key)
+			}
+			continue
+		}
 		if !ok || strings.TrimSpace(fmt.Sprint(val)) == "" {
 			return fmt.Errorf("required field missing: %s", f.Key)
 		}
 	}
 	return nil
+}
+
+func enrichParentRoleData(data map[string]interface{}) {
+	if data == nil {
+		return
+	}
+	if _, ok := data["children"]; !ok || data["children"] == nil {
+		data["children"] = []interface{}{}
+	}
+}
+
+func parseParentUserID(data map[string]interface{}) (uuid.UUID, error) {
+	parentIDStr := strings.TrimSpace(fmt.Sprint(data["parent_user_id"]))
+	if parentIDStr == "" || parentIDStr == "<nil>" {
+		return uuid.Nil, errors.New("parent_user_id is required")
+	}
+	return uuid.Parse(parentIDStr)
 }
 
 func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]interface{}) error {
@@ -161,7 +194,43 @@ func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]
 		data["student_code"] = code
 	}
 	data["admission_year"] = time.Now().Year()
+
+	parentIDStr := strings.TrimSpace(fmt.Sprint(data["parent_user_id"]))
+	if parentIDStr == "" || parentIDStr == "<nil>" {
+		return errors.New("parent is required for student role")
+	}
+	parentID, err := uuid.Parse(parentIDStr)
+	if err != nil {
+		return errors.New("invalid parent_user_id")
+	}
+	parentUser, err := s.validateParentUser(parentID, schoolID)
+	if err != nil {
+		return err
+	}
+	data["parent_user_id"] = parentID.String()
+	data["parent_name"] = parentUser.Name
 	return nil
+}
+
+func (s *UserService) validateParentUser(parentID, schoolID uuid.UUID) (*model.User, error) {
+	if err := s.school.GetMembership(schoolID, parentID); err != nil {
+		return nil, errors.New("parent user not found in this school")
+	}
+	parent, err := s.repo.GetByID(parentID)
+	if err != nil {
+		return nil, errors.New("parent user not found")
+	}
+	if !parent.IsActive {
+		return nil, errors.New("parent user account is inactive")
+	}
+	ur, err := s.auth.GetUserRole(parentID, schoolID)
+	if err != nil {
+		return nil, errors.New("parent role not found for user")
+	}
+	if !strings.EqualFold(ur.RoleName, "parent") {
+		return nil, errors.New("linked user must have the parent role")
+	}
+	return parent, nil
 }
 
 func (s *UserService) generateStudentCode(schoolID uuid.UUID, classID string, data map[string]interface{}) (string, error) {
@@ -397,6 +466,10 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 
 	if req.RoleData != nil && roleID != uuid.Nil {
 		existing, _ := s.profiles.Get(id)
+		var oldParentID uuid.UUID
+		if existing != nil && existing.Data != nil {
+			oldParentID, _ = parseParentUserIDOptional(existing.Data)
+		}
 		data := req.RoleData
 		if existing != nil && existing.Data != nil {
 			for k, v := range existing.Data {
@@ -409,6 +482,14 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 		if err := validateRoleData(fieldDefs, data); err != nil {
 			return nil, err
 		}
+		if strings.EqualFold(user.RoleName, "student") {
+			if err := s.enrichStudentRoleData(schoolID, data); err != nil {
+				return nil, err
+			}
+		}
+		if strings.EqualFold(user.RoleName, "parent") {
+			enrichParentRoleData(data)
+		}
 		if err := s.profiles.Save(id, roleID, schoolID, data); err != nil {
 			return nil, fmt.Errorf("failed to update role profile: %w", err)
 		}
@@ -419,6 +500,17 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 			if classID != "" {
 				if err := s.academic.UpsertEnrollment(id, schoolID, classID, sectionID); err != nil {
 					return nil, fmt.Errorf("failed to update enrollment: %w", err)
+				}
+			}
+			newParentID, _ := parseParentUserIDOptional(data)
+			if oldParentID != newParentID {
+				if oldParentID != uuid.Nil {
+					_ = s.profiles.RemoveChild(oldParentID, id)
+				}
+				if newParentID != uuid.Nil {
+					if err := s.profiles.AppendChild(newParentID, id); err != nil {
+						return nil, fmt.Errorf("failed to link student to parent: %w", err)
+					}
 				}
 			}
 		}
@@ -436,6 +528,11 @@ func (s *UserService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUse
 	}
 	if err := s.school.GetMembership(schoolID, id); err != nil {
 		return errors.New("user not found")
+	}
+	if profile, err := s.profiles.Get(id); err == nil && profile != nil {
+		if parentID, err := parseParentUserIDOptional(profile.Data); err == nil && parentID != uuid.Nil {
+			_ = s.profiles.RemoveChild(parentID, id)
+		}
 	}
 	if err := s.auth.RemoveUserRole(id, schoolID); err != nil {
 		return err
@@ -494,6 +591,60 @@ func (s *UserService) UpdateProfileInternal(id uuid.UUID, name, email *string) (
 		return nil, err
 	}
 	return user, nil
+}
+
+func parseParentUserIDOptional(data map[string]interface{}) (uuid.UUID, error) {
+	if data == nil {
+		return uuid.Nil, nil
+	}
+	parentIDStr := strings.TrimSpace(fmt.Sprint(data["parent_user_id"]))
+	if parentIDStr == "" || parentIDStr == "<nil>" {
+		return uuid.Nil, nil
+	}
+	return uuid.Parse(parentIDStr)
+}
+
+func (s *UserService) ParentHasChild(parentID, childID uuid.UUID) (bool, error) {
+	return s.profiles.HasChild(parentID, childID)
+}
+
+func (s *UserService) GetMyChildren(parentID, schoolID uuid.UUID) ([]model.User, error) {
+	ur, err := s.auth.GetUserRole(parentID, schoolID)
+	if err != nil {
+		return nil, errors.New("parent role not found")
+	}
+	if !strings.EqualFold(ur.RoleName, "parent") {
+		return nil, errors.New("only parent accounts can list children")
+	}
+	profile, err := s.profiles.Get(parentID)
+	if err != nil {
+		return nil, errors.New("parent profile not found")
+	}
+	childIDs := repository.ParseChildrenIDs(profile.Data["children"])
+	children := make([]model.User, 0, len(childIDs))
+	for _, idStr := range childIDs {
+		childID, err := uuid.Parse(idStr)
+		if err != nil {
+			continue
+		}
+		child, err := s.GetUserByID(childID, schoolID)
+		if err != nil {
+			continue
+		}
+		children = append(children, *child)
+	}
+	return children, nil
+}
+
+func (s *UserService) GetChildForParent(parentID, childID, schoolID uuid.UUID) (*model.User, error) {
+	ok, err := s.profiles.HasChild(parentID, childID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, errors.New("student is not linked to this parent account")
+	}
+	return s.GetUserByID(childID, schoolID)
 }
 
 func extractClassNumber(className string) string {

@@ -63,6 +63,7 @@ func main() {
 	{
 		internal.POST("/users", h.CreateProfileInternal)
 		internal.GET("/users/by-email", h.GetUserByEmailInternal)
+		internal.GET("/users/has-child/:parentId/:childId", h.ParentHasChildInternal)
 		internal.GET("/users/:id/profile", h.GetUserProfileInternal)
 		internal.GET("/users/:id", h.GetUserInternal)
 		internal.PATCH("/users/:id", h.UpdateProfileInternal)
@@ -75,6 +76,8 @@ func main() {
 		users.POST("", middleware.RequireAnyPermission("create_user", "admit_student"), h.CreateUser)
 		users.GET("", middleware.RequireAnyPermission("view_users", "view_students", "admit_student"), h.GetUsers)
 		users.GET("/me", middleware.RequirePermission("view_own_profile"), h.GetUserMe)
+		users.GET("/me/children", middleware.RequirePermission("view_own_profile"), h.GetMyChildren)
+		users.GET("/me/children/:childId", middleware.RequirePermission("view_own_profile"), h.GetChildForParent)
 		users.GET("/:id", middleware.RequirePermission("view_users"), h.GetUserByID)
 		users.PATCH("/:id", middleware.RequireAnyPermission("update_user", "update_student"), h.UpdateUser)
 		users.DELETE("/:id", middleware.RequirePermission("delete_user"), h.DeleteUser)

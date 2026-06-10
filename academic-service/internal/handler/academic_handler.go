@@ -5,16 +5,19 @@ import (
 
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/pupil"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
 type AcademicHandler struct {
-	svc *service.AcademicService
+	svc   *service.AcademicService
+	users *userclient.Client
 }
 
-func NewAcademicHandler(svc *service.AcademicService) *AcademicHandler {
-	return &AcademicHandler{svc: svc}
+func NewAcademicHandler(svc *service.AcademicService, users *userclient.Client) *AcademicHandler {
+	return &AcademicHandler{svc: svc, users: users}
 }
 
 // CreateClass godoc
@@ -312,12 +315,11 @@ func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 // @Failure      403  {object}  model.ErrorResponse
 // @Router       /assignments/me [get]
 func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
@@ -340,12 +342,11 @@ func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
 // @Failure      403  {object}  model.ErrorResponse
 // @Router       /academic/me [get]
 func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
@@ -367,12 +368,11 @@ func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
 // @Failure      403  {object}  model.ErrorResponse
 // @Router       /submissions/me [get]
 func (h *AcademicHandler) GetMySubmissions(c *gin.Context) {
-	sidVal, ok := c.Get("student_id")
-	if !ok {
-		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
+	studentID, err := pupil.ResolveStudentID(c, h.users)
+	if err != nil {
+		pupil.WriteForbidden(c, err)
 		return
 	}
-	studentID := sidVal.(uuid.UUID)
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 
 	subs, err := h.svc.GetMySubmissions(schoolID, studentID)
