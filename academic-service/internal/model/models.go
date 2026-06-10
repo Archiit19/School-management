@@ -60,15 +60,25 @@ type Assignment struct {
 }
 
 type Submission struct {
-	ID           uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	SchoolID     uuid.UUID `json:"school_id" gorm:"type:uuid;not null;index"`
-	AssignmentID uuid.UUID `json:"assignment_id" gorm:"type:uuid;not null;index"`
-	StudentID    uuid.UUID `json:"student_id" gorm:"type:uuid;not null;index"`
-	SubmittedBy  uuid.UUID `json:"submitted_by" gorm:"type:uuid;not null;index"`
-	Content      string    `json:"content"`
-	MaterialURL  string    `json:"material_url"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID              uuid.UUID  `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	SchoolID        uuid.UUID  `json:"school_id" gorm:"type:uuid;not null;index"`
+	AssignmentID    uuid.UUID  `json:"assignment_id" gorm:"type:uuid;not null;index"`
+	StudentID       uuid.UUID  `json:"student_id" gorm:"type:uuid;not null;index"`
+	SubmittedBy     uuid.UUID  `json:"submitted_by" gorm:"type:uuid;not null;index"`
+	Content         string     `json:"content"`
+	MaterialURL     string     `json:"material_url"`
+	TeacherFeedback string     `json:"teacher_feedback"`
+	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+// SubmissionView is returned when teachers list submissions for an assignment.
+type SubmissionView struct {
+	Submission
+	StudentName   string `json:"student_name,omitempty"`
+	StudentCode   string `json:"student_code,omitempty"`
+	SubmitterName string `json:"submitter_name,omitempty"`
 }
 
 type CreateClassRequest struct {
@@ -139,6 +149,10 @@ type CreateMySubmissionRequest struct {
 	AssignmentID string `json:"assignment_id" binding:"required,uuid"`
 	Content      string `json:"content"`
 	MaterialURL  string `json:"material_url"`
+}
+
+type UpdateSubmissionRequest struct {
+	TeacherFeedback *string `json:"teacher_feedback"`
 }
 
 type ErrorResponse struct {

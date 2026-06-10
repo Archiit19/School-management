@@ -446,3 +446,70 @@ func (h *AcademicHandler) CreateSubmission(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, submission)
 }
+
+// GetAssignmentSubmissions godoc
+// @Summary      List submissions for an assignment
+// @Description  Teachers and admins view student work submitted for one assignment.
+// @Tags         Assignments
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id  path      string  true  "Assignment ID"
+// @Success      200  {array}   model.SubmissionView
+// @Failure      400  {object}  model.ErrorResponse
+// @Failure      403  {object}  model.ErrorResponse
+// @Router       /assignments/{id}/submissions [get]
+func (h *AcademicHandler) GetAssignmentSubmissions(c *gin.Context) {
+	assignmentID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid assignment id"})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	subs, err := h.svc.GetSubmissionsForAssignment(assignmentID, schoolID, userID, roleName)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, subs)
+}
+
+// ReviewSubmission godoc
+// @Summary      Review a submission
+// @Description  Teacher saves feedback / evaluation for a student submission.
+// @Tags         Assignments
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string                      true  "Submission ID"
+// @Param        body  body      model.UpdateSubmissionRequest  true  "Review payload"
+// @Success      200   {object}  model.Submission
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /submissions/{id} [patch]
+func (h *AcademicHandler) ReviewSubmission(c *gin.Context) {
+	submissionID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid submission id"})
+		return
+	}
+
+	var req model.UpdateSubmissionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	userID := c.MustGet("user_id").(uuid.UUID)
+	roleName := c.MustGet("role_name").(string)
+
+	submission, err := h.svc.ReviewSubmission(submissionID, schoolID, userID, roleName, req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, submission)
+}

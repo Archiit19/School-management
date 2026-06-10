@@ -215,6 +215,29 @@ func (r *AcademicRepository) GetSubmissionsForStudent(
 	return submissions, err
 }
 
+func (r *AcademicRepository) GetSubmissionsForAssignment(
+	schoolID, assignmentID uuid.UUID,
+) ([]model.Submission, error) {
+	var submissions []model.Submission
+	err := r.db.
+		Where("school_id = ? AND assignment_id = ?", schoolID, assignmentID).
+		Order("created_at desc").
+		Find(&submissions).Error
+	return submissions, err
+}
+
+func (r *AcademicRepository) GetSubmissionByIDAndSchool(
+	submissionID, schoolID uuid.UUID,
+) (*model.Submission, error) {
+	var submission model.Submission
+	err := r.db.Where("id = ? AND school_id = ?", submissionID, schoolID).First(&submission).Error
+	return &submission, err
+}
+
+func (r *AcademicRepository) UpdateSubmission(submission *model.Submission) error {
+	return r.db.Save(submission).Error
+}
+
 func (r *AcademicRepository) UpsertEnrollment(enrollment *model.StudentEnrollment) error {
 	var existing model.StudentEnrollment
 	err := r.db.Where("school_id = ? AND user_id = ?", enrollment.SchoolID, enrollment.UserID).First(&existing).Error

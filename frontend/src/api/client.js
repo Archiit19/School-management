@@ -150,6 +150,10 @@ export const academicApi = {
   deleteTeacherAssignment: (id) => request("academic", `/teacher-assignments/${id}`, { method: "DELETE" }),
   createAssignment: (body) => request("academic", "/assignments", { method: "POST", body }),
   getAssignments: (query) => request("academic", "/assignments", { query }),
+  getAssignmentSubmissions: (assignmentId) =>
+    request("academic", `/assignments/${assignmentId}/submissions`),
+  reviewSubmission: (id, body) =>
+    request("academic", `/submissions/${id}`, { method: "PATCH", body }),
   createSubmission: (body) => request("academic", "/submissions", { method: "POST", body }),
   getMyAssignments: (studentId) =>
     request("academic", "/assignments/me", { query: pupilQuery({}, studentId) }),
