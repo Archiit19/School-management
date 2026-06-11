@@ -61,11 +61,11 @@ func RequestLogger() gin.HandlerFunc {
 		status := c.Writer.Status()
 		switch {
 		case status >= 500:
-			logger.L().Error("request", fields...)
+			logger.Error("request", fields...)
 		case status >= 400:
-			logger.L().Warn("request", fields...)
+			logger.Warn("request", fields...)
 		default:
-			logger.L().Info("request", fields...)
+			logger.Info("request", fields...)
 		}
 	}
 }
@@ -76,7 +76,7 @@ func Recovery() gin.HandlerFunc {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				reqID, _ := c.Get(requestIDKey)
-				logger.L().Error("panic recovered", logger.KV(
+				logger.Error("panic recovered", logger.KV(
 					"request_id", reqID,
 					"method", c.Request.Method,
 					"path", c.Request.URL.Path,

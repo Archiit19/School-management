@@ -32,15 +32,27 @@ func SetDefault(l Logger) {
 	defaultLogger = l
 }
 
-// L returns the process-wide logger.
+// L returns the process-wide logger (use when you need the Logger value, e.g. to pass around).
 func L() Logger {
 	return defaultLogger
 }
 
-// With returns a child of the process-wide logger.
+// With returns a child of the process-wide logger with bound fields.
 func With(fields ...Field) Logger {
 	return defaultLogger.With(fields...)
 }
+
+// Debug logs at debug level using the process-wide logger.
+func Debug(msg string, fields ...Field) { defaultLogger.Debug(msg, fields...) }
+
+// Info logs at info level using the process-wide logger.
+func Info(msg string, fields ...Field) { defaultLogger.Info(msg, fields...) }
+
+// Warn logs at warn level using the process-wide logger.
+func Warn(msg string, fields ...Field) { defaultLogger.Warn(msg, fields...) }
+
+// Error logs at error level using the process-wide logger.
+func Error(msg string, fields ...Field) { defaultLogger.Error(msg, fields...) }
 
 // Fatal logs at error level and exits with code 1.
 func Fatal(msg string, fields ...Field) {

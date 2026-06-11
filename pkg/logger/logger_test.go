@@ -67,6 +67,24 @@ func TestZapBackendNotImplemented(t *testing.T) {
 	}
 }
 
+func TestGlobalInfo(t *testing.T) {
+	var buf bytes.Buffer
+	_, err := logger.Init(logger.Config{
+		Service: "test-service",
+		Level:   "info",
+		Format:  "json",
+		Backend: logger.BackendSlog,
+		Output:  &buf,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	logger.Info("started", logger.String("component", "main"))
+	if !strings.Contains(buf.String(), `"msg":"started"`) {
+		t.Fatalf("expected global Info output, got %q", buf.String())
+	}
+}
+
 func TestWithChaining(t *testing.T) {
 	var buf bytes.Buffer
 	root, err := logger.New(logger.Config{
