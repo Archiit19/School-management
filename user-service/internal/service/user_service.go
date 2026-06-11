@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/Archiit19/School-management/user-service/internal/model"
@@ -40,6 +41,12 @@ func NewUserService(
 }
 
 func (s *UserService) rollbackCreate(userID uuid.UUID, schoolID *uuid.UUID) {
+	fields := []logger.Field{logUserID(userID)}
+	if schoolID != nil {
+		fields = append(fields, logSchoolID(*schoolID))
+	}
+	logger.Warn("rolling back user creation", fields...)
+
 	if schoolID != nil {
 		_ = s.academic.DeleteEnrollment(userID, *schoolID)
 		_ = s.auth.RemoveUserRole(userID, *schoolID)
@@ -56,8 +63,10 @@ func (s *UserService) CreateProfileInternal(req model.CreateProfileInternalReque
 	}
 	user := &model.User{Name: req.Name, Email: req.Email, IsActive: true}
 	if err := s.repo.Create(user); err != nil {
+		logger.Error("create profile internal: database insert failed", logger.Err(err), logger.String("email", req.Email))
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
+	logger.Info("profile created (internal)", logUserID(user.ID), logger.String("email", user.Email))
 	return user, nil
 }
 
@@ -95,23 +104,28 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 
 	user := &model.User{Name: req.Name, Email: req.Email, IsActive: true}
 	if err := s.repo.Create(user); err != nil {
+		logger.Error("create user: database insert failed", logger.Err(err), logSchoolID(schoolID), logger.String("email", req.Email))
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	if err := s.profiles.Save(user.ID, roleID, schoolID, roleData); err != nil {
+		logger.Error("create user: save role profile failed", logger.Err(err), logUserID(user.ID), logSchoolID(schoolID))
 		s.rollbackCreate(user.ID, nil)
 		return nil, fmt.Errorf("failed to save role profile: %w", err)
 	}
 
 	if err := s.auth.SetCredential(user.ID, req.Password); err != nil {
+		logger.Error("create user: set credentials failed", logger.Err(err), logUserID(user.ID))
 		s.rollbackCreate(user.ID, nil)
 		return nil, fmt.Errorf("failed to set credentials: %w", err)
 	}
 	if err := s.school.AddMember(schoolID, user.ID); err != nil {
+		logger.Error("create user: add school member failed", logger.Err(err), logUserID(user.ID), logSchoolID(schoolID))
 		s.rollbackCreate(user.ID, &schoolID)
 		return nil, fmt.Errorf("failed to link user to school: %w", err)
 	}
 	if err := s.auth.AssignUserRole(user.ID, schoolID, roleID); err != nil {
+		logger.Error("create user: assign role failed", logger.Err(err), logUserID(user.ID), logSchoolID(schoolID), logger.String("role_id", roleID.String()))
 		s.rollbackCreate(user.ID, &schoolID)
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
@@ -120,22 +134,34 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 		classID := fmt.Sprint(roleData["class_id"])
 		sectionID := fmt.Sprint(roleData["section_id"])
 		if err := s.academic.UpsertEnrollment(user.ID, schoolID, classID, sectionID); err != nil {
+			logger.Error("create user: enroll student failed", logger.Err(err), logUserID(user.ID), logSchoolID(schoolID))
 			s.rollbackCreate(user.ID, &schoolID)
 			return nil, fmt.Errorf("failed to enroll student: %w", err)
 		}
-		if parentID, err := parseParentUserID(roleData); err != nil {
+		parentID, err := parseParentUserID(roleData)
+		if err != nil {
 			s.rollbackCreate(user.ID, &schoolID)
 			return nil, err
-		} else if err := s.profiles.AppendChild(parentID, user.ID); err != nil {
+		}
+		if err := s.profiles.AppendChild(parentID, user.ID); err != nil {
+			logger.Error("create user: link student to parent failed",
+				append([]logger.Field{logger.Err(err)}, logParentChild(parentID, user.ID)...)...)
 			s.rollbackCreate(user.ID, &schoolID)
 			return nil, fmt.Errorf("failed to link student to parent: %w", err)
 		}
+		logger.Info("student linked to parent", logParentChild(parentID, user.ID)...)
 	}
 
 	user.SchoolID = &schoolID
 	user.RoleID = &roleID
 	user.RoleName = roleName
 	user.RoleData = roleData
+	logger.Info("user created",
+		logUserID(user.ID),
+		logSchoolID(schoolID),
+		logRole(roleName),
+		logger.String("email", user.Email),
+	)
 	return user, nil
 }
 
@@ -261,6 +287,7 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 
 	memberIDs, err := s.school.ListMemberUserIDs(schoolID)
 	if err != nil {
+		logger.Error("list users: school members lookup failed", logger.Err(err), logSchoolID(schoolID))
 		return nil, fmt.Errorf("failed to list school members: %w", err)
 	}
 
@@ -299,6 +326,7 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 
 	users, total, err := s.repo.GetByIDs(memberIDs, query)
 	if err != nil {
+		logger.Error("list users: database query failed", logger.Err(err), logSchoolID(schoolID))
 		return nil, fmt.Errorf("failed to fetch users: %w", err)
 	}
 
@@ -461,6 +489,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 		user.IsActive = *req.IsActive
 	}
 	if err := s.repo.Update(user); err != nil {
+		logger.Error("update user: database update failed", logger.Err(err), logUserID(id), logSchoolID(schoolID))
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 
@@ -491,6 +520,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 			enrichParentRoleData(data)
 		}
 		if err := s.profiles.Save(id, roleID, schoolID, data); err != nil {
+			logger.Error("update user: save role profile failed", logger.Err(err), logUserID(id), logSchoolID(schoolID))
 			return nil, fmt.Errorf("failed to update role profile: %w", err)
 		}
 		user.RoleData = data
@@ -499,6 +529,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 			sectionID := fmt.Sprint(data["section_id"])
 			if classID != "" {
 				if err := s.academic.UpsertEnrollment(id, schoolID, classID, sectionID); err != nil {
+					logger.Error("update user: enrollment update failed", logger.Err(err), logUserID(id), logSchoolID(schoolID))
 					return nil, fmt.Errorf("failed to update enrollment: %w", err)
 				}
 			}
@@ -506,11 +537,15 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 			if oldParentID != newParentID {
 				if oldParentID != uuid.Nil {
 					_ = s.profiles.RemoveChild(oldParentID, id)
+					logger.Info("student unlinked from parent", logParentChild(oldParentID, id)...)
 				}
 				if newParentID != uuid.Nil {
 					if err := s.profiles.AppendChild(newParentID, id); err != nil {
+						logger.Error("update user: link student to parent failed",
+							append([]logger.Field{logger.Err(err)}, logParentChild(newParentID, id)...)...)
 						return nil, fmt.Errorf("failed to link student to parent: %w", err)
 					}
+					logger.Info("student linked to parent", logParentChild(newParentID, id)...)
 				}
 			}
 		}
@@ -519,6 +554,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 	}
 
 	user.SchoolID = &schoolID
+	logger.Info("user updated", logUserID(id), logSchoolID(schoolID), logRole(user.RoleName))
 	return user, nil
 }
 
@@ -535,24 +571,32 @@ func (s *UserService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUse
 		}
 	}
 	if err := s.auth.RemoveUserRole(id, schoolID); err != nil {
+		logger.Error("delete user: remove role failed", logger.Err(err), logUserID(id), logSchoolID(schoolID))
 		return err
 	}
 	if err := s.school.RemoveMember(schoolID, id); err != nil {
+		logger.Error("delete user: remove school member failed", logger.Err(err), logUserID(id), logSchoolID(schoolID))
 		return err
 	}
 	_ = s.academic.DeleteEnrollment(id, schoolID)
 	schools, err := s.school.ListMembershipsForUser(id)
 	if err != nil {
+		logger.Error("delete user: list memberships failed", logger.Err(err), logUserID(id))
 		return err
 	}
 	if len(schools) == 0 {
 		_ = s.profiles.Delete(id)
 		if err := s.auth.DeleteUserAuth(id); err != nil {
+			logger.Error("delete user: delete auth record failed", logger.Err(err), logUserID(id))
 			return err
 		}
 		if err := s.repo.Delete(id); err != nil {
+			logger.Error("delete user: database delete failed", logger.Err(err), logUserID(id))
 			return fmt.Errorf("failed to delete user: %w", err)
 		}
+		logger.Info("user fully deleted", logUserID(id), logSchoolID(schoolID))
+	} else {
+		logger.Info("user removed from school", logUserID(id), logSchoolID(schoolID), logger.Int("remaining_schools", len(schools)))
 	}
 	return nil
 }
@@ -570,7 +614,12 @@ func (s *UserService) GetUserForInternalByEmail(email string) (*model.User, erro
 
 func (s *UserService) DeleteProfileInternal(id uuid.UUID) error {
 	_ = s.profiles.Delete(id)
-	return s.repo.Delete(id)
+	if err := s.repo.Delete(id); err != nil {
+		logger.Error("delete profile internal: database delete failed", logger.Err(err), logUserID(id))
+		return err
+	}
+	logger.Info("profile deleted (internal)", logUserID(id))
+	return nil
 }
 
 func (s *UserService) UpdateProfileInternal(id uuid.UUID, name, email *string) (*model.User, error) {
@@ -588,8 +637,10 @@ func (s *UserService) UpdateProfileInternal(id uuid.UUID, name, email *string) (
 		user.Email = *email
 	}
 	if err := s.repo.Update(user); err != nil {
+		logger.Error("update profile internal: database update failed", logger.Err(err), logUserID(id))
 		return nil, err
 	}
+	logger.Info("profile updated (internal)", logUserID(id))
 	return user, nil
 }
 
@@ -605,7 +656,12 @@ func parseParentUserIDOptional(data map[string]interface{}) (uuid.UUID, error) {
 }
 
 func (s *UserService) ParentHasChild(parentID, childID uuid.UUID) (bool, error) {
-	return s.profiles.HasChild(parentID, childID)
+	ok, err := s.profiles.HasChild(parentID, childID)
+	if err != nil {
+		logger.Error("parent has-child check failed",
+			append([]logger.Field{logger.Err(err)}, logParentChild(parentID, childID)...)...)
+	}
+	return ok, err
 }
 
 func (s *UserService) GetMyChildren(parentID, schoolID uuid.UUID) ([]model.User, error) {
