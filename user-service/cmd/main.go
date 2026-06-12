@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
-	"log"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/Archiit19/School-management/user-service/internal/handler"
-	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/user-service/internal/model"
 	"github.com/Archiit19/School-management/user-service/internal/repository"
 	"github.com/Archiit19/School-management/user-service/internal/service"
@@ -15,6 +15,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/user-service/docs"
 )
@@ -28,30 +29,36 @@ import (
 // @in   header
 // @name Authorization
 func main() {
+	if _, err := log.InitFromEnv("user-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
+	}
+
 	cfg := config.Load()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	log.Println("Connected to User DB")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(&model.User{}); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
-	log.Println("Database migrated")
+	log.Info("database migrated")
 
 	profileRepo, err := repository.NewProfileRepository(cfg)
 	if err != nil {
-		log.Fatalf("failed to connect to DynamoDB: %v", err)
+		log.Fatal("failed to connect to dynamodb", log.Err(err))
 	}
-	log.Println("Connected to DynamoDB")
+	log.Info("connected to dynamodb")
 
 	repo := repository.NewUserRepository(db)
 	svc := service.NewUserService(repo, profileRepo, cfg)
 	h := handler.NewUserHandler(svc)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "user-service is running"})
@@ -84,9 +91,11 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("User Service starting on %s", addr)
-	log.Printf("Swagger UI: http://localhost%s/swagger/index.html", addr)
+	log.Info("starting http server",
+		log.AddField("addr", addr),
+		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
+	)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

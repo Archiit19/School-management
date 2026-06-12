@@ -19,11 +19,11 @@ import (
 
 // UserProfileDoc is stored in DynamoDB keyed by user_id.
 type UserProfileDoc struct {
-	UserID   string                 `dynamodbav:"user_id"`
-	RoleID   string                 `dynamodbav:"role_id"`
-	SchoolID string                 `dynamodbav:"school_id"`
-	Data     map[string]interface{} `dynamodbav:"data"`
-	UpdatedAt string                `dynamodbav:"updated_at"`
+	UserID    string                 `dynamodbav:"user_id"`
+	RoleID    string                 `dynamodbav:"role_id"`
+	SchoolID  string                 `dynamodbav:"school_id"`
+	Data      map[string]interface{} `dynamodbav:"data"`
+	UpdatedAt string                 `dynamodbav:"updated_at"`
 }
 
 type ProfileRepository struct {
