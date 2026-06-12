@@ -73,13 +73,55 @@ func TestAddField(t *testing.T) {
 	}
 }
 
-func TestZapBackendNotImplemented(t *testing.T) {
-	_, err := logger.New(logger.Config{
+func TestNewZapJSON(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := logger.New(logger.Config{
+		Service: "test-service",
+		Level:   "info",
+		Format:  "json",
 		Backend: logger.BackendZap,
-		Output:  logger.NopWriter,
+		Output:  &buf,
 	})
-	if err == nil {
-		t.Fatal("expected error for zap backend")
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	l.Info("hello", logger.String("key", "value"))
+	out := buf.String()
+	if !strings.Contains(out, `"msg":"hello"`) {
+		t.Fatalf("expected msg in output, got %q", out)
+	}
+	if !strings.Contains(out, `"service":"test-service"`) {
+		t.Fatalf("expected service in output, got %q", out)
+	}
+	if !strings.Contains(out, `"key":"value"`) {
+		t.Fatalf("expected field in output, got %q", out)
+	}
+}
+
+func TestNewZerologJSON(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := logger.New(logger.Config{
+		Service: "test-service",
+		Level:   "info",
+		Format:  "json",
+		Backend: logger.BackendZerolog,
+		Output:  &buf,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	l.Info("hello", logger.String("key", "value"))
+	out := buf.String()
+	if !strings.Contains(out, `"message":"hello"`) {
+		t.Fatalf("expected message in output, got %q", out)
+	}
+	if !strings.Contains(out, `"service":"test-service"`) {
+		t.Fatalf("expected service in output, got %q", out)
+	}
+	if !strings.Contains(out, `"key":"value"`) {
+		t.Fatalf("expected field in output, got %q", out)
 	}
 }
 
