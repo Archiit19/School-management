@@ -27,6 +27,7 @@ var (
 	Duration = core.Duration
 	Time     = core.Time
 	KV       = core.KV
+	AddField = core.AddField
 )
 
 // New constructs a Logger for the configured backend.

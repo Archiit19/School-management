@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/Archiit19/School-management/pkg/logger"
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/Archiit19/School-management/user-service/internal/handler"
@@ -28,28 +28,28 @@ import (
 // @in   header
 // @name Authorization
 func main() {
-	if _, err := logger.InitFromEnv("user-service"); err != nil {
-		logger.Fatal("failed to initialize logger", logger.Err(err))
+	if _, err := log.InitFromEnv("user-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
 	cfg := config.Load()
 
 	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
 	if err != nil {
-		logger.Fatal("failed to connect to database", logger.Err(err))
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	logger.Info("connected to database")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(&model.User{}); err != nil {
-		logger.Fatal("failed to migrate database", logger.Err(err))
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
-	logger.Info("database migrated")
+	log.Info("database migrated")
 
 	profileRepo, err := repository.NewProfileRepository(cfg)
 	if err != nil {
-		logger.Fatal("failed to connect to dynamodb", logger.Err(err))
+		log.Fatal("failed to connect to dynamodb", log.Err(err))
 	}
-	logger.Info("connected to dynamodb")
+	log.Info("connected to dynamodb")
 
 	repo := repository.NewUserRepository(db)
 	svc := service.NewUserService(repo, profileRepo, cfg)
@@ -88,11 +88,11 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	logger.Info("starting http server",
-		logger.String("addr", addr),
-		logger.String("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
+	log.Info("starting http server",
+		log.AddField("addr", addr),
+		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
 	)
 	if err := r.Run(addr); err != nil {
-		logger.Fatal("failed to start server", logger.Err(err))
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

@@ -3,46 +3,33 @@ package handler
 import (
 	"net/http"
 
-	"github.com/Archiit19/School-management/pkg/logger"
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 )
 
-func requestLogger(c *gin.Context) logger.Logger {
-	var fields []logger.Field
+func requestLogger(c *gin.Context) log.Logger {
+	var fields []log.Field
 	if id, ok := c.Get("request_id"); ok {
-		fields = append(fields, logger.Any("request_id", id))
+		fields = append(fields, log.AddField("request_id", id))
 	}
 	if uid, ok := c.Get("user_id"); ok {
-		fields = append(fields, logger.Any("actor_user_id", uid))
+		fields = append(fields, log.AddField("actor_user_id", uid))
 	}
 	if sid, ok := c.Get("school_id"); ok {
-		fields = append(fields, logger.Any("school_id", sid))
+		fields = append(fields, log.AddField("school_id", sid))
 	}
-	return logger.With(fields...)
+	return log.With(fields...)
 }
 
 func logBindError(c *gin.Context, err error) {
-	requestLogger(c).Warn("invalid request payload", logger.Err(err))
+	requestLogger(c).Warn("invalid request payload", log.Err(err))
 }
 
-func logServiceError(c *gin.Context, status int, msg string, err error, fields ...logger.Field) {
-	all := append([]logger.Field{logger.Err(err)}, fields...)
+func logServiceError(c *gin.Context, status int, msg string, err error, fields ...log.Field) {
+	all := append([]log.Field{log.Err(err)}, fields...)
 	if status >= http.StatusInternalServerError {
 		requestLogger(c).Error(msg, all...)
 		return
 	}
 	requestLogger(c).Warn(msg, all...)
-}
-
-func logUserID(id uuid.UUID) logger.Field {
-	return logger.String("user_id", id.String())
-}
-
-func logSchoolID(id uuid.UUID) logger.Field {
-	return logger.String("school_id", id.String())
-}
-
-func uuidField(key string, id uuid.UUID) logger.Field {
-	return logger.String(key, id.String())
 }

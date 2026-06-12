@@ -8,6 +8,10 @@ import (
 	"github.com/Archiit19/School-management/pkg/logger"
 )
 
+type testStringer struct{ v string }
+
+func (t testStringer) String() string { return t.v }
+
 func TestNewSlogJSON(t *testing.T) {
 	var buf bytes.Buffer
 	l, err := logger.New(logger.Config{
@@ -54,6 +58,18 @@ func TestKV(t *testing.T) {
 	fields := logger.KV("a", 1, "b", "two")
 	if len(fields) != 2 || fields[0].Key != "a" || fields[1].Val != "two" {
 		t.Fatalf("unexpected fields: %+v", fields)
+	}
+}
+
+func TestAddField(t *testing.T) {
+	if f := logger.AddField("name", "alice"); f.Key != "name" || f.Val != "alice" {
+		t.Fatalf("string field: %+v", f)
+	}
+	if f := logger.AddField("count", 3); f.Key != "count" || f.Val != 3 {
+		t.Fatalf("int field: %+v", f)
+	}
+	if f := logger.AddField("id", testStringer{v: "abc"}); f.Val != "abc" {
+		t.Fatalf("stringer field: %+v", f)
 	}
 }
 

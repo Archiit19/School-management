@@ -22,6 +22,24 @@ func Duration(key string, val time.Duration) Field {
 }
 func Time(key string, val time.Time) Field { return Field{Key: key, Val: val} }
 
+// AddField builds a Field from a key and value, choosing the appropriate scalar encoder.
+func AddField(key string, value any) Field {
+	switch v := value.(type) {
+	case string:
+		return String(key, v)
+	case int:
+		return Int(key, v)
+	case int64:
+		return Int64(key, v)
+	case bool:
+		return Bool(key, v)
+	case fmt.Stringer:
+		return String(key, v.String())
+	default:
+		return Any(key, value)
+	}
+}
+
 // KV builds fields from alternating key/value pairs: KV("a", 1, "b", "x").
 func KV(pairs ...any) []Field {
 	if len(pairs) == 0 {
