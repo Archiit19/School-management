@@ -686,6 +686,15 @@ pre.json {
   color: var(--clr-text);
 }
 
+.review-box {
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--clr-bg, #f8fafc);
+  border: 1px solid var(--clr-border, #e2e8f0);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .perm-chip {
   display: inline-flex;
   align-items: center;

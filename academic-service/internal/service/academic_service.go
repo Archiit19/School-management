@@ -623,6 +623,126 @@ func (s *AcademicService) CreateSubmission(
 	return submission, nil
 }
 
+func (s *AcademicService) canManageAssignmentSubmissions(
+	assignment *model.Assignment,
+	schoolID, userID uuid.UUID,
+	roleName string,
+) error {
+	if roleName == "super_admin" {
+		return nil
+	}
+	if roleName != "teacher" {
+		return errors.New("only teacher or super_admin can review submissions")
+	}
+	if assignment.TeacherUserID == userID {
+		return nil
+	}
+	if _, err := s.repo.GetTeacherAssignmentByComposite(schoolID, userID, assignment.ClassID, assignment.SubjectID); err == nil {
+		return nil
+	}
+	return errors.New("you are not allowed to access submissions for this assignment")
+}
+
+func (s *AcademicService) resolveStudent(studentID uuid.UUID) (string, string, error) {
+	url := fmt.Sprintf("%s/internal/students/%s",
+		strings.TrimRight(s.cfg.StudentServiceURL, "/"),
+		studentID.String(),
+	)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", "", fmt.Errorf("student-service returned %d", resp.StatusCode)
+	}
+	var st struct {
+		FirstName   string `json:"first_name"`
+		LastName    string `json:"last_name"`
+		StudentCode string `json:"student_code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
+		return "", "", err
+	}
+	name := strings.TrimSpace(st.FirstName + " " + st.LastName)
+	return name, st.StudentCode, nil
+}
+
+func (s *AcademicService) enrichSubmissionView(sub model.Submission) model.SubmissionView {
+	view := model.SubmissionView{Submission: sub}
+	if name, code, err := s.resolveStudent(sub.StudentID); err == nil {
+		view.StudentName = name
+		view.StudentCode = code
+	}
+	if name, _, err := s.resolveUser(sub.SubmittedBy); err == nil {
+		view.SubmitterName = name
+	}
+	return view
+}
+
+func (s *AcademicService) GetSubmissionsForAssignment(
+	assignmentID, schoolID, userID uuid.UUID,
+	roleName string,
+) ([]model.SubmissionView, error) {
+	assignment, err := s.repo.GetAssignmentByIDAndSchool(assignmentID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("assignment not found")
+		}
+		return nil, fmt.Errorf("failed to fetch assignment: %w", err)
+	}
+	if err := s.canManageAssignmentSubmissions(assignment, schoolID, userID, roleName); err != nil {
+		return nil, err
+	}
+
+	subs, err := s.repo.GetSubmissionsForAssignment(schoolID, assignmentID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch submissions: %w", err)
+	}
+	out := make([]model.SubmissionView, len(subs))
+	for i, sub := range subs {
+		out[i] = s.enrichSubmissionView(sub)
+	}
+	return out, nil
+}
+
+func (s *AcademicService) ReviewSubmission(
+	submissionID, schoolID, userID uuid.UUID,
+	roleName string,
+	req model.UpdateSubmissionRequest,
+) (*model.Submission, error) {
+	submission, err := s.repo.GetSubmissionByIDAndSchool(submissionID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("submission not found")
+		}
+		return nil, fmt.Errorf("failed to fetch submission: %w", err)
+	}
+
+	assignment, err := s.repo.GetAssignmentByIDAndSchool(submission.AssignmentID, schoolID)
+	if err != nil {
+		return nil, errors.New("assignment not found")
+	}
+	if err := s.canManageAssignmentSubmissions(assignment, schoolID, userID, roleName); err != nil {
+		return nil, err
+	}
+
+	if req.TeacherFeedback != nil {
+		submission.TeacherFeedback = strings.TrimSpace(*req.TeacherFeedback)
+	}
+	now := time.Now()
+	submission.ReviewedAt = &now
+
+	if err := s.repo.UpdateSubmission(submission); err != nil {
+		return nil, fmt.Errorf("failed to save review: %w", err)
+	}
+	return submission, nil
+}
+
 type authUserResponse struct {
 	ID       string `json:"id"`
 	SchoolID string `json:"school_id"`

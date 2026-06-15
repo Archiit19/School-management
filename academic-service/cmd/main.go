@@ -83,9 +83,11 @@ func main() {
 		protected.POST("/assignments", middleware.RequirePermission("create_assignment"), h.CreateAssignment)
 		protected.GET("/assignments/me", middleware.RequirePermission("view_own_assignments"), h.GetMyAssignments)
 		protected.GET("/assignments", middleware.RequirePermission("view_assignments"), h.GetAssignments)
+		protected.GET("/assignments/:id/submissions", middleware.RequirePermission("view_assignments"), h.GetAssignmentSubmissions)
 		protected.GET("/submissions/me", middleware.RequirePermission("view_own_submissions"), h.GetMySubmissions)
 		protected.POST("/submissions/me", middleware.RequirePermission("submit_own_assignment"), h.CreateMySubmission)
 		protected.POST("/submissions", middleware.RequirePermission("submit_assignment"), h.CreateSubmission)
+		protected.PATCH("/submissions/:id", middleware.RequirePermission("create_assignment"), h.ReviewSubmission)
 	}
 
 	internal := r.Group("/internal")

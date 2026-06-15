@@ -11,6 +11,7 @@ type Config struct {
 	JWTSecret            string
 	Port                 string
 	UserServiceURL       string
+	StudentServiceURL    string
 	InternalServiceToken string
 }
 
@@ -24,6 +25,7 @@ func Load() *Config {
 		JWTSecret:            pkgconfig.GetEnv("JWT_SECRET", "super-secret-jwt-key-change-in-production"),
 		Port:                 pkgconfig.GetEnv("PORT", "8083"),
 		UserServiceURL:       pkgconfig.GetEnv("USER_SERVICE_URL", "http://user-service:8082"),
+		StudentServiceURL:    pkgconfig.GetEnv("STUDENT_SERVICE_URL", "http://localhost:8084"),
 		InternalServiceToken: pkgconfig.GetEnv("INTERNAL_SERVICE_TOKEN", ""),
 	}
 }
