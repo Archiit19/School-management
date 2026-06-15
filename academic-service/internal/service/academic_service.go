@@ -749,6 +749,13 @@ func (s *AcademicService) ReviewSubmission(
 	if req.TeacherFeedback != nil {
 		submission.TeacherFeedback = strings.TrimSpace(*req.TeacherFeedback)
 	}
+	if req.Marks != nil {
+		if *req.Marks < 0 || *req.Marks > 20 {
+			return nil, errors.New("marks must be between 0 and 20")
+		}
+		marks := *req.Marks
+		submission.Marks = &marks
+	}
 	now := time.Now()
 	submission.ReviewedAt = &now
 

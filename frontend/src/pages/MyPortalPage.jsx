@@ -679,6 +679,7 @@ function AssignmentsTab() {
   useEffect(() => { load(); }, [load]);
 
   const submittedFor = new Map(submissions.map((s) => [s.assignment_id, s]));
+  const assignmentTitle = (id) => assignments.find((a) => a.id === id)?.title || id;
 
   function openSubmit(a) {
     setActive(a);
@@ -716,7 +717,19 @@ function AssignmentsTab() {
                     <td>{a.title}</td>
                     <td>{a.due_date ? fmtDate(a.due_date) : "—"}</td>
                     <td>{a.material_url ? <a href={a.material_url} target="_blank" rel="noreferrer">Open</a> : "—"}</td>
-                    <td>{sub ? <span className="status status-active">Submitted</span> : <span className="status status-inactive">Pending</span>}</td>
+                    <td>
+                      {sub ? (
+                        sub.reviewed_at ? (
+                          <span className="status status-active">
+                            Reviewed{sub.marks != null ? ` · ${sub.marks}/20` : ""}
+                          </span>
+                        ) : (
+                          <span className="status status-active">Submitted</span>
+                        )
+                      ) : (
+                        <span className="status status-inactive">Pending</span>
+                      )}
+                    </td>
                     <td>
                       {canSubmit && !sub && (
                         <button className="btn btn-primary btn-sm" onClick={() => openSubmit(a)}>Submit</button>
@@ -758,13 +771,23 @@ function AssignmentsTab() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Assignment ID</th><th>Submitted</th><th>Material</th></tr></thead>
+            <thead><tr><th>Assignment</th><th>Submitted</th><th>Marks</th><th>Feedback</th><th>Material</th></tr></thead>
             <tbody>
-              {submissions.length === 0 && <tr><td colSpan={3} className="empty">No submissions yet.</td></tr>}
+              {submissions.length === 0 && <tr><td colSpan={5} className="empty">No submissions yet.</td></tr>}
               {submissions.map((s) => (
                 <tr key={s.id}>
-                  <td><span className="mono truncate">{s.assignment_id}</span></td>
+                  <td><strong>{assignmentTitle(s.assignment_id)}</strong></td>
                   <td>{fmtDate(s.created_at)}</td>
+                  <td>
+                    {s.reviewed_at && s.marks != null ? (
+                      <strong>{s.marks}/20</strong>
+                    ) : s.reviewed_at ? (
+                      <span className="text-muted">Reviewed</span>
+                    ) : (
+                      <span className="text-muted">Pending review</span>
+                    )}
+                  </td>
+                  <td>{s.teacher_feedback || (s.reviewed_at ? "—" : <span className="text-muted">Not yet</span>)}</td>
                   <td>{s.material_url ? <a href={s.material_url} target="_blank" rel="noreferrer">Open</a> : "—"}</td>
                 </tr>
               ))}

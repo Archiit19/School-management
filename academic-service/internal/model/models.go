@@ -68,6 +68,7 @@ type Submission struct {
 	Content         string     `json:"content"`
 	MaterialURL     string     `json:"material_url"`
 	TeacherFeedback string     `json:"teacher_feedback"`
+	Marks           *int       `json:"marks,omitempty" gorm:"type:integer"`
 	ReviewedAt      *time.Time `json:"reviewed_at,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
@@ -153,6 +154,7 @@ type CreateMySubmissionRequest struct {
 
 type UpdateSubmissionRequest struct {
 	TeacherFeedback *string `json:"teacher_feedback"`
+	Marks           *int    `json:"marks"`
 }
 
 type ErrorResponse struct {
