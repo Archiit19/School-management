@@ -20,6 +20,11 @@ function fmtDate(iso) {
   return iso.split("T")[0];
 }
 
+function fmtMarks(marks) {
+  if (marks == null) return "—";
+  return `${marks}/20`;
+}
+
 export default function AssignmentsPage() {
   const { user, hasPerm } = useAuth();
   const isTeacher = user?.role_name === "teacher";
@@ -48,6 +53,7 @@ export default function AssignmentsPage() {
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
   const [reviewingId, setReviewingId] = useState(null);
   const [feedbackDraft, setFeedbackDraft] = useState("");
+  const [marksDraft, setMarksDraft] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -143,6 +149,7 @@ export default function AssignmentsPage() {
     setViewAssignment(assignment);
     setReviewingId(null);
     setFeedbackDraft("");
+    setMarksDraft("");
     setSubmissions([]);
     setSubmissionsLoading(true);
     setError("");
@@ -161,22 +168,36 @@ export default function AssignmentsPage() {
     setSubmissions([]);
     setReviewingId(null);
     setFeedbackDraft("");
+    setMarksDraft("");
   }
 
   function startReview(sub) {
     setReviewingId(sub.id);
     setFeedbackDraft(sub.teacher_feedback || "");
+    setMarksDraft(sub.marks != null ? String(sub.marks) : "");
   }
 
   async function saveReview(submissionId) {
     setError("");
+    const trimmedMarks = marksDraft.trim();
+    let marks;
+    if (trimmedMarks !== "") {
+      marks = Number(trimmedMarks);
+      if (!Number.isInteger(marks) || marks < 0 || marks > 20) {
+        setError("Marks must be a whole number from 0 to 20.");
+        return;
+      }
+    }
     setBusy(true);
     try {
-      await academicApi.reviewSubmission(submissionId, { teacher_feedback: feedbackDraft });
+      const body = { teacher_feedback: feedbackDraft };
+      if (marks != null) body.marks = marks;
+      await academicApi.reviewSubmission(submissionId, body);
       msg("Evaluation saved.");
       setSubmissions(await academicApi.getAssignmentSubmissions(viewAssignment.id));
       setReviewingId(null);
       setFeedbackDraft("");
+      setMarksDraft("");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -357,6 +378,7 @@ export default function AssignmentsPage() {
                     <tr>
                       <th>Student</th>
                       <th>Submitted</th>
+                      <th>Marks</th>
                       <th>Status</th>
                       <th></th>
                     </tr>
@@ -369,6 +391,7 @@ export default function AssignmentsPage() {
                           {s.student_code && <div className="text-muted">{s.student_code}</div>}
                         </td>
                         <td>{fmtDate(s.created_at)}</td>
+                        <td>{fmtMarks(s.marks)}</td>
                         <td>
                           {s.reviewed_at ? (
                             <span className="status status-active">Reviewed</span>
@@ -415,8 +438,26 @@ export default function AssignmentsPage() {
                       <div className="review-box">{sub.teacher_feedback}</div>
                     </div>
                   )}
+                  {sub.marks != null && !canReview && (
+                    <div className="form-group">
+                      <label>Marks</label>
+                      <div className="review-box">{fmtMarks(sub.marks)}</div>
+                    </div>
+                  )}
                   {canReview && (
                     <>
+                      <div className="form-group">
+                        <label>Marks (out of 20)</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={20}
+                          step={1}
+                          value={marksDraft}
+                          onChange={(e) => setMarksDraft(e.target.value)}
+                          placeholder="0–20"
+                        />
+                      </div>
                       <div className="form-group">
                         <label>Your feedback / evaluation</label>
                         <textarea

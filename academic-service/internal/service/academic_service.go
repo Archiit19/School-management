@@ -643,33 +643,48 @@ func (s *AcademicService) canManageAssignmentSubmissions(
 	return errors.New("you are not allowed to access submissions for this assignment")
 }
 
-func (s *AcademicService) resolveStudent(studentID uuid.UUID) (string, string, error) {
-	url := fmt.Sprintf("%s/internal/students/%s",
-		strings.TrimRight(s.cfg.StudentServiceURL, "/"),
-		studentID.String(),
+// resolveStudent returns display info for a pupil. submission.student_id stores the
+// pupil's user-service user ID (see CreateOwnSubmission), not student-service admission IDs.
+func (s *AcademicService) resolveStudent(studentUserID uuid.UUID) (string, string, error) {
+	name, _, err := s.resolveUser(studentUserID)
+	if err != nil {
+		return "", "", err
+	}
+	code, _ := s.resolveStudentCode(studentUserID)
+	return name, code, nil
+}
+
+func (s *AcademicService) resolveStudentCode(userID uuid.UUID) (string, error) {
+	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
+		return "", errors.New("internal service token not configured")
+	}
+	url := fmt.Sprintf("%s/internal/users/%s/profile",
+		strings.TrimRight(s.cfg.UserServiceURL, "/"),
+		userID.String(),
 	)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
+	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
 	resp, err := s.httpClient.Do(req)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", "", fmt.Errorf("student-service returned %d", resp.StatusCode)
+		return "", fmt.Errorf("user-service /internal/users/profile returned %d", resp.StatusCode)
 	}
-	var st struct {
-		FirstName   string `json:"first_name"`
-		LastName    string `json:"last_name"`
-		StudentCode string `json:"student_code"`
+	var profile map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return "", err
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
-		return "", "", err
+	if v, ok := profile["student_code"]; ok {
+		if code := strings.TrimSpace(fmt.Sprint(v)); code != "" {
+			return code, nil
+		}
 	}
-	name := strings.TrimSpace(st.FirstName + " " + st.LastName)
-	return name, st.StudentCode, nil
+	return "", nil
 }
 
 func (s *AcademicService) enrichSubmissionView(sub model.Submission) model.SubmissionView {
@@ -733,6 +748,13 @@ func (s *AcademicService) ReviewSubmission(
 
 	if req.TeacherFeedback != nil {
 		submission.TeacherFeedback = strings.TrimSpace(*req.TeacherFeedback)
+	}
+	if req.Marks != nil {
+		if *req.Marks < 0 || *req.Marks > 20 {
+			return nil, errors.New("marks must be between 0 and 20")
+		}
+		marks := *req.Marks
+		submission.Marks = &marks
 	}
 	now := time.Now()
 	submission.ReviewedAt = &now
