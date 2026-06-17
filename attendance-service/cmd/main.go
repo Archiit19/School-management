@@ -2,22 +2,23 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/handler"
-	"github.com/Archiit19/School-management/pkg/middleware"
-	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/attendance-service/docs"
 )
@@ -31,24 +32,30 @@ import (
 // @in              header
 // @name            Authorization
 func main() {
+	if _, err := log.InitFromEnv("attendance-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
+	}
+
 	cfg := config.Load()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	log.Println("connected to Attendance DB")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(&model.Attendance{}, &model.TeacherAttendance{}); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
-	log.Println("attendance database migrated")
+	log.Info("database migrated")
 
 	if err := db.Exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS ux_teacher_attendance_school_teacher_date
 ON teacher_attendances (school_id, teacher_user_id, date);
 `).Error; err != nil {
-		log.Printf("warn: teacher attendance unique index: %v", err)
+		log.Warn("teacher attendance unique index", log.Err(err))
 	}
 	if err := db.Exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS ux_student_attendance_scope
@@ -61,7 +68,7 @@ ON attendances (
 	COALESCE(subject_id, '00000000-0000-0000-0000-000000000000'::uuid)
 );
 `).Error; err != nil {
-		log.Printf("warn: student attendance unique index: %v", err)
+		log.Warn("student attendance unique index", log.Err(err))
 	}
 
 	repo := repository.NewAttendanceRepository(db)
@@ -70,7 +77,7 @@ ON attendances (
 	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
 	h := handler.NewAttendanceHandler(svc, users)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "attendance-service is running"})
@@ -96,8 +103,11 @@ ON attendances (
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("Attendance Service starting on %s", addr)
+	log.Info("starting http server",
+		log.AddField("addr", addr),
+		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
+	)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }
