@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/repository"
 	"github.com/google/uuid"
@@ -59,8 +60,15 @@ func (s *FinanceService) CreateFee(
 		CreatedBy:   createdBy,
 	}
 	if err := s.repo.CreateFee(fee); err != nil {
+		log.Error("create fee: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("title", req.Title))
 		return nil, fmt.Errorf("failed to create fee: %w", err)
 	}
+	log.Info("fee created",
+		log.AddField("fee_id", fee.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("title", fee.Title),
+		log.AddField("amount", fee.Amount),
+	)
 	return fee, nil
 }
 
@@ -90,6 +98,7 @@ func (s *FinanceService) RecordPayment(
 
 	paidSoFar, err := s.repo.GetPaidAmountForFeeAndStudent(feeID, studentID)
 	if err != nil {
+		log.Error("record payment: validate paid amount failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("fee_id", feeID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to validate paid amount: %w", err)
 	}
 	if paidSoFar+req.AmountPaid > fee.Amount {
@@ -112,14 +121,23 @@ func (s *FinanceService) RecordPayment(
 		ReceivedBy:  receivedBy,
 	}
 	if err := s.repo.CreatePayment(payment); err != nil {
+		log.Error("record payment: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("fee_id", feeID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to create payment: %w", err)
 	}
+	log.Info("payment recorded",
+		log.AddField("payment_id", payment.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("fee_id", feeID),
+		log.AddField("student_id", studentID),
+		log.AddField("amount_paid", payment.AmountPaid),
+	)
 	return payment, nil
 }
 
 func (s *FinanceService) GetDues(schoolID uuid.UUID, query model.DueQuery) ([]model.DueItem, error) {
 	fees, err := s.repo.GetFeesForDues(schoolID, query)
 	if err != nil {
+		log.Error("get dues: fetch fees failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch fees: %w", err)
 	}
 
@@ -153,6 +171,7 @@ func (s *FinanceService) GetDues(schoolID uuid.UUID, query model.DueQuery) ([]mo
 
 		paid, err := s.repo.GetPaidAmountForFeeAndStudent(fee.ID, targetStudentID)
 		if err != nil {
+			log.Error("get dues: compute due failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("fee_id", fee.ID), log.AddField("student_id", targetStudentID))
 			return nil, fmt.Errorf("failed to compute due for fee %s: %w", fee.ID, err)
 		}
 

@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/service"
 	"github.com/Archiit19/School-management/pkg/pupil"
@@ -34,6 +35,7 @@ func NewFinanceHandler(svc *service.FinanceService, users *userclient.Client) *F
 func (h *FinanceHandler) CreateFee(c *gin.Context) {
 	var req model.CreateFeeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -44,9 +46,11 @@ func (h *FinanceHandler) CreateFee(c *gin.Context) {
 
 	fee, err := h.svc.CreateFee(req, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create fee failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("fee created", log.AddField("fee_id", fee.ID), log.AddField("school_id", schoolID), log.AddField("title", fee.Title))
 	c.JSON(http.StatusCreated, fee)
 }
 
@@ -64,6 +68,7 @@ func (h *FinanceHandler) CreateFee(c *gin.Context) {
 func (h *FinanceHandler) RecordPayment(c *gin.Context) {
 	var req model.CreatePaymentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,9 +79,11 @@ func (h *FinanceHandler) RecordPayment(c *gin.Context) {
 
 	payment, err := h.svc.RecordPayment(req, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "record payment failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("payment recorded", log.AddField("payment_id", payment.ID), log.AddField("school_id", schoolID), log.AddField("fee_id", payment.FeeID))
 	c.JSON(http.StatusCreated, payment)
 }
 
@@ -95,6 +102,7 @@ func (h *FinanceHandler) RecordPayment(c *gin.Context) {
 func (h *FinanceHandler) GetDues(c *gin.Context) {
 	var query model.DueQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -102,6 +110,7 @@ func (h *FinanceHandler) GetDues(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	dues, err := h.svc.GetDues(schoolID, query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get dues failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -123,12 +132,15 @@ func (h *FinanceHandler) GetDues(c *gin.Context) {
 func (h *FinanceHandler) GetMyDues(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		userID, _ := c.Get("user_id")
+		logServiceError(c, http.StatusForbidden, "get my dues failed", err, log.AddField("user_id", userID.(uuid.UUID)))
 		pupil.WriteForbidden(c, err)
 		return
 	}
 
 	var query model.DueQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -137,6 +149,7 @@ func (h *FinanceHandler) GetMyDues(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	dues, err := h.svc.GetDues(schoolID, query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get my dues failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
