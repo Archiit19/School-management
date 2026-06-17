@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/school-service/internal/config"
 	"github.com/Archiit19/School-management/school-service/internal/handler"
 	"github.com/Archiit19/School-management/school-service/internal/migrate"
@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 )
 
 // @title           School Service API
@@ -27,27 +28,33 @@ import (
 // @in              header
 // @name            Authorization
 func main() {
+	if _, err := log.InitFromEnv("school-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
+	}
+
 	cfg := config.Load()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	log.Println("connected to School DB")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(&model.School{}, &model.UserSchool{}); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
 	if err := migrate.DropRoleIDFromMemberships(db); err != nil {
-		log.Fatalf("failed membership schema migration: %v", err)
+		log.Fatal("failed membership schema migration", log.Err(err))
 	}
-	log.Println("school database migrated")
+	log.Info("database migrated")
 
 	repo := repository.NewSchoolRepository(db)
 	svc := service.NewSchoolService(repo, cfg.AuthServiceURL, cfg.InternalServiceToken)
 	h := handler.NewSchoolHandler(svc)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "school-service is running"})
@@ -87,8 +94,8 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("School Service starting on %s", addr)
+	log.Info("starting http server", log.AddField("addr", addr))
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

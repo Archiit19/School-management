@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/school-service/internal/model"
 	"github.com/Archiit19/School-management/school-service/internal/service"
 	"github.com/gin-gonic/gin"
@@ -20,6 +21,7 @@ func NewSchoolHandler(svc *service.SchoolService) *SchoolHandler {
 func (h *SchoolHandler) CreateSchool(c *gin.Context) {
 	var req model.CreateSchoolRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -27,9 +29,11 @@ func (h *SchoolHandler) CreateSchool(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	school, err := h.svc.CreateSchoolForUser(userID, req)
 	if err != nil {
+		logServiceError(c, http.StatusConflict, "create school failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school created", log.AddField("school_id", school.ID), log.AddField("user_id", userID), log.AddField("name", school.Name))
 	c.JSON(http.StatusCreated, school)
 }
 
@@ -37,6 +41,7 @@ func (h *SchoolHandler) ListMySchools(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	schools, err := h.svc.ListSchoolsForUser(userID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list my schools failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -49,12 +54,14 @@ func (h *SchoolHandler) ListMySchools(c *gin.Context) {
 func (h *SchoolHandler) ListSchools(c *gin.Context) {
 	var query model.SchoolListQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	resp, err := h.svc.ListSchools(query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list schools failed", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -70,6 +77,7 @@ func (h *SchoolHandler) GetSchool(c *gin.Context) {
 
 	school, err := h.svc.GetSchool(id)
 	if err != nil {
+		logServiceError(c, http.StatusNotFound, "get school failed", err, log.AddField("school_id", id))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -84,6 +92,7 @@ func (h *SchoolHandler) GetMySchool(c *gin.Context) {
 	}
 	school, err := h.svc.GetSchool(schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusNotFound, "get my school failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -99,15 +108,18 @@ func (h *SchoolHandler) UpdateSchool(c *gin.Context) {
 
 	var req model.UpdateSchoolRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	school, err := h.svc.UpdateSchool(id, req)
 	if err != nil {
+		logServiceError(c, http.StatusConflict, "update school failed", err, log.AddField("school_id", id))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school updated", log.AddField("school_id", school.ID))
 	c.JSON(http.StatusOK, school)
 }
 
@@ -120,15 +132,18 @@ func (h *SchoolHandler) UpdateMySchool(c *gin.Context) {
 
 	var req model.UpdateSchoolRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	school, err := h.svc.UpdateSchool(schoolID, req)
 	if err != nil {
+		logServiceError(c, http.StatusConflict, "update my school failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school updated", log.AddField("school_id", school.ID))
 	c.JSON(http.StatusOK, school)
 }
 
@@ -140,15 +155,18 @@ func (h *SchoolHandler) DeleteSchool(c *gin.Context) {
 	}
 
 	if err := h.svc.DeleteSchool(id); err != nil {
+		logServiceError(c, http.StatusNotFound, "delete school failed", err, log.AddField("school_id", id))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school deactivated", log.AddField("school_id", id))
 	c.JSON(http.StatusOK, gin.H{"message": "school deactivated"})
 }
 
 func (h *SchoolHandler) CreateSchoolWithAdminInternal(c *gin.Context) {
 	var req model.CreateSchoolWithAdminRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -166,9 +184,11 @@ func (h *SchoolHandler) CreateSchoolWithAdminInternal(c *gin.Context) {
 		Email:   req.Email,
 	})
 	if err != nil {
+		logServiceError(c, http.StatusConflict, "create school with admin internal failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school created (internal)", log.AddField("school_id", school.ID), log.AddField("user_id", userID), log.AddField("name", school.Name))
 	c.JSON(http.StatusCreated, school)
 }
 
@@ -185,6 +205,7 @@ func (h *SchoolHandler) GetSchoolByEmailInternal(c *gin.Context) {
 
 	school, err := h.svc.GetSchoolByEmail(email)
 	if err != nil {
+		logServiceError(c, http.StatusNotFound, "get school by email internal failed", err, log.AddField("email", email))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -200,6 +221,7 @@ func (h *SchoolHandler) ListSchoolsByUserInternal(c *gin.Context) {
 
 	schools, err := h.svc.ListSchoolsForUser(userID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list schools by user internal failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -223,6 +245,7 @@ func (h *SchoolHandler) CheckAdminInternal(c *gin.Context) {
 
 	ok, err := h.svc.IsUserMember(schoolID, userID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "check admin internal failed", err, log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -241,6 +264,7 @@ func (h *SchoolHandler) ListMembershipsForUserInternal(c *gin.Context) {
 	}
 	rows, err := h.svc.ListMembershipsForUser(userID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list memberships for user internal failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -258,6 +282,7 @@ func (h *SchoolHandler) ListMembersForSchoolInternal(c *gin.Context) {
 	}
 	rows, err := h.svc.ListMembersForSchool(schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list members for school internal failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -280,6 +305,7 @@ func (h *SchoolHandler) GetMemberInternal(c *gin.Context) {
 	}
 	m, err := h.svc.GetMembership(schoolID, userID)
 	if err != nil {
+		logServiceError(c, http.StatusNotFound, "get member internal failed", err, log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -297,6 +323,7 @@ func (h *SchoolHandler) AddMemberInternal(c *gin.Context) {
 	}
 	var req model.AddMemberRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -307,9 +334,11 @@ func (h *SchoolHandler) AddMemberInternal(c *gin.Context) {
 	}
 	m, err := h.svc.AddMember(schoolID, userID)
 	if err != nil {
+		logServiceError(c, http.StatusConflict, "add member internal failed", err, log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school member added", log.AddField("school_id", m.SchoolID), log.AddField("user_id", m.UserID))
 	c.JSON(http.StatusCreated, model.UserSchoolMember{
 		UserID:   m.UserID,
 		SchoolID: m.SchoolID,
@@ -328,8 +357,10 @@ func (h *SchoolHandler) RemoveMemberInternal(c *gin.Context) {
 		return
 	}
 	if err := h.svc.RemoveMember(schoolID, userID); err != nil {
+		logServiceError(c, http.StatusNotFound, "remove member internal failed", err, log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("school member removed", log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 	c.JSON(http.StatusOK, gin.H{"message": "membership removed"})
 }
