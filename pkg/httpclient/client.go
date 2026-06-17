@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 )
 
 const InternalTokenHeader = "X-Internal-Token"
@@ -21,19 +23,25 @@ type Client struct {
 	HTTP    *http.Client
 }
 
-// New creates an internal HTTP client with the standard timeout.
+// New creates an internal HTTP client using environment-based production defaults.
 func New(baseURL, token string) *Client {
+	return NewFromConfig(ClientConfig{BaseURL: baseURL, Token: token})
+}
+
+// NewFromConfig creates an internal HTTP client with tuned transport, retry, and circuit breaker.
+func NewFromConfig(cfg ClientConfig) *Client {
+	httpCfg := cfg.httpConfig()
 	return &Client{
-		BaseURL: strings.TrimRight(baseURL, "/"),
-		Token:   token,
-		HTTP:    &http.Client{Timeout: DefaultTimeout},
+		BaseURL: strings.TrimRight(cfg.BaseURL, "/"),
+		Token:   cfg.Token,
+		HTTP:    NewHTTPClient(cfg.breakerName(), httpCfg),
 	}
 }
 
-// NewWithHTTP allows injecting a custom http.Client (e.g. shared transport).
+// NewWithHTTP allows injecting a custom http.Client (e.g. tests or shared transport).
 func NewWithHTTP(baseURL, token string, httpClient *http.Client) *Client {
 	if httpClient == nil {
-		httpClient = &http.Client{Timeout: DefaultTimeout}
+		httpClient = NewHTTPClient("httpclient", pkgconfig.LoadHTTPClientConfigFromEnv())
 	}
 	return &Client{
 		BaseURL: strings.TrimRight(baseURL, "/"),
