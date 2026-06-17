@@ -5,7 +5,7 @@ go 1.24
 toolchain go1.24.4
 
 require (
-	github.com/Archiit19/School-management/pkg v0.0.0-00010101000000-000000000000
+	github.com/Archiit19/School-management/pkg v1.0.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	github.com/swaggo/files v1.0.1
@@ -65,5 +65,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/Archiit19/School-management/pkg => ../pkg
