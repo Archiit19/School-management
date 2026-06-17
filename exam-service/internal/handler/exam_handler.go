@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/service"
 	"github.com/Archiit19/School-management/pkg/pupil"
@@ -34,6 +35,7 @@ func NewExamHandler(svc *service.ExamService, users *userclient.Client) *ExamHan
 func (h *ExamHandler) CreateExam(c *gin.Context) {
 	var req model.CreateExamRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -44,9 +46,11 @@ func (h *ExamHandler) CreateExam(c *gin.Context) {
 
 	exam, err := h.svc.CreateExam(req, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create exam failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("exam created", log.AddField("exam_id", exam.ID), log.AddField("school_id", schoolID), log.AddField("title", exam.Title))
 	c.JSON(http.StatusCreated, exam)
 }
 
@@ -64,6 +68,7 @@ func (h *ExamHandler) CreateExam(c *gin.Context) {
 func (h *ExamHandler) EnterMarks(c *gin.Context) {
 	var req model.EnterMarksRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,9 +79,11 @@ func (h *ExamHandler) EnterMarks(c *gin.Context) {
 
 	mark, err := h.svc.EnterMarks(req, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "enter marks failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("marks entered", log.AddField("mark_id", mark.ID), log.AddField("school_id", schoolID), log.AddField("exam_id", mark.ExamID), log.AddField("student_id", mark.StudentID))
 	c.JSON(http.StatusCreated, mark)
 }
 
@@ -94,6 +101,7 @@ func (h *ExamHandler) EnterMarks(c *gin.Context) {
 func (h *ExamHandler) PublishResults(c *gin.Context) {
 	var req model.PublishResultRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -103,9 +111,11 @@ func (h *ExamHandler) PublishResults(c *gin.Context) {
 
 	exam, err := h.svc.PublishResults(req, schoolID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "publish results failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("results published", log.AddField("exam_id", exam.ID), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusOK, exam)
 }
 
@@ -124,6 +134,7 @@ func (h *ExamHandler) PublishResults(c *gin.Context) {
 func (h *ExamHandler) GetResults(c *gin.Context) {
 	var query model.ResultQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -132,6 +143,7 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 	roleName := c.MustGet("role_name").(string)
 	results, err := h.svc.GetResults(schoolID, query, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get results failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -155,6 +167,7 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 func (h *ExamHandler) GetExams(c *gin.Context) {
 	var query model.ExamQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -162,6 +175,7 @@ func (h *ExamHandler) GetExams(c *gin.Context) {
 
 	exams, err := h.svc.GetExams(schoolID, query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list exams failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -181,6 +195,8 @@ func (h *ExamHandler) GetExams(c *gin.Context) {
 func (h *ExamHandler) GetMyExams(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		userID, _ := c.Get("user_id")
+		logServiceError(c, http.StatusForbidden, "get my exams failed", err, log.AddField("user_id", userID.(uuid.UUID)))
 		pupil.WriteForbidden(c, err)
 		return
 	}
@@ -194,6 +210,7 @@ func (h *ExamHandler) GetMyExams(c *gin.Context) {
 
 	exams, err := h.svc.GetMyExams(schoolID, studentID, authHeader, upcoming)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get my exams failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -215,12 +232,15 @@ func (h *ExamHandler) GetMyExams(c *gin.Context) {
 func (h *ExamHandler) GetMyResults(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		userID, _ := c.Get("user_id")
+		logServiceError(c, http.StatusForbidden, "get my results failed", err, log.AddField("user_id", userID.(uuid.UUID)))
 		pupil.WriteForbidden(c, err)
 		return
 	}
 
 	var query model.ResultQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -229,6 +249,7 @@ func (h *ExamHandler) GetMyResults(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	results, err := h.svc.GetResults(schoolID, query, "student")
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get my results failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
