@@ -8,19 +8,11 @@ import (
 	"strings"
 
 	"github.com/Archiit19/School-management/pkg/httpclient"
-	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
 type academicClient struct {
 	*httpclient.Client
-}
-
-func newAcademicClient(cfg *config.Config, client *http.Client) *academicClient {
-	if client == nil {
-		return &academicClient{Client: httpclient.New(cfg.AcademicServiceURL, cfg.InternalServiceToken)}
-	}
-	return &academicClient{Client: httpclient.NewWithHTTP(cfg.AcademicServiceURL, cfg.InternalServiceToken, client)}
 }
 
 type studentEnrollment struct {
