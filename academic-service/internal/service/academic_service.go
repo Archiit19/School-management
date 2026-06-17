@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/academic-service/internal/config"
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/repository"
@@ -39,6 +40,7 @@ func (s *AcademicService) CreateClass(req model.CreateClassRequest, schoolID uui
 		return nil, errors.New("class with this name already exists")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create class: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to validate class uniqueness: %w", err)
 	}
 
@@ -48,8 +50,10 @@ func (s *AcademicService) CreateClass(req model.CreateClassRequest, schoolID uui
 		Description: req.Description,
 	}
 	if err := s.repo.CreateClass(class); err != nil {
+		log.Error("create class: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("name", req.Name))
 		return nil, fmt.Errorf("failed to create class: %w", err)
 	}
+	log.Info("class created", log.AddField("class_id", class.ID), log.AddField("school_id", schoolID), log.AddField("name", class.Name))
 	return class, nil
 }
 
@@ -69,6 +73,7 @@ func (s *AcademicService) CreateSection(req model.CreateSectionRequest, schoolID
 		return nil, errors.New("section with this name already exists in this class")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create section: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 		return nil, fmt.Errorf("failed to validate section uniqueness: %w", err)
 	}
 
@@ -78,8 +83,10 @@ func (s *AcademicService) CreateSection(req model.CreateSectionRequest, schoolID
 		Name:     req.Name,
 	}
 	if err := s.repo.CreateSection(section); err != nil {
+		log.Error("create section: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 		return nil, fmt.Errorf("failed to create section: %w", err)
 	}
+	log.Info("section created", log.AddField("section_id", section.ID), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 	return section, nil
 }
 
@@ -116,6 +123,7 @@ func (s *AcademicService) CreateSubject(req model.CreateSubjectRequest, schoolID
 		return nil, errors.New("subject with this name already exists in this scope")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create subject: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 		return nil, fmt.Errorf("failed to validate subject uniqueness: %w", err)
 	}
 
@@ -127,14 +135,17 @@ func (s *AcademicService) CreateSubject(req model.CreateSubjectRequest, schoolID
 		Code:      req.Code,
 	}
 	if err := s.repo.CreateSubject(subject); err != nil {
+		log.Error("create subject: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 		return nil, fmt.Errorf("failed to create subject: %w", err)
 	}
+	log.Info("subject created", log.AddField("subject_id", subject.ID), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 	return subject, nil
 }
 
 func (s *AcademicService) GetClasses(schoolID uuid.UUID) ([]model.ClassWithChildren, error) {
 	classes, err := s.repo.GetClassesBySchoolID(schoolID)
 	if err != nil {
+		log.Error("list classes: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch classes: %w", err)
 	}
 
@@ -142,10 +153,12 @@ func (s *AcademicService) GetClasses(schoolID uuid.UUID) ([]model.ClassWithChild
 	for _, class := range classes {
 		sections, err := s.repo.GetSectionsByClassID(class.ID)
 		if err != nil {
+			log.Error("list classes: sections query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", class.ID))
 			return nil, fmt.Errorf("failed to fetch sections for class %s: %w", class.ID, err)
 		}
 		subjects, err := s.repo.GetSubjectsByClassID(class.ID)
 		if err != nil {
+			log.Error("list classes: subjects query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", class.ID))
 			return nil, fmt.Errorf("failed to fetch subjects for class %s: %w", class.ID, err)
 		}
 
@@ -198,6 +211,7 @@ func (s *AcademicService) CreateTeacherAssignment(
 		return nil, errors.New("this subject already has a teacher assigned for this class")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create teacher assignment: subject assignment check failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to validate subject assignment: %w", err)
 	}
 
@@ -206,6 +220,7 @@ func (s *AcademicService) CreateTeacherAssignment(
 		return nil, errors.New("teacher assignment already exists")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create teacher assignment: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to validate assignment uniqueness: %w", err)
 	}
 
@@ -216,8 +231,14 @@ func (s *AcademicService) CreateTeacherAssignment(
 		SubjectID:     subjectID,
 	}
 	if err := s.repo.CreateTeacherAssignment(assignment); err != nil {
+		log.Error("create teacher assignment: database insert failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to create teacher assignment: %w", err)
 	}
+	log.Info("teacher assignment created",
+		log.AddField("teacher_assignment_id", assignment.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("teacher_user_id", teacherUserID),
+	)
 
 	return assignment, nil
 }
@@ -228,6 +249,7 @@ func (s *AcademicService) GetTeacherAssignments(
 ) ([]model.TeacherAssignment, error) {
 	assignments, err := s.repo.GetTeacherAssignments(schoolID, query)
 	if err != nil {
+		log.Error("list teacher assignments: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch teacher assignments: %w", err)
 	}
 	return assignments, nil
@@ -244,6 +266,7 @@ func (s *AcademicService) UpdateTeacherAssignment(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("teacher assignment not found")
 		}
+		log.Error("update teacher assignment: database fetch failed", log.Err(err), log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch teacher assignment: %w", err)
 	}
 
@@ -315,8 +338,10 @@ func (s *AcademicService) UpdateTeacherAssignment(
 	assignment.SubjectID = subjectID
 
 	if err := s.repo.UpdateTeacherAssignment(assignment); err != nil {
+		log.Error("update teacher assignment: database update failed", log.Err(err), log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to update teacher assignment: %w", err)
 	}
+	log.Info("teacher assignment updated", log.AddField("teacher_assignment_id", assignment.ID), log.AddField("school_id", schoolID))
 
 	return assignment, nil
 }
@@ -327,11 +352,14 @@ func (s *AcademicService) DeleteTeacherAssignment(id, schoolID uuid.UUID) error 
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("teacher assignment not found")
 		}
+		log.Error("delete teacher assignment: database fetch failed", log.Err(err), log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		return fmt.Errorf("failed to fetch teacher assignment: %w", err)
 	}
 	if err := s.repo.DeleteTeacherAssignment(id, schoolID); err != nil {
+		log.Error("delete teacher assignment: database delete failed", log.Err(err), log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		return fmt.Errorf("failed to delete teacher assignment: %w", err)
 	}
+	log.Info("teacher assignment deleted", log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 	return nil
 }
 
@@ -392,8 +420,14 @@ func (s *AcademicService) CreateAssignment(
 		DueDate:       dueDate,
 	}
 	if err := s.repo.CreateAssignment(assignment); err != nil {
+		log.Error("create assignment: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("title", req.Title))
 		return nil, fmt.Errorf("failed to create assignment: %w", err)
 	}
+	log.Info("assignment created",
+		log.AddField("assignment_id", assignment.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("title", assignment.Title),
+	)
 
 	return assignment, nil
 }
@@ -404,6 +438,7 @@ func (s *AcademicService) GetAssignments(
 ) ([]model.Assignment, error) {
 	assignments, err := s.repo.GetAssignments(schoolID, query)
 	if err != nil {
+		log.Error("list assignments: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch assignments: %w", err)
 	}
 	return assignments, nil
@@ -543,6 +578,7 @@ func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) 
 func (s *AcademicService) GetMySubmissions(schoolID, studentID uuid.UUID) ([]model.Submission, error) {
 	subs, err := s.repo.GetSubmissionsForStudent(schoolID, studentID)
 	if err != nil {
+		log.Error("get my submissions: database query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to fetch submissions: %w", err)
 	}
 	return subs, nil
@@ -565,6 +601,7 @@ func (s *AcademicService) CreateOwnSubmission(
 	if _, err := s.repo.GetSubmissionByComposite(schoolID, assignmentID, studentID); err == nil {
 		return nil, errors.New("submission already exists for this assignment")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create own submission: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("assignment_id", assignmentID))
 		return nil, fmt.Errorf("failed to validate submission uniqueness: %w", err)
 	}
 
@@ -577,8 +614,15 @@ func (s *AcademicService) CreateOwnSubmission(
 		MaterialURL:  req.MaterialURL,
 	}
 	if err := s.repo.CreateSubmission(submission); err != nil {
+		log.Error("create own submission: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("assignment_id", assignmentID))
 		return nil, fmt.Errorf("failed to create submission: %w", err)
 	}
+	log.Info("submission created",
+		log.AddField("submission_id", submission.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("assignment_id", assignmentID),
+		log.AddField("student_id", studentID),
+	)
 	return submission, nil
 }
 
@@ -605,6 +649,7 @@ func (s *AcademicService) CreateSubmission(
 		return nil, errors.New("submission already exists for this assignment and student")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create submission: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("assignment_id", assignmentID))
 		return nil, fmt.Errorf("failed to validate submission uniqueness: %w", err)
 	}
 
@@ -617,8 +662,15 @@ func (s *AcademicService) CreateSubmission(
 		MaterialURL:  req.MaterialURL,
 	}
 	if err := s.repo.CreateSubmission(submission); err != nil {
+		log.Error("create submission: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("assignment_id", assignmentID))
 		return nil, fmt.Errorf("failed to create submission: %w", err)
 	}
+	log.Info("submission created",
+		log.AddField("submission_id", submission.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("assignment_id", assignmentID),
+		log.AddField("student_id", studentID),
+	)
 
 	return submission, nil
 }
@@ -708,6 +760,7 @@ func (s *AcademicService) GetSubmissionsForAssignment(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("assignment not found")
 		}
+		log.Error("list assignment submissions: assignment fetch failed", log.Err(err), log.AddField("assignment_id", assignmentID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch assignment: %w", err)
 	}
 	if err := s.canManageAssignmentSubmissions(assignment, schoolID, userID, roleName); err != nil {
@@ -716,6 +769,7 @@ func (s *AcademicService) GetSubmissionsForAssignment(
 
 	subs, err := s.repo.GetSubmissionsForAssignment(schoolID, assignmentID)
 	if err != nil {
+		log.Error("list assignment submissions: database query failed", log.Err(err), log.AddField("assignment_id", assignmentID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch submissions: %w", err)
 	}
 	out := make([]model.SubmissionView, len(subs))
@@ -735,6 +789,7 @@ func (s *AcademicService) ReviewSubmission(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("submission not found")
 		}
+		log.Error("review submission: database fetch failed", log.Err(err), log.AddField("submission_id", submissionID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch submission: %w", err)
 	}
 
@@ -760,8 +815,14 @@ func (s *AcademicService) ReviewSubmission(
 	submission.ReviewedAt = &now
 
 	if err := s.repo.UpdateSubmission(submission); err != nil {
+		log.Error("review submission: database update failed", log.Err(err), log.AddField("submission_id", submissionID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to save review: %w", err)
 	}
+	log.Info("submission reviewed",
+		log.AddField("submission_id", submission.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("assignment_id", submission.AssignmentID),
+	)
 	return submission, nil
 }
 
@@ -818,6 +879,7 @@ func (s *AcademicService) resolvePupilProfile(studentID, schoolID uuid.UUID) (*p
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("pupil enrollment not found")
 		}
+		log.Error("resolve pupil profile: enrollment fetch failed", log.Err(err), log.AddField("student_id", studentID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to load enrollment: %w", err)
 	}
 	return &pupilProfile{
@@ -850,6 +912,7 @@ func (s *AcademicService) ListEnrollments(schoolID uuid.UUID, query model.Enroll
 	}
 	rows, err := s.repo.ListEnrollmentsByClassSection(schoolID, classID, sectionID)
 	if err != nil {
+		log.Error("list enrollments: database query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("class_id", classID))
 		return nil, fmt.Errorf("failed to list enrollments: %w", err)
 	}
 	return &model.EnrollmentListResponse{Enrollments: rows, Total: int64(len(rows))}, nil
@@ -861,6 +924,7 @@ func (s *AcademicService) GetEnrollmentByUser(userID, schoolID uuid.UUID) (*mode
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("enrollment not found")
 		}
+		log.Error("get enrollment: database query failed", log.Err(err), log.AddField("user_id", userID), log.AddField("school_id", schoolID))
 		return nil, err
 	}
 	return enrollment, nil
@@ -901,11 +965,27 @@ func (s *AcademicService) UpsertEnrollment(req model.UpsertEnrollmentRequest) (*
 		IsActive:  true,
 	}
 	if err := s.repo.UpsertEnrollment(row); err != nil {
+		log.Error("upsert enrollment: database save failed", log.Err(err), log.AddField("user_id", userID), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to save enrollment: %w", err)
 	}
-	return s.repo.GetEnrollmentByUserAndSchool(userID, schoolID)
+	enrollment, err := s.repo.GetEnrollmentByUserAndSchool(userID, schoolID)
+	if err != nil {
+		log.Error("upsert enrollment: reload failed", log.Err(err), log.AddField("user_id", userID), log.AddField("school_id", schoolID))
+		return nil, err
+	}
+	log.Info("enrollment upserted",
+		log.AddField("user_id", userID),
+		log.AddField("school_id", schoolID),
+		log.AddField("class_id", classID),
+	)
+	return enrollment, nil
 }
 
 func (s *AcademicService) DeleteEnrollment(userID, schoolID uuid.UUID) error {
-	return s.repo.DeleteEnrollment(userID, schoolID)
+	if err := s.repo.DeleteEnrollment(userID, schoolID); err != nil {
+		log.Error("delete enrollment: database delete failed", log.Err(err), log.AddField("user_id", userID), log.AddField("school_id", schoolID))
+		return err
+	}
+	log.Info("enrollment deleted", log.AddField("user_id", userID), log.AddField("school_id", schoolID))
+	return nil
 }

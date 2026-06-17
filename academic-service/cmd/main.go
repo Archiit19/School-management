@@ -2,22 +2,23 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/academic-service/internal/config"
 	"github.com/Archiit19/School-management/academic-service/internal/handler"
-	"github.com/Archiit19/School-management/pkg/middleware"
-	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/repository"
 	"github.com/Archiit19/School-management/academic-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/academic-service/docs"
 )
@@ -31,13 +32,19 @@ import (
 // @in              header
 // @name            Authorization
 func main() {
+	if _, err := log.InitFromEnv("academic-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
+	}
+
 	cfg := config.Load()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	log.Println("connected to Academic DB")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(
 		&model.Class{},
@@ -48,9 +55,9 @@ func main() {
 		&model.Submission{},
 		&model.StudentEnrollment{},
 	); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
-	log.Println("academic database migrated")
+	log.Info("database migrated")
 
 	repo := repository.NewAcademicRepository(db)
 	httpClient := &http.Client{Timeout: 8 * time.Second}
@@ -59,7 +66,7 @@ func main() {
 	h := handler.NewAcademicHandler(svc, users)
 	eh := handler.NewEnrollmentHandler(svc, users)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "academic-service is running"})
@@ -99,8 +106,11 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("Academic Service starting on %s", addr)
+	log.Info("starting http server",
+		log.AddField("addr", addr),
+		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
+	)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }
