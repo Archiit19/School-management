@@ -7,16 +7,11 @@ import (
 	"net/http"
 
 	"github.com/Archiit19/School-management/pkg/httpclient"
-	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
 type schoolClient struct {
 	*httpclient.Client
-}
-
-func newSchoolClient(cfg *config.Config) *schoolClient {
-	return &schoolClient{Client: httpclient.New(cfg.SchoolServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {

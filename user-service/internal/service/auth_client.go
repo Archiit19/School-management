@@ -8,16 +8,11 @@ import (
 	"net/url"
 
 	"github.com/Archiit19/School-management/pkg/httpclient"
-	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
 type authClient struct {
 	*httpclient.Client
-}
-
-func newAuthClient(cfg *config.Config) *authClient {
-	return &authClient{Client: httpclient.New(cfg.AuthServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *authClient) SetCredential(userID uuid.UUID, password string) error {
@@ -135,7 +130,11 @@ func (c *authClient) ListUserRoles(userID uuid.UUID) ([]userRoleMember, error) {
 }
 
 func (c *authClient) GetRoleByID(roleID uuid.UUID) (string, error) {
-	resp, err := c.HTTP.Get(c.URL(fmt.Sprintf("/api/v1/roles/%s", roleID.String())))
+	req, err := http.NewRequest(http.MethodGet, c.URL(fmt.Sprintf("/api/v1/roles/%s", roleID.String())), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -154,7 +153,11 @@ func (c *authClient) GetRoleByID(roleID uuid.UUID) (string, error) {
 
 func (c *authClient) StudentRoleID(schoolID uuid.UUID) (uuid.UUID, error) {
 	path := fmt.Sprintf("/api/v1/internal/roles/by-name?school_id=%s&name=student", url.QueryEscape(schoolID.String()))
-	resp, err := c.HTTP.Get(c.URL(path))
+	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -180,7 +183,11 @@ type fieldDefinition struct {
 }
 
 func (c *authClient) GetRoleFields(roleID uuid.UUID) ([]fieldDefinition, error) {
-	resp, err := c.HTTP.Get(c.URL(fmt.Sprintf("/api/v1/roles/%s/fields", roleID.String())))
+	req, err := http.NewRequest(http.MethodGet, c.URL(fmt.Sprintf("/api/v1/roles/%s/fields", roleID.String())), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.Do(req)
 	if err != nil {
 		return nil, err
 	}

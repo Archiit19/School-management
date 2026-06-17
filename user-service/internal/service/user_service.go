@@ -3,7 +3,6 @@ package service
 import (
 	"errors"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,12 +30,14 @@ func NewUserService(
 	profiles *repository.ProfileRepository,
 	cfg *config.Config,
 ) *UserService {
+	httpCfg := outboundHTTPConfig()
+	auth, school, academic := newServiceClients(cfg, httpCfg)
 	return &UserService{
 		repo:     repo,
 		profiles: profiles,
-		auth:     newAuthClient(cfg),
-		school:   newSchoolClient(cfg),
-		academic: newAcademicClient(cfg, &http.Client{Timeout: 8 * time.Second}),
+		auth:     auth,
+		school:   school,
+		academic: academic,
 	}
 }
 
