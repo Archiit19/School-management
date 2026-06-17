@@ -3,8 +3,8 @@ package service
 import (
 	"errors"
 	"fmt"
-	"log"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/google/uuid"
@@ -52,7 +52,10 @@ func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 			for _, pname := range t.Permissions {
 				pid, ok := permByName[pname]
 				if !ok {
-					log.Printf("rbac bootstrap: unknown permission %q for role %q — skipping", pname, t.Name)
+					log.Warn("rbac bootstrap: unknown permission for role — skipping",
+						log.AddField("permission", pname),
+						log.AddField("role", t.Name),
+					)
 					continue
 				}
 				permIDs = append(permIDs, pid)
@@ -85,7 +88,7 @@ func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 		}
 
 		if err := s.bootstrapRoleFields(role.ID, t.Name); err != nil {
-			log.Printf("rbac bootstrap: role fields for %q: %v", t.Name, err)
+			log.Warn("rbac bootstrap: role fields", log.Err(err), log.AddField("role", t.Name))
 		}
 	}
 
@@ -93,6 +96,7 @@ func (s *RBACService) BootstrapSchoolRoles(schoolID uuid.UUID) (uuid.UUID, error
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("super_admin role missing after bootstrap: %w", err)
 	}
+	log.Info("school roles bootstrapped", log.AddField("school_id", schoolID), log.AddField("super_admin_role_id", admin.ID))
 	return admin.ID, nil
 }
 

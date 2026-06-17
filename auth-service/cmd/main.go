@@ -2,21 +2,22 @@ package main
 
 import (
 	"fmt"
-	"log"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/handler"
-	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/auth-service/internal/migrate"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/Archiit19/School-management/auth-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/auth-service/docs"
 )
@@ -32,7 +33,7 @@ import (
 func seedPermissionsFromJSON(db *gorm.DB) {
 	list, err := rbacdata.LoadPredefinedPermissions()
 	if err != nil {
-		log.Fatalf("failed to load predefined_permissions.json: %v", err)
+		log.Fatal("failed to load predefined_permissions.json", log.Err(err))
 	}
 	for _, p := range list {
 		db.Where("name = ?", p.Name).FirstOrCreate(&model.Permission{
@@ -43,13 +44,19 @@ func seedPermissionsFromJSON(db *gorm.DB) {
 }
 
 func main() {
+	if _, err := log.InitFromEnv("auth-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
+	}
+
 	cfg := config.Load()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
+		Logger: gormlogger.Discard,
+	})
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatal("failed to connect to database", log.Err(err))
 	}
-	log.Println("Connected to Auth DB")
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(
 		&model.UserCredential{},
@@ -59,15 +66,15 @@ func main() {
 		&model.RolePermission{},
 		&model.RoleField{},
 	); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
 	if err := migrate.LegacySchema(db); err != nil {
-		log.Fatalf("failed legacy migration: %v", err)
+		log.Fatal("failed legacy migration", log.Err(err))
 	}
-	log.Println("Database migrated")
+	log.Info("database migrated")
 
 	seedPermissionsFromJSON(db)
-	log.Println("Predefined permissions seeded")
+	log.Info("predefined permissions seeded")
 
 	rbacRepo := repository.NewRBACRepository(db)
 	credRepo := repository.NewCredentialRepository(db)
@@ -76,14 +83,14 @@ func main() {
 	authSvc := service.NewAuthService(cfg, credSvc, rbacSvc)
 
 	if err := rbacSvc.SyncTemplateRolesForAllSchools(); err != nil {
-		log.Printf("template role sync: %v", err)
+		log.Warn("template role sync", log.Err(err))
 	}
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	rbacHandler := handler.NewRBACHandler(rbacSvc)
 	internalHandler := handler.NewInternalHandler(credSvc, rbacSvc)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.JSON(200, gin.H{"status": "auth-service is running"})
@@ -144,9 +151,11 @@ func main() {
 	}
 
 	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("Auth Service starting on %s", addr)
-	log.Printf("Swagger UI: http://localhost%s/swagger/index.html", addr)
+	log.Info("starting http server",
+		log.AddField("addr", addr),
+		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
+	)
 	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

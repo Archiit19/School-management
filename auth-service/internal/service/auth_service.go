@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/golang-jwt/jwt/v5"
@@ -43,15 +44,18 @@ func (s *AuthService) Signup(req model.SignupRequest) (*model.LoginResponse, err
 	if _, err := s.users.GetByEmail(req.Email); err == nil {
 		return nil, errors.New("user with this email already exists")
 	} else if !strings.Contains(err.Error(), "not found") {
+		log.Error("signup: email lookup failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to check email: %w", err)
 	}
 
 	user, err := s.users.CreateProfile(req.Name, req.Email, nil)
 	if err != nil {
+		log.Error("signup: create user profile failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to create user profile: %w", err)
 	}
 	if err := s.creds.SetPassword(user.ID, req.Password); err != nil {
 		_ = s.users.DeleteProfile(user.ID)
+		log.Error("signup: set password failed", log.Err(err), log.AddField("user_id", user.ID))
 		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
@@ -76,10 +80,12 @@ func (s *AuthService) RegisterSchool(req model.RegisterSchoolRequest) (*model.Re
 
 	user, err := s.users.CreateProfile(req.AdminName, req.AdminEmail, nil)
 	if err != nil {
+		log.Error("register school: create admin user failed", log.Err(err), log.AddField("email", req.AdminEmail))
 		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
 	if err := s.creds.SetPassword(user.ID, req.AdminPassword); err != nil {
 		_ = s.users.DeleteProfile(user.ID)
+		log.Error("register school: set password failed", log.Err(err), log.AddField("user_id", user.ID))
 		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
@@ -87,11 +93,13 @@ func (s *AuthService) RegisterSchool(req model.RegisterSchoolRequest) (*model.Re
 	if err != nil {
 		_ = s.creds.RemoveUserCompletely(user.ID)
 		_ = s.users.DeleteProfile(user.ID)
+		log.Error("register school: create school failed", log.Err(err), log.AddField("user_id", user.ID))
 		return nil, err
 	}
 
 	ur, err := s.creds.GetUserRole(user.ID, school.ID)
 	if err != nil {
+		log.Error("register school: load school role failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", school.ID))
 		return nil, fmt.Errorf("failed to load school role: %w", err)
 	}
 
@@ -148,6 +156,7 @@ func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error
 
 	memberships, err := s.school.ListMembershipsForUser(user.ID)
 	if err != nil {
+		log.Error("login: load school memberships failed", log.Err(err), log.AddField("user_id", user.ID))
 		return nil, fmt.Errorf("failed to load school memberships: %w", err)
 	}
 
@@ -158,6 +167,7 @@ func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error
 		m := memberships[0]
 		ur, err := s.creds.GetUserRole(user.ID, m.SchoolID)
 		if err != nil {
+			log.Error("login: load role for school failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", m.SchoolID))
 			return nil, fmt.Errorf("failed to load role for school: %w", err)
 		}
 		roleName := s.rbac.RoleName(ur.RoleID)
@@ -284,6 +294,7 @@ func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissi
 	if !permissionSetsEqual(jwtPermissions, user.Permissions) {
 		token, err := s.generateToken(user, ctx)
 		if err != nil {
+			log.Error("get me: refresh session token failed", log.Err(err), log.AddField("user_id", userID))
 			return nil, fmt.Errorf("failed to refresh session token: %w", err)
 		}
 		resp.Token = token
