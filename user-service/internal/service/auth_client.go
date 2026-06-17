@@ -7,12 +7,12 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
 type authClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 func (c *authClient) SetCredential(userID uuid.UUID, password string) error {
@@ -24,7 +24,7 @@ func (c *authClient) SetCredential(userID uuid.UUID, password string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "auth set credential")
+	return httpx.CheckStatus(resp, http.StatusOK, "auth set credential")
 }
 
 func (c *authClient) DeleteUserAuth(userID uuid.UUID) error {
@@ -37,7 +37,7 @@ func (c *authClient) DeleteUserAuth(userID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "auth delete credential")
+	return httpx.CheckStatus(resp, http.StatusOK, "auth delete credential")
 }
 
 func (c *authClient) AssignUserRole(userID, schoolID, roleID uuid.UUID) error {
@@ -50,7 +50,7 @@ func (c *authClient) AssignUserRole(userID, schoolID, roleID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusCreated, "auth assign role")
+	return httpx.CheckStatus(resp, http.StatusCreated, "auth assign role")
 }
 
 func (c *authClient) UpdateUserRole(userID, schoolID, roleID uuid.UUID) error {
@@ -63,7 +63,7 @@ func (c *authClient) UpdateUserRole(userID, schoolID, roleID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "auth update role")
+	return httpx.CheckStatus(resp, http.StatusOK, "auth update role")
 }
 
 func (c *authClient) RemoveUserRole(userID, schoolID uuid.UUID) error {
@@ -75,7 +75,7 @@ func (c *authClient) RemoveUserRole(userID, schoolID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "auth remove role")
+	return httpx.CheckStatus(resp, http.StatusOK, "auth remove role")
 }
 
 type userRoleMember struct {
@@ -99,7 +99,7 @@ func (c *authClient) GetUserRole(userID, schoolID uuid.UUID) (*userRoleMember, e
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, errors.New("role not found")
 	}
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "auth get role"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "auth get role"); err != nil {
 		return nil, err
 	}
 	var m userRoleMember
@@ -119,7 +119,7 @@ func (c *authClient) ListUserRoles(userID uuid.UUID) ([]userRoleMember, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "auth list roles"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "auth list roles"); err != nil {
 		return nil, err
 	}
 	var rows []userRoleMember

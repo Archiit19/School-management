@@ -1,4 +1,4 @@
-package httpclient
+package builder
 
 import (
 	"bytes"
@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/httpx/config"
 )
 
 type retryTransport struct {
 	base http.RoundTripper
-	cfg  pkgconfig.HTTPClient
+	cfg  config.HTTPClient
 }
 
 func (t *retryTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -33,7 +33,7 @@ func (e *statusError) Error() string {
 	return "http status " + strconv.Itoa(e.status)
 }
 
-func roundTripWithRetry(base http.RoundTripper, req *http.Request, cfg pkgconfig.HTTPClient) (*http.Response, error) {
+func roundTripWithRetry(base http.RoundTripper, req *http.Request, cfg config.HTTPClient) (*http.Response, error) {
 	if err := prepareRequestBodyForRetry(req); err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func roundTripWithRetry(base http.RoundTripper, req *http.Request, cfg pkgconfig
 	if lastErr != nil {
 		return nil, lastErr
 	}
-	return nil, errors.New("httpclient: retry attempts exhausted")
+	return nil, errors.New("httpx: retry attempts exhausted")
 }
 
 func prepareRequestBodyForRetry(req *http.Request) error {
@@ -110,7 +110,7 @@ func resetRequestBody(req *http.Request) error {
 	return nil
 }
 
-func shouldRetry(req *http.Request, resp *http.Response, err error, cfg pkgconfig.HTTPClient) bool {
+func shouldRetry(req *http.Request, resp *http.Response, err error, cfg config.HTTPClient) bool {
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return false
@@ -134,7 +134,11 @@ func shouldRetry(req *http.Request, resp *http.Response, err error, cfg pkgconfi
 	}
 }
 
-func methodAllowsRetry(method string, cfg pkgconfig.HTTPClient) bool {
+func MethodAllowsRetry(method string, cfg config.HTTPClient) bool {
+	return methodAllowsRetry(method, cfg)
+}
+
+func methodAllowsRetry(method string, cfg config.HTTPClient) bool {
 	if !cfg.RetryIdempotentOnly {
 		return true
 	}
@@ -146,7 +150,7 @@ func methodAllowsRetry(method string, cfg pkgconfig.HTTPClient) bool {
 	}
 }
 
-func waitForRetry(ctx context.Context, attempt int, cfg pkgconfig.HTTPClient) error {
+func waitForRetry(ctx context.Context, attempt int, cfg config.HTTPClient) error {
 	delay := retryDelay(attempt, cfg)
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
@@ -159,7 +163,7 @@ func waitForRetry(ctx context.Context, attempt int, cfg pkgconfig.HTTPClient) er
 	}
 }
 
-func retryDelay(attempt int, cfg pkgconfig.HTTPClient) time.Duration {
+func retryDelay(attempt int, cfg config.HTTPClient) time.Duration {
 	if attempt <= 0 {
 		return 0
 	}

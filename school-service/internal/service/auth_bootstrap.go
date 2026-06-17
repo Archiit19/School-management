@@ -5,16 +5,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
 type authBootstrapClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 func newAuthBootstrapClient(baseURL, token string) *authBootstrapClient {
-	return &authBootstrapClient{Client: httpclient.New(baseURL, token)}
+	return &authBootstrapClient{Client: httpx.New(baseURL, token)}
 }
 
 func (c *authBootstrapClient) BootstrapSchool(schoolID uuid.UUID) error {
@@ -25,7 +25,7 @@ func (c *authBootstrapClient) BootstrapSchool(schoolID uuid.UUID) error {
 		return fmt.Errorf("auth-service unreachable: %w", err)
 	}
 	defer resp.Body.Close()
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "auth-service bootstrap"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "auth-service bootstrap"); err != nil {
 		return err
 	}
 	return nil
@@ -33,12 +33,12 @@ func (c *authBootstrapClient) BootstrapSchool(schoolID uuid.UUID) error {
 
 func (c *authBootstrapClient) FetchRoleID(schoolID uuid.UUID, roleName string) (uuid.UUID, error) {
 	path := fmt.Sprintf("/api/v1/internal/roles/by-name?school_id=%s&name=%s", schoolID.String(), roleName)
-	resp, err := c.HTTP.Get(c.URL(path))
+	resp, err := c.Get(path)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("auth-service unreachable: %w", err)
 	}
 	defer resp.Body.Close()
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "auth-service role lookup"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "auth-service role lookup"); err != nil {
 		return uuid.Nil, fmt.Errorf("auth-service returned status %d for role %s", resp.StatusCode, roleName)
 	}
 	var role struct {
@@ -60,5 +60,5 @@ func (c *authBootstrapClient) AssignUserRole(userID, schoolID, roleID uuid.UUID)
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusCreated, "auth assign role")
+	return httpx.CheckStatus(resp, http.StatusCreated, "auth assign role")
 }

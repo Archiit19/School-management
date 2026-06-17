@@ -1,4 +1,4 @@
-package httpclient
+package builder_test
 
 import (
 	"errors"
@@ -8,7 +8,8 @@ import (
 	"testing"
 	"time"
 
-	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/httpx"
+	"github.com/Archiit19/School-management/pkg/httpx/internal/builder"
 )
 
 func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
@@ -17,13 +18,13 @@ func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := pkgconfig.DefaultHTTPClient()
+	cfg := httpx.DefaultHTTPClient()
 	cfg.RetryMax = 0
 	cfg.CircuitFailureThreshold = 2
 	cfg.CircuitTimeout = 200 * time.Millisecond
 	cfg.CircuitInterval = time.Minute
 
-	client := NewHTTPClient("cb-test", cfg)
+	client := httpx.NewHTTPClient("cb-test", cfg)
 
 	for i := 0; i < 2; i++ {
 		req, err := http.NewRequest(http.MethodGet, server.URL, nil)
@@ -48,7 +49,19 @@ func TestCircuitBreakerOpensAfterFailures(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected circuit open error")
 	}
-	if !errors.Is(err, ErrCircuitOpen) {
+	if !errors.Is(err, httpx.ErrCircuitOpen) {
 		t.Fatalf("err = %v, want ErrCircuitOpen", err)
+	}
+}
+
+func TestMethodAllowsRetry(t *testing.T) {
+	cfg := httpx.DefaultHTTPClient()
+	cfg.RetryIdempotentOnly = true
+
+	if !builder.MethodAllowsRetry(http.MethodGet, cfg) {
+		t.Fatal("GET should be retryable")
+	}
+	if builder.MethodAllowsRetry(http.MethodPost, cfg) {
+		t.Fatal("POST should not be retryable when idempotent-only")
 	}
 }

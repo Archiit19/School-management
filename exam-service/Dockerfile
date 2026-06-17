@@ -1,9 +1,8 @@
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /build
+RUN apk add --no-cache git
 
-COPY pkg/go.mod ./pkg/
-COPY pkg/ ./pkg/
+WORKDIR /build
 
 COPY exam-service/go.mod exam-service/go.sum ./exam-service/
 WORKDIR /build/exam-service

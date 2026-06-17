@@ -11,7 +11,7 @@ import (
 
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
@@ -21,15 +21,15 @@ type schoolMembership struct {
 }
 
 type schoolClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 func newSchoolClient(cfg *config.Config) *schoolClient {
-	return &schoolClient{Client: httpclient.New(cfg.SchoolServiceURL, cfg.InternalServiceToken)}
+	return &schoolClient{Client: httpx.New(cfg.SchoolServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *schoolClient) enabled() bool {
-	return c.BaseURL != "" && strings.TrimSpace(c.Token) != ""
+	return c.BaseURL() != "" && strings.TrimSpace(c.Token()) != ""
 }
 
 func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phone, email string) (*model.School, error) {

@@ -9,20 +9,20 @@ import (
 
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
 type userClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 func newUserClient(cfg *config.Config) *userClient {
-	return &userClient{Client: httpclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)}
+	return &userClient{Client: httpx.New(cfg.UserServiceURL, cfg.InternalServiceToken)}
 }
 
 func (c *userClient) enabled() bool {
-	return c.BaseURL != ""
+	return c.BaseURL() != ""
 }
 
 func (c *userClient) GetByEmail(email string) (*model.User, error) {
@@ -42,7 +42,7 @@ func (c *userClient) GetByEmail(email string) (*model.User, error) {
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("not found")
 	}
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "user-service get by email"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "user-service get by email"); err != nil {
 		return nil, err
 	}
 	var user model.User
@@ -68,7 +68,7 @@ func (c *userClient) GetByID(id uuid.UUID) (*model.User, error) {
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("not found")
 	}
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "user-service get by id"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "user-service get by id"); err != nil {
 		return nil, err
 	}
 	var user model.User
@@ -121,5 +121,5 @@ func (c *userClient) DeleteProfile(userID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "user-service delete")
+	return httpx.CheckStatus(resp, http.StatusOK, "user-service delete")
 }

@@ -3,7 +3,7 @@ module github.com/Archiit19/School-management/school-service
 go 1.25
 
 require (
-	github.com/Archiit19/School-management/pkg v1.0.0
+	github.com/Archiit19/School-management/pkg v1.0.2
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	gorm.io/driver/postgres v1.5.7

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
 type schoolClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
@@ -21,7 +21,7 @@ func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusCreated, "school add member")
+	return httpx.CheckStatus(resp, http.StatusCreated, "school add member")
 }
 
 func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
@@ -35,7 +35,7 @@ func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "school remove member")
+	return httpx.CheckStatus(resp, http.StatusOK, "school remove member")
 }
 
 func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
@@ -52,7 +52,7 @@ func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
 	if resp.StatusCode == http.StatusNotFound {
 		return errors.New("not a member")
 	}
-	return httpclient.CheckStatus(resp, http.StatusOK, "school get member")
+	return httpx.CheckStatus(resp, http.StatusOK, "school get member")
 }
 
 func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error) {
@@ -66,7 +66,7 @@ func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "school list members"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "school list members"); err != nil {
 		return nil, err
 	}
 	var rows []struct {
@@ -93,7 +93,7 @@ func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]uuid.UUID, er
 		return nil, err
 	}
 	defer resp.Body.Close()
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "school list memberships"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "school list memberships"); err != nil {
 		return nil, err
 	}
 	var rows []struct {

@@ -1,9 +1,8 @@
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /build
+RUN apk add --no-cache git
 
-COPY pkg/go.mod ./pkg/
-COPY pkg/ ./pkg/
+WORKDIR /build
 
 COPY finance-service/go.mod finance-service/go.sum ./finance-service/
 WORKDIR /build/finance-service

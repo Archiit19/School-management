@@ -1,4 +1,4 @@
-package httpclient
+package builder_test
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/httpx"
 )
 
 func TestRoundTripWithRetryRetriesGETOn503(t *testing.T) {
@@ -24,13 +24,13 @@ func TestRoundTripWithRetryRetriesGETOn503(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := pkgconfig.DefaultHTTPClient()
+	cfg := httpx.DefaultHTTPClient()
 	cfg.RetryMax = 2
 	cfg.RetryInitialBackoff = 1 * time.Millisecond
 	cfg.RetryMaxBackoff = 2 * time.Millisecond
 	cfg.RetryJitter = false
 
-	client := NewHTTPClient("retry-test", cfg)
+	client := httpx.NewHTTPClient("retry-test", cfg)
 	req, err := http.NewRequest(http.MethodGet, server.URL, nil)
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
@@ -58,12 +58,12 @@ func TestRoundTripWithRetryDoesNotRetryPOST(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cfg := pkgconfig.DefaultHTTPClient()
+	cfg := httpx.DefaultHTTPClient()
 	cfg.RetryMax = 3
 	cfg.RetryIdempotentOnly = true
 	cfg.CircuitBreakerEnabled = false
 
-	client := NewHTTPClient("retry-test", cfg)
+	client := httpx.NewHTTPClient("retry-test", cfg)
 	req, err := http.NewRequest(http.MethodPost, server.URL, bytes.NewReader([]byte("payload")))
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
@@ -80,17 +80,5 @@ func TestRoundTripWithRetryDoesNotRetryPOST(t *testing.T) {
 	}
 	if calls.Load() != 1 {
 		t.Fatalf("calls = %d, want 1", calls.Load())
-	}
-}
-
-func TestMethodAllowsRetry(t *testing.T) {
-	cfg := pkgconfig.DefaultHTTPClient()
-	cfg.RetryIdempotentOnly = true
-
-	if !methodAllowsRetry(http.MethodGet, cfg) {
-		t.Fatal("GET should be retryable")
-	}
-	if methodAllowsRetry(http.MethodPost, cfg) {
-		t.Fatal("POST should not be retryable when idempotent-only")
 	}
 }

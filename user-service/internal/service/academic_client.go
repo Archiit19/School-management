@@ -7,12 +7,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/httpx"
 	"github.com/google/uuid"
 )
 
 type academicClient struct {
-	*httpclient.Client
+	httpx.Client
 }
 
 type studentEnrollment struct {
@@ -35,7 +35,7 @@ func (c *academicClient) UpsertEnrollment(userID, schoolID uuid.UUID, classID st
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatus(resp, http.StatusOK, "academic upsert enrollment")
+	return httpx.CheckStatus(resp, http.StatusOK, "academic upsert enrollment")
 }
 
 func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnrollment, error) {
@@ -52,7 +52,7 @@ func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnro
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, nil
 	}
-	if err := httpclient.CheckStatus(resp, http.StatusOK, "academic get enrollment"); err != nil {
+	if err := httpx.CheckStatus(resp, http.StatusOK, "academic get enrollment"); err != nil {
 		return nil, err
 	}
 	var row studentEnrollment
@@ -73,5 +73,5 @@ func (c *academicClient) DeleteEnrollment(userID, schoolID uuid.UUID) error {
 		return err
 	}
 	defer resp.Body.Close()
-	return httpclient.CheckStatusAny(resp, "academic delete enrollment", http.StatusOK, http.StatusNotFound)
+	return httpx.CheckStatusAny(resp, "academic delete enrollment", http.StatusOK, http.StatusNotFound)
 }
