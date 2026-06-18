@@ -48,13 +48,9 @@ func (s *ExamService) CreateExam(
 		sectionID = &parsed
 	}
 
-	var subjectID *uuid.UUID
-	if strings.TrimSpace(req.SubjectID) != "" {
-		parsed, err := uuid.Parse(req.SubjectID)
-		if err != nil {
-			return nil, errors.New("invalid subject_id")
-		}
-		subjectID = &parsed
+	subjectID, err := uuid.Parse(req.SubjectID)
+	if err != nil {
+		return nil, errors.New("invalid subject_id")
 	}
 
 	examDate, err := time.Parse("2006-01-02", req.ExamDate)
@@ -66,7 +62,7 @@ func (s *ExamService) CreateExam(
 		SchoolID:    schoolID,
 		ClassID:     classID,
 		SectionID:   sectionID,
-		SubjectID:   subjectID,
+		SubjectID:   &subjectID,
 		Title:       req.Title,
 		ExamDate:    examDate,
 		TotalMarks:  req.TotalMarks,
@@ -77,6 +73,119 @@ func (s *ExamService) CreateExam(
 		return nil, fmt.Errorf("failed to create exam: %w", err)
 	}
 	return exam, nil
+}
+
+func (s *ExamService) UpdateExam(
+	examID uuid.UUID,
+	req model.UpdateExamRequest,
+	schoolID uuid.UUID,
+) (*model.Exam, error) {
+	exam, err := s.repo.GetExamByIDAndSchool(examID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("exam not found")
+		}
+		return nil, fmt.Errorf("failed to fetch exam: %w", err)
+	}
+	if exam.IsPublished {
+		return nil, errors.New("cannot edit exam after results are published")
+	}
+
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return nil, errors.New("title cannot be empty")
+		}
+		exam.Title = title
+	}
+	if req.ClassID != nil {
+		parsed, err := uuid.Parse(*req.ClassID)
+		if err != nil {
+			return nil, errors.New("invalid class_id")
+		}
+		exam.ClassID = parsed
+	}
+	if req.SectionID != nil {
+		if strings.TrimSpace(*req.SectionID) == "" {
+			exam.SectionID = nil
+		} else {
+			parsed, err := uuid.Parse(*req.SectionID)
+			if err != nil {
+				return nil, errors.New("invalid section_id")
+			}
+			exam.SectionID = &parsed
+		}
+	}
+	if req.SubjectID != nil {
+		if strings.TrimSpace(*req.SubjectID) == "" {
+			return nil, errors.New("subject_id is required")
+		}
+		parsed, err := uuid.Parse(*req.SubjectID)
+		if err != nil {
+			return nil, errors.New("invalid subject_id")
+		}
+		exam.SubjectID = &parsed
+	}
+	if req.ExamDate != nil {
+		examDate, err := time.Parse("2006-01-02", *req.ExamDate)
+		if err != nil {
+			return nil, errors.New("invalid exam_date format, use YYYY-MM-DD")
+		}
+		exam.ExamDate = examDate
+	}
+	if req.TotalMarks != nil {
+		maxEntered, err := s.repo.MaxMarksObtainedForExam(examID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to validate marks: %w", err)
+		}
+		if *req.TotalMarks < maxEntered {
+			return nil, fmt.Errorf("total_marks cannot be less than highest marks entered (%.2f)", maxEntered)
+		}
+		exam.TotalMarks = *req.TotalMarks
+	}
+
+	if err := s.repo.UpdateExam(exam); err != nil {
+		return nil, fmt.Errorf("failed to update exam: %w", err)
+	}
+	return exam, nil
+}
+
+func (s *ExamService) CompleteExam(examID, schoolID uuid.UUID) (*model.Exam, error) {
+	exam, err := s.repo.GetExamByIDAndSchool(examID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("exam not found")
+		}
+		return nil, fmt.Errorf("failed to fetch exam: %w", err)
+	}
+	if exam.IsPublished {
+		return nil, errors.New("cannot mark exam complete after results are published")
+	}
+	if exam.IsComplete {
+		return exam, nil
+	}
+	exam.IsComplete = true
+	if err := s.repo.UpdateExam(exam); err != nil {
+		return nil, fmt.Errorf("failed to mark exam complete: %w", err)
+	}
+	return exam, nil
+}
+
+func (s *ExamService) DeleteExam(examID, schoolID uuid.UUID) error {
+	exam, err := s.repo.GetExamByIDAndSchool(examID, schoolID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("exam not found")
+		}
+		return fmt.Errorf("failed to fetch exam: %w", err)
+	}
+	if exam.IsPublished {
+		return errors.New("cannot delete exam after results are published")
+	}
+	if err := s.repo.DeleteExam(examID, schoolID); err != nil {
+		return fmt.Errorf("failed to delete exam: %w", err)
+	}
+	return nil
 }
 
 func (s *ExamService) EnterMarks(

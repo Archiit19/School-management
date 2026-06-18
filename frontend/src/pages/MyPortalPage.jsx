@@ -237,8 +237,8 @@ function ExamsTab() {
                   <td>{fmtDate(e.exam_date)}</td>
                   <td>{e.total_marks}</td>
                   <td>
-                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
-                      {e.is_published ? "Results Published" : "Scheduled"}
+                    <span className={`status ${e.is_published ? "status-active" : e.is_complete ? "status-late" : "status-inactive"}`}>
+                      {e.is_published ? "Results Published" : e.is_complete ? "Completed" : "Scheduled"}
                     </span>
                   </td>
                 </tr>
