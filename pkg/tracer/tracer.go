@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/logger"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -47,25 +49,39 @@ func Init(cfg Config) (ShutdownFunc, error) {
 		return nil, fmt.Errorf("tracer: create otlp exporter: %w", err)
 	}
 
+	attrs := []attribute.KeyValue{semconv.ServiceName(cfg.Service)}
+	if cfg.Version != "" {
+		attrs = append(attrs, semconv.ServiceVersion(cfg.Version))
+	}
+	if cfg.Environment != "" {
+		attrs = append(attrs, semconv.DeploymentEnvironment(cfg.Environment))
+	}
+
 	res, err := resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(
-			semconv.SchemaURL,
-			semconv.ServiceName(cfg.Service),
-		),
+		resource.NewWithAttributes(semconv.SchemaURL, attrs...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("tracer: create resource: %w", err)
 	}
 
+	batcherOpts := []sdktrace.BatchSpanProcessorOption{
+		sdktrace.WithBatchTimeout(cfg.BatchTimeout),
+		sdktrace.WithMaxExportBatchSize(cfg.MaxExportBatchSize),
+		sdktrace.WithMaxQueueSize(cfg.MaxQueueSize),
+	}
+
 	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(cfg.SampleRatio))
 	provider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(exporter, batcherOpts...),
 		sdktrace.WithResource(res),
 		sdktrace.WithSampler(sampler),
 	)
 
 	SetProvider(provider)
+	otel.SetErrorHandler(otel.ErrorHandlerFunc(func(err error) {
+		logger.Error("otel export error", logger.Err(err))
+	}))
 
 	shutdown := func(ctx context.Context) error {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)

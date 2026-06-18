@@ -27,9 +27,12 @@ func TestInitDisabledUsesNoopProvider(t *testing.T) {
 
 func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	t.Setenv("TRACE_ENABLED", "")
+	t.Setenv("OTEL_SDK_DISABLED", "")
+	t.Setenv("OTEL_TRACES_EXPORTER", "")
 	t.Setenv("OTEL_EXPORTER_OTLP_ENDPOINT", "")
 	t.Setenv("OTEL_EXPORTER_OTLP_INSECURE", "")
 	t.Setenv("TRACE_SAMPLE_RATIO", "")
+	t.Setenv("OTEL_TRACES_SAMPLER_ARG", "")
 
 	cfg := LoadConfigFromEnv("user-service")
 	if cfg.Service != "user-service" {
@@ -41,11 +44,22 @@ func TestLoadConfigFromEnvDefaults(t *testing.T) {
 	if cfg.Endpoint != "localhost:4318" {
 		t.Fatalf("Endpoint = %q, want localhost:4318", cfg.Endpoint)
 	}
-	if !cfg.Insecure {
-		t.Fatal("Insecure = false, want true")
+	if cfg.Insecure {
+		t.Fatal("Insecure = true, want false")
 	}
-	if cfg.SampleRatio != 1.0 {
-		t.Fatalf("SampleRatio = %v, want 1.0", cfg.SampleRatio)
+	if cfg.SampleRatio != defaultSampleRatio {
+		t.Fatalf("SampleRatio = %v, want %v", cfg.SampleRatio, defaultSampleRatio)
+	}
+}
+
+func TestLoadConfigFromEnvOTELExporterEnablesTracing(t *testing.T) {
+	t.Setenv("TRACE_ENABLED", "")
+	t.Setenv("OTEL_SDK_DISABLED", "")
+	t.Setenv("OTEL_TRACES_EXPORTER", "otlp")
+
+	cfg := LoadConfigFromEnv("user-service")
+	if !cfg.Enabled {
+		t.Fatal("Enabled = false, want true when OTEL_TRACES_EXPORTER=otlp")
 	}
 }
 
