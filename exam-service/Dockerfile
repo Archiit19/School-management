@@ -1,9 +1,16 @@
 FROM golang:1.24-alpine AS builder
 
-WORKDIR /build
+RUN apk add --no-cache git ca-certificates
 
-COPY pkg/go.mod ./pkg/
-COPY pkg/ ./pkg/
+ENV GOPRIVATE=github.com/Archiit19/School-management \
+    GONOSUMDB=github.com/Archiit19/School-management
+
+ARG GITHUB_TOKEN
+RUN if [ -n "$GITHUB_TOKEN" ]; then \
+      git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    fi
+
+WORKDIR /build
 
 COPY exam-service/go.mod exam-service/go.sum ./exam-service/
 WORKDIR /build/exam-service

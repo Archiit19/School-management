@@ -1,5 +1,7 @@
 github.com/Archiit19/School-management/pkg v1.0.0 h1:MtRaOWCaCMw+p174G67xBCQBNO2ykRjm9luf0QsDcrw=
 github.com/Archiit19/School-management/pkg v1.0.0/go.mod h1:vZeAJ3R5pKarBGOhnLpiLRV4L3Q9rQX3oMQvQ2DocdQ=
+github.com/Archiit19/School-management/pkg v1.0.3 h1:+zWE1/Gi7RlXFV4pA7NIrfb8dGipR/yFmilI3VkhSjI=
+github.com/Archiit19/School-management/pkg v1.0.3/go.mod h1:8QvggJXZMCgGKZsDBHKfeYfYZXglOLsgafkuXLbeSJ8=
 github.com/bytedance/sonic v1.5.0/go.mod h1:ED5hyg4y6t3/9Ku1R6dU/4KyJ48DZ4jPhfY1O2AihPM=
 github.com/bytedance/sonic v1.9.1 h1:6iJ6NqdoxCDr6mbY8h18oSO+cShGSMRGCEo7F2h0x8s=
 github.com/bytedance/sonic v1.9.1/go.mod h1:i736AoUSYt75HyZLoJW9ERYxcy6eaN6h4BZXU064P/U=
