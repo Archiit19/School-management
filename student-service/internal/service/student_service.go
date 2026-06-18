@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/student-service/internal/config"
 	"github.com/Archiit19/School-management/student-service/internal/model"
@@ -21,20 +22,23 @@ import (
 )
 
 type StudentService struct {
-	repo       *repository.StudentRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.StudentRepository
+	cfg          *config.Config
+	userInternal *httpclient.Client
+	outboundHTTP *http.Client
 }
 
 func NewStudentService(
 	repo *repository.StudentRepository,
 	cfg *config.Config,
-	httpClient *http.Client,
+	userInternal *httpclient.Client,
+	outboundHTTP *http.Client,
 ) *StudentService {
 	return &StudentService{
-		repo:       repo,
-		cfg:        cfg,
-		httpClient: httpClient,
+		repo:         repo,
+		cfg:          cfg,
+		userInternal: userInternal,
+		outboundHTTP: outboundHTTP,
 	}
 }
 
@@ -150,9 +154,8 @@ func (s *StudentService) provisionStudentLogin(student *model.Student, email, pa
 		return fmt.Errorf("build login request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
 
-	resp, err := s.httpClient.Do(httpReq)
+	resp, err := s.userInternal.Do(httpReq)
 	if err != nil {
 		return fmt.Errorf("user-service unreachable: %w", err)
 	}
@@ -311,7 +314,7 @@ func (s *StudentService) validateParent(authHeader string, parentID, schoolID uu
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return errors.New("failed to validate parent user with user-service")
 	}
@@ -368,7 +371,7 @@ func (s *StudentService) getClassSectionInfo(
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return nil, nil, errors.New("failed to validate class/section with academic-service")
 	}

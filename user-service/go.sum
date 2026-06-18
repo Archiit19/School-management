@@ -1,5 +1,7 @@
 github.com/Archiit19/School-management/pkg v1.0.1-dev1 h1:2Xs/bx6d+bTUJAlqtv75DwmhbmtPUrYjByyAeEVADxk=
 github.com/Archiit19/School-management/pkg v1.0.1-dev1/go.mod h1:DLMKUbv1kLLPzPgKfnvJvNxzTWYmFdCrum0WKy3yViw=
+github.com/Archiit19/School-management/pkg v1.0.3 h1:+zWE1/Gi7RlXFV4pA7NIrfb8dGipR/yFmilI3VkhSjI=
+github.com/Archiit19/School-management/pkg v1.0.3/go.mod h1:8QvggJXZMCgGKZsDBHKfeYfYZXglOLsgafkuXLbeSJ8=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tNFfI=

@@ -1,10 +1,8 @@
 package service
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -339,22 +337,8 @@ func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string,
 }
 
 func (s *AuthService) fetchUserProfile(userID uuid.UUID) map[string]interface{} {
-	url := fmt.Sprintf("%s/internal/users/%s/profile", s.cfg.UserServiceURL, userID.String())
-	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	profile, err := s.users.GetProfile(userID)
 	if err != nil {
-		return nil
-	}
-	if s.cfg.InternalServiceToken != "" {
-		req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
-	}
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	defer resp.Body.Close()
-	var profile map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil
 	}
 	return profile

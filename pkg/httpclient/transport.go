@@ -9,6 +9,11 @@ import (
 	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 )
 
+// OutboundHTTP returns a production *http.Client without internal auth (e.g. JWT forwarding).
+func OutboundHTTP(name string) *http.Client {
+	return NewHTTPClient(name, pkgconfig.LoadHTTPClientConfigFromEnv())
+}
+
 // NewHTTPClient builds a production-ready *http.Client with pooling, retry, and optional circuit breaker.
 func NewHTTPClient(name string, cfg pkgconfig.HTTPClient) *http.Client {
 	base := newBaseTransport(cfg)

@@ -11,25 +11,29 @@ import (
 	"github.com/Archiit19/School-management/academic-service/internal/config"
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/repository"
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type AcademicService struct {
-	repo       *repository.AcademicRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.AcademicRepository
+	cfg          *config.Config
+	userInternal *httpclient.Client
+	outboundHTTP *http.Client
 }
 
 func NewAcademicService(
 	repo *repository.AcademicRepository,
 	cfg *config.Config,
-	httpClient *http.Client,
+	userInternal *httpclient.Client,
+	outboundHTTP *http.Client,
 ) *AcademicService {
 	return &AcademicService{
-		repo:       repo,
-		cfg:        cfg,
-		httpClient: httpClient,
+		repo:         repo,
+		cfg:          cfg,
+		userInternal: userInternal,
+		outboundHTTP: outboundHTTP,
 	}
 }
 
@@ -513,16 +517,12 @@ func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) 
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return "", "", errors.New("internal service token not configured")
 	}
-	url := fmt.Sprintf("%s/internal/users/%s",
-		strings.TrimRight(s.cfg.UserServiceURL, "/"),
-		userID.String(),
-	)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	url := fmt.Sprintf("/internal/users/%s", userID.String())
+	req, err := http.NewRequest(http.MethodGet, s.userInternal.URL(url), nil)
 	if err != nil {
 		return "", "", err
 	}
-	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.userInternal.Do(req)
 	if err != nil {
 		return "", "", err
 	}
@@ -658,16 +658,12 @@ func (s *AcademicService) resolveStudentCode(userID uuid.UUID) (string, error) {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return "", errors.New("internal service token not configured")
 	}
-	url := fmt.Sprintf("%s/internal/users/%s/profile",
-		strings.TrimRight(s.cfg.UserServiceURL, "/"),
-		userID.String(),
-	)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	url := fmt.Sprintf("/internal/users/%s/profile", userID.String())
+	req, err := http.NewRequest(http.MethodGet, s.userInternal.URL(url), nil)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.userInternal.Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -779,7 +775,7 @@ func (s *AcademicService) validateTeacher(
 	req, _ := http.NewRequest(http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return errors.New("failed to validate teacher user with user-service")
 	}
