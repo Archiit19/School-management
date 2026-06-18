@@ -1,20 +1,19 @@
 package main
 
 import (
-	"fmt"
-
 	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/health"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/server"
 	"github.com/Archiit19/School-management/finance-service/internal/config"
 	"github.com/Archiit19/School-management/finance-service/internal/handler"
 	"github.com/Archiit19/School-management/finance-service/internal/model"
 	"github.com/Archiit19/School-management/finance-service/internal/repository"
 	"github.com/Archiit19/School-management/finance-service/internal/service"
-	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/pkg/userclient"
-	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
@@ -35,9 +34,12 @@ func main() {
 	}
 
 	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger: gormlogger.Discard,
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), &pkgconfig.GORMOptions{
+		Config: &gorm.Config{Logger: gormlogger.Discard},
 	})
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
@@ -55,10 +57,8 @@ func main() {
 	h := handler.NewFinanceHandler(svc, users)
 
 	r := middleware.NewEngine()
+	health.Register(r, "finance-service", health.CheckDB(db))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "finance-service is running"})
-	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	protected := r.Group("")
@@ -70,12 +70,7 @@ func main() {
 		protected.GET("/dues", middleware.RequirePermission("view_dues"), h.GetDues)
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Info("starting http server",
-		log.AddField("addr", addr),
-		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
-	)
-	if err := r.Run(addr); err != nil {
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
 		log.Fatal("failed to start server", log.Err(err))
 	}
 }

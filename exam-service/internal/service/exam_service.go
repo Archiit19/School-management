@@ -16,17 +16,17 @@ import (
 )
 
 type ExamService struct {
-	repo       *repository.ExamRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.ExamRepository
+	cfg          *config.Config
+	outboundHTTP *http.Client
 }
 
 func NewExamService(
 	repo *repository.ExamRepository,
 	cfg *config.Config,
-	httpClient *http.Client,
+	outboundHTTP *http.Client,
 ) *ExamService {
-	return &ExamService{repo: repo, cfg: cfg, httpClient: httpClient}
+	return &ExamService{repo: repo, cfg: cfg, outboundHTTP: outboundHTTP}
 }
 
 func (s *ExamService) CreateExam(
@@ -184,7 +184,7 @@ func (s *ExamService) GetMyExams(
 	}
 	req.Header.Set("Authorization", authHeader)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return nil, errors.New("failed to resolve pupil enrollment from academic-service")
 	}

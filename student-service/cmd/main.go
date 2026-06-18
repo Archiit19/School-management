@@ -1,22 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"net/http"
-	"time"
-
+	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/student-service/internal/config"
 	"github.com/Archiit19/School-management/student-service/internal/handler"
+	"github.com/Archiit19/School-management/pkg/health"
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/server"
 	"github.com/Archiit19/School-management/student-service/internal/model"
 	"github.com/Archiit19/School-management/student-service/internal/repository"
 	"github.com/Archiit19/School-management/student-service/internal/service"
-	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 
 	_ "github.com/Archiit19/School-management/student-service/docs"
 )
@@ -30,29 +27,41 @@ import (
 // @in              header
 // @name            Authorization
 func main() {
-	cfg := config.Load()
-
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+	if _, err := log.InitFromEnv("student-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
 	}
-	log.Println("connected to Student DB")
+
+	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
+
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
+	if err != nil {
+		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(&model.Student{}); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
-	log.Println("student database migrated")
+	log.Info("database migrated")
 
 	repo := repository.NewStudentRepository(db)
-	httpClient := &http.Client{Timeout: 8 * time.Second}
-	svc := service.NewStudentService(repo, cfg, httpClient)
+	httpCfg := pkgconfig.LoadHTTPClientConfigFromEnv()
+	userInternal := httpclient.NewFromConfig(httpclient.ClientConfig{
+		BaseURL: cfg.UserServiceURL,
+		Token:   cfg.InternalServiceToken,
+		Name:    "user-service",
+		HTTP:    &httpCfg,
+	})
+	outbound := httpclient.OutboundHTTP("outbound")
+	svc := service.NewStudentService(repo, cfg, userInternal, outbound)
 	h := handler.NewStudentHandler(svc)
 
-	r := gin.Default()
+	r := middleware.NewEngine()
+	health.Register(r, "student-service", health.CheckDB(db))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "student-service is running"})
-	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.GET("/internal/students/:id", h.GetStudentByIDInternal)
@@ -66,9 +75,7 @@ func main() {
 		protected.PATCH("/students/:id", middleware.RequirePermission("update_student"), h.UpdateStudent)
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("Student Service starting on %s", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

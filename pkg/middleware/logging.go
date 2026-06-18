@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/correlation"
 	"github.com/Archiit19/School-management/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -24,12 +25,13 @@ func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		reqID := c.GetHeader("X-Request-ID")
+		reqID := c.GetHeader(correlation.RequestIDHeader)
 		if reqID == "" {
 			reqID = uuid.New().String()
 		}
 		c.Set(requestIDKey, reqID)
-		c.Header("X-Request-ID", reqID)
+		c.Header(correlation.RequestIDHeader, reqID)
+		c.Request = c.Request.WithContext(correlation.ContextWithRequestID(c.Request.Context(), reqID))
 
 		c.Next()
 
@@ -68,6 +70,16 @@ func RequestLogger() gin.HandlerFunc {
 			logger.Info("request", fields...)
 		}
 	}
+}
+
+// GetRequestID returns the request ID for the current Gin context.
+func GetRequestID(c *gin.Context) string {
+	if v, ok := c.Get(requestIDKey); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
 }
 
 // Recovery logs panics with request context and returns 500.

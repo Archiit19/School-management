@@ -13,21 +13,30 @@ import (
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type AttendanceService struct {
-	repo       *repository.AttendanceRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.AttendanceRepository
+	cfg          *config.Config
+	userInternal *httpclient.Client
+	outboundHTTP *http.Client
 }
 
-func NewAttendanceService(repo *repository.AttendanceRepository, cfg *config.Config, httpClient *http.Client) *AttendanceService {
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 8 * time.Second}
+func NewAttendanceService(
+	repo *repository.AttendanceRepository,
+	cfg *config.Config,
+	userInternal *httpclient.Client,
+	outboundHTTP *http.Client,
+) *AttendanceService {
+	return &AttendanceService{
+		repo:         repo,
+		cfg:          cfg,
+		userInternal: userInternal,
+		outboundHTTP: outboundHTTP,
 	}
-	return &AttendanceService{repo: repo, cfg: cfg, httpClient: httpClient}
 }
 
 func isDuplicateKey(err error) bool {
@@ -67,7 +76,7 @@ func (s *AttendanceService) fetchTeacherAssignments(
 		req.Header.Set("Authorization", authHeader)
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return nil, apierrors.ServiceUnavailable("academic-service unreachable for teacher assignment check")
 	}
@@ -149,9 +158,8 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 	if err != nil {
 		return fmt.Errorf("failed to build auth request: %w", err)
 	}
-	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.userInternal.Do(req)
 	if err != nil {
 		return apierrors.ServiceUnavailable("user-service unreachable for user validation")
 	}

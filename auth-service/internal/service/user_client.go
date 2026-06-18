@@ -25,6 +25,29 @@ func (c *userClient) enabled() bool {
 	return c.BaseURL != ""
 }
 
+func (c *userClient) GetProfile(userID uuid.UUID) (map[string]interface{}, error) {
+	if !c.enabled() {
+		return nil, errors.New("user service is not configured")
+	}
+	req, err := http.NewRequest(http.MethodGet, c.URL("/internal/users/"+userID.String()+"/profile"), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, httpclient.CheckStatus(resp, http.StatusOK, "user-service get profile")
+	}
+	var profile map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
+		return nil, err
+	}
+	return profile, nil
+}
+
 func (c *userClient) GetByEmail(email string) (*model.User, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
