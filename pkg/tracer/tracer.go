@@ -59,7 +59,7 @@ func Init(cfg Config) (ShutdownFunc, error) {
 
 	res, err := resource.Merge(
 		resource.Default(),
-		resource.NewWithAttributes(semconv.SchemaURL, attrs...),
+		resource.NewSchemaless(attrs...),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("tracer: create resource: %w", err)

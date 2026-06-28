@@ -152,6 +152,36 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # Tracing (Grafana Tempo + Grafana UI)
+  # ──────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "4318:4318" # OTLP HTTP
+      - "4317:4317" # OTLP gRPC
+      - "3200:3200" # Tempo API
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tempo
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -201,10 +231,17 @@ services:
       AWS_REGION: us-east-1
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8082
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       user-db:
         condition: service_healthy
       dynamodb-local:
+        condition: service_started
+      tempo:
         condition: service_started
 
   # ──────────────────────────────────────
@@ -334,6 +371,8 @@ services:
         condition: service_healthy
 
 volumes:
+  tempo_data:
+  grafana_data:
   auth_db_data:
   user_db_data:
   academic_db_data:

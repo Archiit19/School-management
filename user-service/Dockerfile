@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -12,12 +12,17 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
 
 WORKDIR /build
 
+# Local pkg module (includes tracer); go.mod uses replace => ../pkg
+COPY pkg/go.mod pkg/go.sum ./pkg/
 COPY user-service/go.mod user-service/go.sum ./user-service/
+
 WORKDIR /build/user-service
 RUN go mod download
 
+COPY pkg/ /build/pkg/
 COPY user-service/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /user-service ./cmd/main.go
+
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /user-service ./cmd/main.go
 
 FROM alpine:3.19
 
