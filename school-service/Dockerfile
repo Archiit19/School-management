@@ -12,12 +12,16 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
 
 WORKDIR /build
 
+COPY pkg/go.mod pkg/go.sum ./pkg/
 COPY school-service/go.mod school-service/go.sum ./school-service/
+
 WORKDIR /build/school-service
 RUN go mod download
 
+COPY pkg/ /build/pkg/
 COPY school-service/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /school-service ./cmd/main.go
+
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /school-service ./cmd/main.go
 
 FROM alpine:3.19
 

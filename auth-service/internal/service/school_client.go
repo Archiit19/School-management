@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,7 +33,7 @@ func (c *schoolClient) enabled() bool {
 	return c.BaseURL != "" && strings.TrimSpace(c.Token) != ""
 }
 
-func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phone, email string) (*model.School, error) {
+func (c *schoolClient) CreateSchoolForUser(ctx context.Context, userID uuid.UUID, name, address, phone, email string) (*model.School, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
@@ -49,13 +50,13 @@ func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phon
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, c.URL("/internal/schools/with-admin"), bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.URL("/internal/schools/with-admin"), bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("school-service unreachable: %w", err)
 	}
@@ -76,18 +77,18 @@ func (c *schoolClient) CreateSchoolForUser(userID uuid.UUID, name, address, phon
 	return &school, nil
 }
 
-func (c *schoolClient) GetSchoolByEmail(email string) (*model.School, error) {
+func (c *schoolClient) GetSchoolByEmail(ctx context.Context, email string) (*model.School, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/by-email?email=%s", email))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -107,18 +108,18 @@ func (c *schoolClient) GetSchoolByEmail(email string) (*model.School, error) {
 	return &school, nil
 }
 
-func (c *schoolClient) GetSchoolByID(id uuid.UUID) (*model.School, error) {
+func (c *schoolClient) GetSchoolByID(ctx context.Context, id uuid.UUID) (*model.School, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/%s", id.String()))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -139,18 +140,18 @@ func (c *schoolClient) GetSchoolByID(id uuid.UUID) (*model.School, error) {
 	return &school, nil
 }
 
-func (c *schoolClient) ListSchoolsForUser(userID uuid.UUID) ([]model.School, error) {
+func (c *schoolClient) ListSchoolsForUser(ctx context.Context, userID uuid.UUID) ([]model.School, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/by-user/%s", userID.String()))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -167,18 +168,18 @@ func (c *schoolClient) ListSchoolsForUser(userID uuid.UUID) ([]model.School, err
 	return schools, nil
 }
 
-func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]schoolMembership, error) {
+func (c *schoolClient) ListMembershipsForUser(ctx context.Context, userID uuid.UUID) ([]schoolMembership, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/users/%s/memberships", userID.String()))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -195,18 +196,18 @@ func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]schoolMembers
 	return rows, nil
 }
 
-func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) (*schoolMembership, error) {
+func (c *schoolClient) GetMembership(ctx context.Context, schoolID, userID uuid.UUID) (*schoolMembership, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String()))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -226,8 +227,8 @@ func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) (*schoolMembers
 	return &m, nil
 }
 
-func (c *schoolClient) IsUserMember(schoolID, userID uuid.UUID) (bool, error) {
-	_, err := c.GetMembership(schoolID, userID)
+func (c *schoolClient) IsUserMember(ctx context.Context, schoolID, userID uuid.UUID) (bool, error) {
+	_, err := c.GetMembership(ctx, schoolID, userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return false, nil
@@ -237,18 +238,18 @@ func (c *schoolClient) IsUserMember(schoolID, userID uuid.UUID) (bool, error) {
 	return true, nil
 }
 
-func (c *schoolClient) ListMembersForSchool(schoolID uuid.UUID) ([]schoolMembership, error) {
+func (c *schoolClient) ListMembersForSchool(ctx context.Context, schoolID uuid.UUID) ([]schoolMembership, error) {
 	if !c.enabled() {
 		return nil, errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/%s/members", schoolID.String()))
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -265,7 +266,7 @@ func (c *schoolClient) ListMembersForSchool(schoolID uuid.UUID) ([]schoolMembers
 	return members, nil
 }
 
-func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
+func (c *schoolClient) AddMember(ctx context.Context, schoolID, userID uuid.UUID) error {
 	if !c.enabled() {
 		return errors.New("school service is not configured")
 	}
@@ -279,13 +280,13 @@ func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/%s/members", schoolID.String()))
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -298,18 +299,18 @@ func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 	return nil
 }
 
-func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
+func (c *schoolClient) RemoveMember(ctx context.Context, schoolID, userID uuid.UUID) error {
 	if !c.enabled() {
 		return errors.New("school service is not configured")
 	}
 
 	url := c.URL(fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String()))
-	req, err := http.NewRequest(http.MethodDelete, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
 	}
 
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -322,6 +323,6 @@ func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
 }
 
 // IsUserAdmin is kept for backward compatibility — checks school membership.
-func (c *schoolClient) IsUserAdmin(schoolID, userID uuid.UUID) (bool, error) {
-	return c.IsUserMember(schoolID, userID)
+func (c *schoolClient) IsUserAdmin(ctx context.Context, schoolID, userID uuid.UUID) (bool, error) {
+	return c.IsUserMember(ctx, schoolID, userID)
 }

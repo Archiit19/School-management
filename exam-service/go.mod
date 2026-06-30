@@ -66,3 +66,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/postgres v1.5.7 // indirect
 )
+
+replace github.com/Archiit19/School-management/pkg => ../pkg

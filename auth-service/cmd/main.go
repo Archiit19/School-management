@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"time"
+
 	log "github.com/Archiit19/School-management/pkg/logger"
 	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
@@ -13,6 +16,7 @@ import (
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/Archiit19/School-management/auth-service/internal/service"
 	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
@@ -46,6 +50,18 @@ func main() {
 		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
+	traceShutdown, err := tracer.InitFromEnv("auth-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
+
 	cfg := config.Load()
 	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
 		log.Fatal("invalid configuration", log.Err(err))
@@ -54,6 +70,9 @@ func main() {
 	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
 	}
 	log.Info("connected to database")
 
@@ -89,7 +108,7 @@ func main() {
 	rbacHandler := handler.NewRBACHandler(rbacSvc)
 	internalHandler := handler.NewInternalHandler(credSvc, rbacSvc)
 
-	r := middleware.NewEngine()
+	r := middleware.NewEngine("auth-service")
 	health.Register(r, "auth-service", health.CheckDB(db))
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

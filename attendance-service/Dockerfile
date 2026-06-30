@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 RUN apk add --no-cache git ca-certificates
 
@@ -12,12 +12,16 @@ RUN if [ -n "$GITHUB_TOKEN" ]; then \
 
 WORKDIR /build
 
+COPY pkg/go.mod pkg/go.sum ./pkg/
 COPY attendance-service/go.mod attendance-service/go.sum ./attendance-service/
+
 WORKDIR /build/attendance-service
 RUN go mod download
 
+COPY pkg/ /build/pkg/
 COPY attendance-service/ .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /attendance-service ./cmd/main.go
+
+RUN go mod tidy && CGO_ENABLED=0 GOOS=linux go build -o /attendance-service ./cmd/main.go
 
 FROM alpine:3.19
 

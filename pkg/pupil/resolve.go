@@ -1,6 +1,7 @@
 package pupil
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 // ChildValidator checks that a parent account is linked to a student user.
 type ChildValidator interface {
-	ParentHasChild(parentID, childID uuid.UUID) (bool, error)
+	ParentHasChild(ctx context.Context, parentID, childID uuid.UUID) (bool, error)
 }
 
 // ResolveStudentID returns the pupil user ID for portal /me endpoints.
@@ -57,7 +58,7 @@ func ResolveStudentID(c *gin.Context, validator ChildValidator) (uuid.UUID, erro
 		if validator == nil {
 			return uuid.Nil, errors.New("parent-child validation is not configured")
 		}
-		okChild, err := validator.ParentHasChild(parentID, childID)
+		okChild, err := validator.ParentHasChild(c.Request.Context(), parentID, childID)
 		if err != nil {
 			return uuid.Nil, err
 		}

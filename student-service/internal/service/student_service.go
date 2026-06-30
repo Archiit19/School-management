@@ -2,6 +2,7 @@ package service
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,7 +43,7 @@ func NewStudentService(
 	}
 }
 
-func (s *StudentService) CreateStudent(
+func (s *StudentService) CreateStudent(ctx context.Context, 
 	req model.CreateStudentRequest,
 	schoolID uuid.UUID,
 	authHeader string,
@@ -61,7 +62,7 @@ func (s *StudentService) CreateStudent(
 		sectionUUID = &parsed
 	}
 
-	classInfo, sectionInfo, err := s.getClassSectionInfo(authHeader, classID, sectionUUID)
+	classInfo, sectionInfo, err := s.getClassSectionInfo(ctx, authHeader, classID, sectionUUID)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,7 @@ func (s *StudentService) CreateStudent(
 			return nil, errors.New("invalid parent_user_id")
 		}
 
-		if err := s.validateParent(authHeader, parsedParentID, schoolID); err != nil {
+		if err := s.validateParent(ctx, authHeader, parsedParentID, schoolID); err != nil {
 			return nil, err
 		}
 		parentUUID = &parsedParentID
@@ -111,7 +112,7 @@ func (s *StudentService) CreateStudent(
 	resp := &model.CreateStudentResponse{Student: *student}
 
 	if wantLogin {
-		if err := s.provisionStudentLogin(student, req.LoginEmail, req.LoginPassword); err != nil {
+		if err := s.provisionStudentLogin(ctx, student, req.LoginEmail, req.LoginPassword); err != nil {
 			_ = s.repo.DeleteStudent(student.ID)
 			return nil, fmt.Errorf("admission rolled back: %w", err)
 		}
@@ -132,7 +133,7 @@ func validateLoginFields(req model.CreateStudentRequest) (bool, error) {
 }
 
 // provisionStudentLogin asks auth-service to create a pupil auth user linked to this student.
-func (s *StudentService) provisionStudentLogin(student *model.Student, email, password string) error {
+func (s *StudentService) provisionStudentLogin(ctx context.Context, student *model.Student, email, password string) error {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return errors.New("login provisioning is not configured (set INTERNAL_SERVICE_TOKEN)")
 	}
@@ -149,13 +150,13 @@ func (s *StudentService) provisionStudentLogin(student *model.Student, email, pa
 	}
 
 	url := fmt.Sprintf("%s/internal/users/from-student", s.cfg.UserServiceURL)
-	httpReq, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build login request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	resp, err := s.userInternal.Do(httpReq)
+	resp, err := s.userInternal.DoContext(ctx, httpReq)
 	if err != nil {
 		return fmt.Errorf("user-service unreachable: %w", err)
 	}
@@ -221,7 +222,7 @@ func (s *StudentService) GetStudentByID(studentID uuid.UUID) (*model.Student, er
 	return student, nil
 }
 
-func (s *StudentService) UpdateStudent(
+func (s *StudentService) UpdateStudent(ctx context.Context, 
 	id uuid.UUID,
 	req model.UpdateStudentRequest,
 	schoolID uuid.UUID,
@@ -259,7 +260,7 @@ func (s *StudentService) UpdateStudent(
 			if err != nil {
 				return nil, errors.New("invalid parent_user_id")
 			}
-			if err := s.validateParent(authHeader, parentID, schoolID); err != nil {
+			if err := s.validateParent(ctx, authHeader, parentID, schoolID); err != nil {
 				return nil, err
 			}
 			student.ParentUserID = &parentID
@@ -289,7 +290,7 @@ func (s *StudentService) UpdateStudent(
 	}
 
 	if req.ClassID != nil || req.SectionID != nil {
-		if err := s.validateClassSection(authHeader, newClassID, newSectionID); err != nil {
+		if err := s.validateClassSection(ctx, authHeader, newClassID, newSectionID); err != nil {
 			return nil, err
 		}
 		student.ClassID = newClassID
@@ -309,9 +310,9 @@ type authUserResponse struct {
 	RoleName string `json:"role_name"`
 }
 
-func (s *StudentService) validateParent(authHeader string, parentID, schoolID uuid.UUID) error {
+func (s *StudentService) validateParent(ctx context.Context, authHeader string, parentID, schoolID uuid.UUID) error {
 	url := fmt.Sprintf("%s/users/%s", s.cfg.UserServiceURL, parentID.String())
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
 	resp, err := s.outboundHTTP.Do(req)
@@ -362,13 +363,13 @@ type sectionInfo struct {
 	Name string
 }
 
-func (s *StudentService) getClassSectionInfo(
+func (s *StudentService) getClassSectionInfo(ctx context.Context, 
 	authHeader string,
 	classID uuid.UUID,
 	sectionID *uuid.UUID,
 ) (*classInfo, *sectionInfo, error) {
 	url := fmt.Sprintf("%s/classes", s.cfg.AcademicServiceURL)
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
 	resp, err := s.outboundHTTP.Do(req)
@@ -417,12 +418,12 @@ func (s *StudentService) getClassSectionInfo(
 	return foundClass, foundSection, nil
 }
 
-func (s *StudentService) validateClassSection(
+func (s *StudentService) validateClassSection(ctx context.Context, 
 	authHeader string,
 	classID uuid.UUID,
 	sectionID *uuid.UUID,
 ) error {
-	_, _, err := s.getClassSectionInfo(authHeader, classID, sectionID)
+	_, _, err := s.getClassSectionInfo(ctx, authHeader, classID, sectionID)
 	return err
 }
 

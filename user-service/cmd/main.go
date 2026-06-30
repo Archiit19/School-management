@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"time"
+
 	log "github.com/Archiit19/School-management/pkg/logger"
 	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/pkg/health"
 	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/Archiit19/School-management/user-service/internal/handler"
 	"github.com/Archiit19/School-management/user-service/internal/model"
@@ -32,6 +36,18 @@ func main() {
 		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
+	traceShutdown, err := tracer.InitFromEnv("user-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
+
 	cfg := config.Load()
 	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
 		log.Fatal("invalid configuration", log.Err(err))
@@ -42,6 +58,9 @@ func main() {
 	})
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
 	}
 	log.Info("connected to database")
 
@@ -60,7 +79,7 @@ func main() {
 	svc := service.NewUserService(repo, profileRepo, cfg)
 	h := handler.NewUserHandler(svc)
 
-	r := middleware.NewEngine()
+	r := middleware.NewEngine("user-service")
 	health.Register(r, "user-service", health.CheckDB(db))
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
