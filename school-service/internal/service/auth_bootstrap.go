@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -17,8 +18,8 @@ func newAuthBootstrapClient(baseURL, token string) *authBootstrapClient {
 	return &authBootstrapClient{Client: httpclient.New(baseURL, token)}
 }
 
-func (c *authBootstrapClient) BootstrapSchool(schoolID uuid.UUID) error {
-	resp, err := c.DoJSON(http.MethodPost, "/api/v1/internal/bootstrap-school", map[string]string{
+func (c *authBootstrapClient) BootstrapSchool(ctx context.Context, schoolID uuid.UUID) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, "/api/v1/internal/bootstrap-school", map[string]string{
 		"school_id": schoolID.String(),
 	}, nil)
 	if err != nil {
@@ -31,9 +32,13 @@ func (c *authBootstrapClient) BootstrapSchool(schoolID uuid.UUID) error {
 	return nil
 }
 
-func (c *authBootstrapClient) FetchRoleID(schoolID uuid.UUID, roleName string) (uuid.UUID, error) {
+func (c *authBootstrapClient) FetchRoleID(ctx context.Context, schoolID uuid.UUID, roleName string) (uuid.UUID, error) {
 	path := fmt.Sprintf("/api/v1/internal/roles/by-name?school_id=%s&name=%s", schoolID.String(), roleName)
-	resp, err := c.HTTP.Get(c.URL(path))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("auth-service unreachable: %w", err)
 	}
@@ -50,8 +55,8 @@ func (c *authBootstrapClient) FetchRoleID(schoolID uuid.UUID, roleName string) (
 	return uuid.Parse(role.ID)
 }
 
-func (c *authBootstrapClient) AssignUserRole(userID, schoolID, roleID uuid.UUID) error {
-	resp, err := c.DoJSON(http.MethodPost, "/internal/user-roles", map[string]string{
+func (c *authBootstrapClient) AssignUserRole(ctx context.Context, userID, schoolID, roleID uuid.UUID) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, "/internal/user-roles", map[string]string{
 		"user_id":   userID.String(),
 		"school_id": schoolID.String(),
 		"role_id":   roleID.String(),

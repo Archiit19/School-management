@@ -192,7 +192,7 @@ func (h *ExamHandler) GetMyExams(c *gin.Context) {
 		upcoming = false
 	}
 
-	exams, err := h.svc.GetMyExams(schoolID, studentID, authHeader, upcoming)
+	exams, err := h.svc.GetMyExams(c.Request.Context(), schoolID, studentID, authHeader, upcoming)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

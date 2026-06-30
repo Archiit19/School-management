@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,9 +15,9 @@ type schoolClient struct {
 	*httpclient.Client
 }
 
-func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
+func (c *schoolClient) AddMember(ctx context.Context, schoolID, userID uuid.UUID) error {
 	path := fmt.Sprintf("/internal/schools/%s/members", schoolID.String())
-	resp, err := c.DoJSON(http.MethodPost, path, map[string]string{"user_id": userID.String()}, nil)
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, path, map[string]string{"user_id": userID.String()}, nil)
 	if err != nil {
 		return err
 	}
@@ -24,13 +25,13 @@ func (c *schoolClient) AddMember(schoolID, userID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusCreated, "school add member")
 }
 
-func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
+func (c *schoolClient) RemoveMember(ctx context.Context, schoolID, userID uuid.UUID) error {
 	path := fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String())
-	req, err := http.NewRequest(http.MethodDelete, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -38,13 +39,13 @@ func (c *schoolClient) RemoveMember(schoolID, userID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusOK, "school remove member")
 }
 
-func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
+func (c *schoolClient) GetMembership(ctx context.Context, schoolID, userID uuid.UUID) error {
 	path := fmt.Sprintf("/internal/schools/%s/members/%s", schoolID.String(), userID.String())
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -55,13 +56,13 @@ func (c *schoolClient) GetMembership(schoolID, userID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusOK, "school get member")
 }
 
-func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error) {
+func (c *schoolClient) ListMemberUserIDs(ctx context.Context, schoolID uuid.UUID) ([]uuid.UUID, error) {
 	path := fmt.Sprintf("/internal/schools/%s/members", schoolID.String())
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -82,13 +83,13 @@ func (c *schoolClient) ListMemberUserIDs(schoolID uuid.UUID) ([]uuid.UUID, error
 	return ids, nil
 }
 
-func (c *schoolClient) ListMembershipsForUser(userID uuid.UUID) ([]uuid.UUID, error) {
+func (c *schoolClient) ListMembershipsForUser(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	path := fmt.Sprintf("/internal/users/%s/memberships", userID.String())
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}

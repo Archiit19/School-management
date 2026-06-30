@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,15 +26,15 @@ func (c *userClient) enabled() bool {
 	return c.BaseURL != ""
 }
 
-func (c *userClient) GetProfile(userID uuid.UUID) (map[string]interface{}, error) {
+func (c *userClient) GetProfile(ctx context.Context, userID uuid.UUID) (map[string]interface{}, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
 	}
-	req, err := http.NewRequest(http.MethodGet, c.URL("/internal/users/"+userID.String()+"/profile"), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL("/internal/users/"+userID.String()+"/profile"), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -48,16 +49,16 @@ func (c *userClient) GetProfile(userID uuid.UUID) (map[string]interface{}, error
 	return profile, nil
 }
 
-func (c *userClient) GetByEmail(email string) (*model.User, error) {
+func (c *userClient) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
 	}
 	path := fmt.Sprintf("/internal/users/by-email?email=%s", url.QueryEscape(email))
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("user-service unreachable: %w", err)
 	}
@@ -75,15 +76,15 @@ func (c *userClient) GetByEmail(email string) (*model.User, error) {
 	return &user, nil
 }
 
-func (c *userClient) GetByID(id uuid.UUID) (*model.User, error) {
+func (c *userClient) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
 	}
-	req, err := http.NewRequest(http.MethodGet, c.URL("/internal/users/"+id.String()), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL("/internal/users/"+id.String()), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +102,7 @@ func (c *userClient) GetByID(id uuid.UUID) (*model.User, error) {
 	return &user, nil
 }
 
-func (c *userClient) CreateProfile(name, email string, studentID *uuid.UUID) (*model.User, error) {
+func (c *userClient) CreateProfile(ctx context.Context, name, email string, studentID *uuid.UUID) (*model.User, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
 	}
@@ -113,33 +114,33 @@ func (c *userClient) CreateProfile(name, email string, studentID *uuid.UUID) (*m
 		payload["student_id"] = studentID.String()
 	}
 	var user model.User
-	if err := c.DoJSONExpect(http.MethodPost, "/internal/users", payload, &user, http.StatusCreated); err != nil {
+	if err := c.DoJSONExpectContext(ctx, http.MethodPost, "/internal/users", payload, &user, http.StatusCreated); err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (c *userClient) UpdateProfile(userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error) {
+func (c *userClient) UpdateProfile(ctx context.Context, userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error) {
 	if !c.enabled() {
 		return nil, errors.New("user service is not configured")
 	}
 	var user model.User
 	path := "/internal/users/" + userID.String()
-	if err := c.DoJSONExpect(http.MethodPatch, path, req, &user, http.StatusOK); err != nil {
+	if err := c.DoJSONExpectContext(ctx, http.MethodPatch, path, req, &user, http.StatusOK); err != nil {
 		return nil, err
 	}
 	return &user, nil
 }
 
-func (c *userClient) DeleteProfile(userID uuid.UUID) error {
+func (c *userClient) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
 	if !c.enabled() {
 		return errors.New("user service is not configured")
 	}
-	req, err := http.NewRequest(http.MethodDelete, c.URL("/internal/users/"+userID.String()), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.URL("/internal/users/"+userID.String()), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}

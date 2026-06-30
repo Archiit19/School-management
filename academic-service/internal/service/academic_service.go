@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -162,7 +163,7 @@ func (s *AcademicService) GetClasses(schoolID uuid.UUID) ([]model.ClassWithChild
 	return resp, nil
 }
 
-func (s *AcademicService) CreateTeacherAssignment(
+func (s *AcademicService) CreateTeacherAssignment(ctx context.Context, 
 	req model.CreateTeacherAssignmentRequest,
 	schoolID uuid.UUID,
 	authHeader string,
@@ -193,7 +194,7 @@ func (s *AcademicService) CreateTeacherAssignment(
 		return nil, errors.New("subject does not belong to the selected class")
 	}
 
-	if err := s.validateTeacher(authHeader, teacherUserID, schoolID); err != nil {
+	if err := s.validateTeacher(ctx, authHeader, teacherUserID, schoolID); err != nil {
 		return nil, err
 	}
 
@@ -237,7 +238,7 @@ func (s *AcademicService) GetTeacherAssignments(
 	return assignments, nil
 }
 
-func (s *AcademicService) UpdateTeacherAssignment(
+func (s *AcademicService) UpdateTeacherAssignment(ctx context.Context, 
 	id uuid.UUID,
 	req model.UpdateTeacherAssignmentRequest,
 	schoolID uuid.UUID,
@@ -294,7 +295,7 @@ func (s *AcademicService) UpdateTeacherAssignment(
 		return nil, errors.New("subject does not belong to the selected class")
 	}
 
-	if err := s.validateTeacher(authHeader, teacherUserID, schoolID); err != nil {
+	if err := s.validateTeacher(ctx, authHeader, teacherUserID, schoolID); err != nil {
 		return nil, err
 	}
 
@@ -429,7 +430,7 @@ func (s *AcademicService) GetMyAssignments(
 // teachers assigned to that class. Class/section are resolved by calling
 // user-service /users/me with the pupil's JWT; teacher names are resolved
 // via auth-service's internal /internal/users/:id endpoint.
-func (s *AcademicService) GetMyAcademicProfile(
+func (s *AcademicService) GetMyAcademicProfile(ctx context.Context, 
 	schoolID, studentID uuid.UUID,
 	authHeader string,
 ) (*model.MyAcademicProfile, error) {
@@ -484,7 +485,7 @@ func (s *AcademicService) GetMyAcademicProfile(
 			SubjectID:     ta.SubjectID,
 			SubjectName:   subjectName[ta.SubjectID],
 		}
-		if name, email, err := s.resolveUser(ta.TeacherUserID); err == nil {
+		if name, email, err := s.resolveUser(ctx, ta.TeacherUserID); err == nil {
 			ct.TeacherName = name
 			ct.TeacherEmail = email
 		}
@@ -513,16 +514,16 @@ func filterSubjectsForStudent(subjects []model.Subject, sectionID *uuid.UUID) []
 // resolveUser fetches a user's name and email via auth-service's internal endpoint.
 // Returns empty strings (no error) when the call is not configured or fails — the
 // caller treats missing names as "Unknown teacher" but still surfaces the subject.
-func (s *AcademicService) resolveUser(userID uuid.UUID) (string, string, error) {
+func (s *AcademicService) resolveUser(ctx context.Context, userID uuid.UUID) (string, string, error) {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return "", "", errors.New("internal service token not configured")
 	}
 	url := fmt.Sprintf("/internal/users/%s", userID.String())
-	req, err := http.NewRequest(http.MethodGet, s.userInternal.URL(url), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.userInternal.URL(url), nil)
 	if err != nil {
 		return "", "", err
 	}
-	resp, err := s.userInternal.Do(req)
+	resp, err := s.userInternal.DoContext(ctx, req)
 	if err != nil {
 		return "", "", err
 	}
@@ -645,25 +646,25 @@ func (s *AcademicService) canManageAssignmentSubmissions(
 
 // resolveStudent returns display info for a pupil. submission.student_id stores the
 // pupil's user-service user ID (see CreateOwnSubmission), not student-service admission IDs.
-func (s *AcademicService) resolveStudent(studentUserID uuid.UUID) (string, string, error) {
-	name, _, err := s.resolveUser(studentUserID)
+func (s *AcademicService) resolveStudent(ctx context.Context, studentUserID uuid.UUID) (string, string, error) {
+	name, _, err := s.resolveUser(ctx, studentUserID)
 	if err != nil {
 		return "", "", err
 	}
-	code, _ := s.resolveStudentCode(studentUserID)
+	code, _ := s.resolveStudentCode(ctx, studentUserID)
 	return name, code, nil
 }
 
-func (s *AcademicService) resolveStudentCode(userID uuid.UUID) (string, error) {
+func (s *AcademicService) resolveStudentCode(ctx context.Context, userID uuid.UUID) (string, error) {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return "", errors.New("internal service token not configured")
 	}
 	url := fmt.Sprintf("/internal/users/%s/profile", userID.String())
-	req, err := http.NewRequest(http.MethodGet, s.userInternal.URL(url), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.userInternal.URL(url), nil)
 	if err != nil {
 		return "", err
 	}
-	resp, err := s.userInternal.Do(req)
+	resp, err := s.userInternal.DoContext(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -683,19 +684,19 @@ func (s *AcademicService) resolveStudentCode(userID uuid.UUID) (string, error) {
 	return "", nil
 }
 
-func (s *AcademicService) enrichSubmissionView(sub model.Submission) model.SubmissionView {
+func (s *AcademicService) enrichSubmissionView(ctx context.Context, sub model.Submission) model.SubmissionView {
 	view := model.SubmissionView{Submission: sub}
-	if name, code, err := s.resolveStudent(sub.StudentID); err == nil {
+	if name, code, err := s.resolveStudent(ctx, sub.StudentID); err == nil {
 		view.StudentName = name
 		view.StudentCode = code
 	}
-	if name, _, err := s.resolveUser(sub.SubmittedBy); err == nil {
+	if name, _, err := s.resolveUser(ctx, sub.SubmittedBy); err == nil {
 		view.SubmitterName = name
 	}
 	return view
 }
 
-func (s *AcademicService) GetSubmissionsForAssignment(
+func (s *AcademicService) GetSubmissionsForAssignment(ctx context.Context, 
 	assignmentID, schoolID, userID uuid.UUID,
 	roleName string,
 ) ([]model.SubmissionView, error) {
@@ -716,7 +717,7 @@ func (s *AcademicService) GetSubmissionsForAssignment(
 	}
 	out := make([]model.SubmissionView, len(subs))
 	for i, sub := range subs {
-		out[i] = s.enrichSubmissionView(sub)
+		out[i] = s.enrichSubmissionView(ctx, sub)
 	}
 	return out, nil
 }
@@ -767,12 +768,12 @@ type authUserResponse struct {
 	RoleName string `json:"role_name"`
 }
 
-func (s *AcademicService) validateTeacher(
+func (s *AcademicService) validateTeacher(ctx context.Context, 
 	authHeader string,
 	teacherUserID, schoolID uuid.UUID,
 ) error {
 	url := fmt.Sprintf("%s/users/%s", s.cfg.UserServiceURL, teacherUserID.String())
-	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	req.Header.Set("Authorization", authHeader)
 
 	resp, err := s.outboundHTTP.Do(req)

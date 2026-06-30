@@ -15,7 +15,6 @@ import (
 	"github.com/Archiit19/School-management/user-service/internal/model"
 	"github.com/Archiit19/School-management/user-service/internal/repository"
 	"github.com/Archiit19/School-management/user-service/internal/service"
-	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
@@ -80,8 +79,7 @@ func main() {
 	svc := service.NewUserService(repo, profileRepo, cfg)
 	h := handler.NewUserHandler(svc)
 
-	r := gin.New()
-	r.Use(tracer.GinMiddleware("user-service"), middleware.RequestLogger(), middleware.Recovery())
+	r := middleware.NewEngine("user-service")
 	health.Register(r, "user-service", health.CheckDB(db))
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))

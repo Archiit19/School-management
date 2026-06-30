@@ -16,11 +16,11 @@ import (
 
 const requestIDKey = "request_id"
 
-// NewEngine returns a Gin engine with structured request logging and panic recovery.
+// NewEngine returns a Gin engine with tracing (when enabled), structured request logging, and panic recovery.
 // Prefer this over gin.Default() so HTTP access logs use pkg/logger.
-func NewEngine() *gin.Engine {
+func NewEngine(service string) *gin.Engine {
 	r := gin.New()
-	r.Use(RequestLogger(), Recovery())
+	r.Use(tracer.GinMiddleware(service), RequestLogger(), Recovery())
 	return r
 }
 
