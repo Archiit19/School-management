@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/school-service/internal/model"
 	"github.com/Archiit19/School-management/school-service/internal/repository"
 	"github.com/google/uuid"
@@ -29,6 +30,7 @@ func (s *SchoolService) CreateSchool(req model.CreateSchoolRequest) (*model.Scho
 		return nil, errors.New("school with this email already exists")
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create school: email check failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to check school email: %w", err)
 	}
 
@@ -40,8 +42,10 @@ func (s *SchoolService) CreateSchool(req model.CreateSchoolRequest) (*model.Scho
 		IsActive: true,
 	}
 	if err := s.repo.Create(school); err != nil {
+		log.Error("create school: database insert failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to create school: %w", err)
 	}
+	log.Info("school created", log.AddField("school_id", school.ID), log.AddField("name", school.Name))
 	return school, nil
 }
 
@@ -57,10 +61,12 @@ func (s *SchoolService) CreateSchoolForUser(ctx context.Context, userID uuid.UUI
 
 	roleID, err := s.bootstrap.FetchRoleID(ctx, school.ID, "super_admin")
 	if err != nil {
+		log.Error("create school for user: resolve super_admin role failed", log.Err(err), log.AddField("school_id", school.ID), log.AddField("user_id", userID))
 		return nil, fmt.Errorf("failed to resolve super_admin role: %w", err)
 	}
 
 	if err := s.repo.CreateMembership(&model.UserSchool{SchoolID: school.ID, UserID: userID}); err != nil {
+		log.Error("create school for user: membership insert failed", log.Err(err), log.AddField("school_id", school.ID), log.AddField("user_id", userID))
 		return nil, fmt.Errorf("failed to link user to school: %w", err)
 	}
 
@@ -68,6 +74,7 @@ func (s *SchoolService) CreateSchoolForUser(ctx context.Context, userID uuid.UUI
 		return nil, fmt.Errorf("failed to assign super_admin role: %w", err)
 	}
 
+	log.Info("school created for user", log.AddField("school_id", school.ID), log.AddField("user_id", userID))
 	return school, nil
 }
 
@@ -81,18 +88,26 @@ func (s *SchoolService) AddMember(schoolID, userID uuid.UUID) (*model.UserSchool
 	if _, err := s.repo.GetMembership(schoolID, userID); err == nil {
 		return nil, errors.New("user is already a member of this school")
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("add member: membership lookup failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		return nil, err
 	}
 
 	m := &model.UserSchool{SchoolID: schoolID, UserID: userID}
 	if err := s.repo.CreateMembership(m); err != nil {
+		log.Error("add member: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		return nil, fmt.Errorf("failed to add member: %w", err)
 	}
+	log.Info("school member added", log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 	return m, nil
 }
 
 func (s *SchoolService) RemoveMember(schoolID, userID uuid.UUID) error {
-	return s.repo.DeleteMembership(schoolID, userID)
+	if err := s.repo.DeleteMembership(schoolID, userID); err != nil {
+		log.Error("remove member: database delete failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("user_id", userID))
+		return err
+	}
+	log.Info("school member removed", log.AddField("school_id", schoolID), log.AddField("user_id", userID))
+	return nil
 }
 
 func (s *SchoolService) GetMembership(schoolID, userID uuid.UUID) (*model.UserSchool, error) {
@@ -101,6 +116,7 @@ func (s *SchoolService) GetMembership(schoolID, userID uuid.UUID) (*model.UserSc
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("membership not found")
 		}
+		log.Error("get membership: database query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("user_id", userID))
 		return nil, err
 	}
 	return m, nil
@@ -109,6 +125,7 @@ func (s *SchoolService) GetMembership(schoolID, userID uuid.UUID) (*model.UserSc
 func (s *SchoolService) ListMembershipsForUser(userID uuid.UUID) ([]model.UserSchoolMember, error) {
 	rows, err := s.repo.GetMembershipsForUser(userID)
 	if err != nil {
+		log.Error("list memberships for user: database query failed", log.Err(err), log.AddField("user_id", userID))
 		return nil, err
 	}
 	out := make([]model.UserSchoolMember, len(rows))
@@ -121,6 +138,7 @@ func (s *SchoolService) ListMembershipsForUser(userID uuid.UUID) ([]model.UserSc
 func (s *SchoolService) ListMembersForSchool(schoolID uuid.UUID) ([]model.UserSchoolMember, error) {
 	rows, err := s.repo.GetMembersForSchool(schoolID)
 	if err != nil {
+		log.Error("list members for school: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, err
 	}
 	out := make([]model.UserSchoolMember, len(rows))
@@ -140,6 +158,7 @@ func (s *SchoolService) GetSchool(id uuid.UUID) (*model.School, error) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("school not found")
 		}
+		log.Error("get school: database query failed", log.Err(err), log.AddField("school_id", id))
 		return nil, fmt.Errorf("failed to fetch school: %w", err)
 	}
 	return school, nil
@@ -151,6 +170,7 @@ func (s *SchoolService) GetSchoolByEmail(email string) (*model.School, error) {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("school not found")
 		}
+		log.Error("get school by email: database query failed", log.Err(err), log.AddField("email", email))
 		return nil, fmt.Errorf("failed to fetch school: %w", err)
 	}
 	return school, nil
@@ -159,6 +179,7 @@ func (s *SchoolService) GetSchoolByEmail(email string) (*model.School, error) {
 func (s *SchoolService) ListSchools(query model.SchoolListQuery) (*model.SchoolListResponse, error) {
 	schools, total, err := s.repo.List(query)
 	if err != nil {
+		log.Error("list schools: database query failed", log.Err(err))
 		return nil, fmt.Errorf("failed to list schools: %w", err)
 	}
 	return &model.SchoolListResponse{
@@ -170,7 +191,12 @@ func (s *SchoolService) ListSchools(query model.SchoolListQuery) (*model.SchoolL
 }
 
 func (s *SchoolService) ListSchoolsForUser(userID uuid.UUID) ([]model.School, error) {
-	return s.repo.ListSchoolsForUser(userID)
+	schools, err := s.repo.ListSchoolsForUser(userID)
+	if err != nil {
+		log.Error("list schools for user: database query failed", log.Err(err), log.AddField("user_id", userID))
+		return nil, err
+	}
+	return schools, nil
 }
 
 func (s *SchoolService) IsUserMember(schoolID, userID uuid.UUID) (bool, error) {
@@ -183,6 +209,7 @@ func (s *SchoolService) UpdateSchool(id uuid.UUID, req model.UpdateSchoolRequest
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("school not found")
 		}
+		log.Error("update school: database fetch failed", log.Err(err), log.AddField("school_id", id))
 		return nil, fmt.Errorf("failed to fetch school: %w", err)
 	}
 
@@ -200,6 +227,7 @@ func (s *SchoolService) UpdateSchool(id uuid.UUID, req model.UpdateSchoolRequest
 			if _, err := s.repo.GetByEmail(*req.Email); err == nil {
 				return nil, errors.New("school with this email already exists")
 			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+				log.Error("update school: email check failed", log.Err(err), log.AddField("school_id", id))
 				return nil, fmt.Errorf("failed to check email: %w", err)
 			}
 		}
@@ -210,8 +238,10 @@ func (s *SchoolService) UpdateSchool(id uuid.UUID, req model.UpdateSchoolRequest
 	}
 
 	if err := s.repo.Update(school); err != nil {
+		log.Error("update school: database update failed", log.Err(err), log.AddField("school_id", id))
 		return nil, fmt.Errorf("failed to update school: %w", err)
 	}
+	log.Info("school updated", log.AddField("school_id", school.ID))
 	return school, nil
 }
 
@@ -221,8 +251,14 @@ func (s *SchoolService) DeleteSchool(id uuid.UUID) error {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("school not found")
 		}
+		log.Error("delete school: database fetch failed", log.Err(err), log.AddField("school_id", id))
 		return fmt.Errorf("failed to fetch school: %w", err)
 	}
 	school.IsActive = false
-	return s.repo.Update(school)
+	if err := s.repo.Update(school); err != nil {
+		log.Error("delete school: database update failed", log.Err(err), log.AddField("school_id", id))
+		return err
+	}
+	log.Info("school deactivated", log.AddField("school_id", id))
+	return nil
 }
