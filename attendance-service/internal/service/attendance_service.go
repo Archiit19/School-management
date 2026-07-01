@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/pkg/apierrors"
 	"github.com/Archiit19/School-management/pkg/pagination"
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
@@ -239,6 +240,7 @@ func (s *AttendanceService) CreateAttendance(ctx context.Context,
 		return nil, errors.New("attendance already marked for this student and date")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create attendance: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to validate attendance uniqueness: %w", err)
 	}
 
@@ -257,8 +259,15 @@ func (s *AttendanceService) CreateAttendance(ctx context.Context,
 		if isDuplicateKey(err) {
 			return nil, apierrors.Conflict("attendance already marked for this student and date")
 		}
+		log.Error("create attendance: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to create attendance: %w", err)
 	}
+	log.Info("attendance created",
+		log.AddField("attendance_id", record.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("student_id", studentID),
+		log.AddField("status", record.Status),
+	)
 
 	return record, nil
 }
@@ -286,6 +295,7 @@ func (s *AttendanceService) GetAttendance(ctx context.Context,
 
 	records, total, err := s.repo.GetAttendance(schoolID, query)
 	if err != nil {
+		log.Error("list attendance: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch attendance: %w", err)
 	}
 
@@ -308,6 +318,7 @@ func (s *AttendanceService) UpdateAttendance(ctx context.Context,
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apierrors.NotFound("attendance not found")
 		}
+		log.Error("update attendance: database fetch failed", log.Err(err), log.AddField("attendance_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch attendance: %w", err)
 	}
 
@@ -332,8 +343,10 @@ func (s *AttendanceService) UpdateAttendance(ctx context.Context,
 	}
 
 	if err := s.repo.UpdateAttendance(record); err != nil {
+		log.Error("update attendance: database update failed", log.Err(err), log.AddField("attendance_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to update attendance: %w", err)
 	}
+	log.Info("attendance updated", log.AddField("attendance_id", record.ID), log.AddField("school_id", schoolID))
 
 	return record, nil
 }
@@ -420,6 +433,14 @@ func (s *AttendanceService) BulkCreateAttendance(ctx context.Context,
 		resp.Records = append(resp.Records, *record)
 	}
 
+	if resp.Created > 0 {
+		log.Info("attendance bulk created",
+			log.AddField("school_id", schoolID),
+			log.AddField("created", resp.Created),
+			log.AddField("skipped", resp.Skipped),
+		)
+	}
+
 	return resp, nil
 }
 
@@ -485,6 +506,7 @@ func (s *AttendanceService) CreateTeacherAttendance(ctx context.Context,
 		return nil, errors.New("attendance already marked for this teacher and date")
 	}
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("create teacher attendance: uniqueness check failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("teacher_user_id", targetTeacherID))
 		return nil, fmt.Errorf("failed to validate teacher attendance uniqueness: %w", err)
 	}
 
@@ -500,8 +522,15 @@ func (s *AttendanceService) CreateTeacherAttendance(ctx context.Context,
 		if isDuplicateKey(err) {
 			return nil, apierrors.Conflict("attendance already marked for this teacher and date")
 		}
+		log.Error("create teacher attendance: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("teacher_user_id", targetTeacherID))
 		return nil, fmt.Errorf("failed to create teacher attendance: %w", err)
 	}
+	log.Info("teacher attendance created",
+		log.AddField("teacher_attendance_id", record.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("teacher_user_id", targetTeacherID),
+		log.AddField("status", record.Status),
+	)
 
 	return record, nil
 }
@@ -594,6 +623,14 @@ func (s *AttendanceService) BulkCreateTeacherAttendance(ctx context.Context,
 		resp.Records = append(resp.Records, *record)
 	}
 
+	if resp.Created > 0 {
+		log.Info("teacher attendance bulk created",
+			log.AddField("school_id", schoolID),
+			log.AddField("created", resp.Created),
+			log.AddField("skipped", resp.Skipped),
+		)
+	}
+
 	return resp, nil
 }
 
@@ -623,6 +660,7 @@ func (s *AttendanceService) GetTeacherAttendance(
 
 	records, total, err := s.repo.GetTeacherAttendance(schoolID, query)
 	if err != nil {
+		log.Error("list teacher attendance: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch teacher attendance: %w", err)
 	}
 
@@ -645,6 +683,7 @@ func (s *AttendanceService) UpdateTeacherAttendance(
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, apierrors.NotFound("teacher attendance not found")
 		}
+		log.Error("update teacher attendance: database fetch failed", log.Err(err), log.AddField("teacher_attendance_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch teacher attendance: %w", err)
 	}
 
@@ -665,8 +704,10 @@ func (s *AttendanceService) UpdateTeacherAttendance(
 	}
 
 	if err := s.repo.UpdateTeacherAttendance(record); err != nil {
+		log.Error("update teacher attendance: database update failed", log.Err(err), log.AddField("teacher_attendance_id", id), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to update teacher attendance: %w", err)
 	}
+	log.Info("teacher attendance updated", log.AddField("teacher_attendance_id", record.ID), log.AddField("school_id", schoolID))
 
 	return record, nil
 }
@@ -689,6 +730,7 @@ func (s *AttendanceService) GetAttendanceStats(ctx context.Context,
 
 	counts, err := s.repo.GetAttendanceStats(schoolID, query, startDate, endDate)
 	if err != nil {
+		log.Error("get attendance stats: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch attendance stats: %w", err)
 	}
 
@@ -748,6 +790,7 @@ func (s *AttendanceService) GetTeacherAttendanceStats(
 
 	counts, err := s.repo.GetTeacherAttendanceStats(schoolID, query, startDate, endDate)
 	if err != nil {
+		log.Error("get teacher attendance stats: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch teacher attendance stats: %w", err)
 	}
 
