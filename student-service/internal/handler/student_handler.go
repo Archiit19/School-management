@@ -38,7 +38,7 @@ func (h *StudentHandler) CreateStudent(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
-	resp, err := h.svc.CreateStudent(req, schoolID, authHeader)
+	resp, err := h.svc.CreateStudent(c.Request.Context(), req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -161,7 +161,7 @@ func (h *StudentHandler) UpdateStudent(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
-	student, err := h.svc.UpdateStudent(id, req, schoolID, authHeader)
+	student, err := h.svc.UpdateStudent(c.Request.Context(), id, req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

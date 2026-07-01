@@ -1,12 +1,13 @@
-go 1.25
+go 1.25.0
 
 use (
-	./auth-service
-	./user-service
+	./pkg
 	./academic-service
-	./school-service
 	./attendance-service
+	./auth-service
 	./exam-service
 	./finance-service
+	./school-service
 	./student-service
+	./user-service
 )
