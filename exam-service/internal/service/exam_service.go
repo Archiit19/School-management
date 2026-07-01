@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/exam-service/internal/config"
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/repository"
@@ -75,8 +76,15 @@ func (s *ExamService) CreateExam(
 		CreatedBy:   createdBy,
 	}
 	if err := s.repo.CreateExam(exam); err != nil {
+		log.Error("create exam: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("title", req.Title))
 		return nil, fmt.Errorf("failed to create exam: %w", err)
 	}
+	log.Info("exam created",
+		log.AddField("exam_id", exam.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("title", exam.Title),
+		log.AddField("class_id", exam.ClassID),
+	)
 	return exam, nil
 }
 
@@ -110,11 +118,20 @@ func (s *ExamService) EnterMarks(
 		existing.MarksObtained = req.MarksObtained
 		existing.Remarks = req.Remarks
 		if err := s.repo.UpdateMark(existing); err != nil {
+			log.Error("enter marks: database update failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("exam_id", examID), log.AddField("student_id", studentID))
 			return nil, fmt.Errorf("failed to update marks: %w", err)
 		}
+		log.Info("marks updated",
+			log.AddField("mark_id", existing.ID),
+			log.AddField("school_id", schoolID),
+			log.AddField("exam_id", examID),
+			log.AddField("student_id", studentID),
+			log.AddField("marks_obtained", existing.MarksObtained),
+		)
 		return existing, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		log.Error("enter marks: validate existing mark failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("exam_id", examID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to validate existing mark: %w", err)
 	}
 
@@ -127,8 +144,16 @@ func (s *ExamService) EnterMarks(
 		CreatedBy:     createdBy,
 	}
 	if err := s.repo.CreateMark(mark); err != nil {
+		log.Error("enter marks: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("exam_id", examID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to create marks: %w", err)
 	}
+	log.Info("marks entered",
+		log.AddField("mark_id", mark.ID),
+		log.AddField("school_id", schoolID),
+		log.AddField("exam_id", examID),
+		log.AddField("student_id", studentID),
+		log.AddField("marks_obtained", mark.MarksObtained),
+	)
 	return mark, nil
 }
 
@@ -148,8 +173,13 @@ func (s *ExamService) PublishResults(
 	}
 	exam.IsPublished = true
 	if err := s.repo.UpdateExam(exam); err != nil {
+		log.Error("publish results: database update failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("exam_id", examID))
 		return nil, fmt.Errorf("failed to publish results: %w", err)
 	}
+	log.Info("results published",
+		log.AddField("exam_id", exam.ID),
+		log.AddField("school_id", schoolID),
+	)
 	return exam, nil
 }
 
@@ -158,6 +188,7 @@ func (s *ExamService) PublishResults(
 func (s *ExamService) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]model.Exam, error) {
 	exams, err := s.repo.GetExams(schoolID, query)
 	if err != nil {
+		log.Error("list exams: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch exams: %w", err)
 	}
 	return exams, nil
@@ -187,10 +218,12 @@ func (s *ExamService) GetMyExams(ctx context.Context,
 
 	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
+		log.Error("get my exams: academic enrollment lookup failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, errors.New("failed to resolve pupil enrollment from academic-service")
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
+		log.Error("get my exams: academic enrollment lookup failed", log.AddField("school_id", schoolID), log.AddField("student_id", studentID), log.AddField("status", resp.StatusCode))
 		return nil, fmt.Errorf("academic-service /enrollments/me returned status %d", resp.StatusCode)
 	}
 
@@ -214,6 +247,7 @@ func (s *ExamService) GetMyExams(ctx context.Context,
 	}
 	exams, err := s.repo.GetExams(schoolID, query)
 	if err != nil {
+		log.Error("get my exams: database query failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, fmt.Errorf("failed to fetch exams: %w", err)
 	}
 
@@ -234,6 +268,7 @@ func (s *ExamService) GetResults(
 	includeUnpublished := roleName == "teacher" || roleName == "super_admin"
 	results, err := s.repo.GetResults(schoolID, query, includeUnpublished)
 	if err != nil {
+		log.Error("get results: database query failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to fetch results: %w", err)
 	}
 
