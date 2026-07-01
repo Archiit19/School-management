@@ -1,24 +1,24 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"context"
 	"time"
 
 	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/exam-service/internal/config"
 	"github.com/Archiit19/School-management/exam-service/internal/handler"
+	"github.com/Archiit19/School-management/pkg/health"
+	"github.com/Archiit19/School-management/pkg/httpclient"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
+	"github.com/Archiit19/School-management/pkg/userclient"
 	"github.com/Archiit19/School-management/exam-service/internal/model"
 	"github.com/Archiit19/School-management/exam-service/internal/repository"
 	"github.com/Archiit19/School-management/exam-service/internal/service"
-	"github.com/Archiit19/School-management/pkg/middleware"
-	"github.com/Archiit19/School-management/pkg/userclient"
-	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/exam-service/docs"
 )
@@ -36,13 +36,29 @@ func main() {
 		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
-	cfg := config.Load()
+	traceShutdown, err := tracer.InitFromEnv("exam-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger: gormlogger.Discard,
-	})
+	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
+
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
 	}
 	log.Info("connected to database")
 
@@ -52,16 +68,14 @@ func main() {
 	log.Info("database migrated")
 
 	repo := repository.NewExamRepository(db)
-	httpClient := &http.Client{Timeout: 8 * time.Second}
-	svc := service.NewExamService(repo, cfg, httpClient)
+	outbound := httpclient.OutboundHTTP("outbound")
+	svc := service.NewExamService(repo, cfg, outbound)
 	users := userclient.New(cfg.UserServiceURL, cfg.InternalServiceToken)
 	h := handler.NewExamHandler(svc, users)
 
-	r := middleware.NewEngine()
+	r := middleware.NewEngine("exam-service")
+	health.Register(r, "exam-service", health.CheckDB(db))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "exam-service is running"})
-	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	protected := r.Group("")
@@ -79,12 +93,7 @@ func main() {
 		protected.GET("/results", middleware.RequirePermission("view_results"), h.GetResults)
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Info("starting http server",
-		log.AddField("addr", addr),
-		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
-	)
-	if err := r.Run(addr); err != nil {
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
 		log.Fatal("failed to start server", log.Err(err))
 	}
 }

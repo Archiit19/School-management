@@ -1,9 +1,9 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
@@ -31,16 +31,18 @@ func NewUserService(
 	profiles *repository.ProfileRepository,
 	cfg *config.Config,
 ) *UserService {
+	httpCfg := outboundHTTPConfig()
+	auth, school, academic := newServiceClients(cfg, httpCfg)
 	return &UserService{
 		repo:     repo,
 		profiles: profiles,
-		auth:     newAuthClient(cfg),
-		school:   newSchoolClient(cfg),
-		academic: newAcademicClient(cfg, &http.Client{Timeout: 8 * time.Second}),
+		auth:     auth,
+		school:   school,
+		academic: academic,
 	}
 }
 
-func (s *UserService) rollbackCreate(userID uuid.UUID, schoolID *uuid.UUID) {
+func (s *UserService) rollbackCreate(ctx context.Context, userID uuid.UUID, schoolID *uuid.UUID) {
 	fields := []log.Field{log.AddField("user_id", userID)}
 	if schoolID != nil {
 		fields = append(fields, log.AddField("school_id", *schoolID))
@@ -48,16 +50,16 @@ func (s *UserService) rollbackCreate(userID uuid.UUID, schoolID *uuid.UUID) {
 	log.Warn("rolling back user creation", fields...)
 
 	if schoolID != nil {
-		_ = s.academic.DeleteEnrollment(userID, *schoolID)
-		_ = s.auth.RemoveUserRole(userID, *schoolID)
-		_ = s.school.RemoveMember(*schoolID, userID)
+		_ = s.academic.DeleteEnrollment(ctx, userID, *schoolID)
+		_ = s.auth.RemoveUserRole(ctx, userID, *schoolID)
+		_ = s.school.RemoveMember(ctx, *schoolID, userID)
 	}
 	_ = s.profiles.Delete(userID)
-	_ = s.auth.DeleteUserAuth(userID)
+	_ = s.auth.DeleteUserAuth(ctx, userID)
 	_ = s.repo.Delete(userID)
 }
 
-func (s *UserService) CreateProfileInternal(req model.CreateProfileInternalRequest) (*model.User, error) {
+func (s *UserService) CreateProfileInternal(ctx context.Context, req model.CreateProfileInternalRequest) (*model.User, error) {
 	if _, err := s.repo.GetByEmail(req.Email); err == nil {
 		return nil, errors.New("user with this email already exists")
 	}
@@ -70,7 +72,7 @@ func (s *UserService) CreateProfileInternal(req model.CreateProfileInternalReque
 	return user, nil
 }
 
-func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID) (*model.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, req model.CreateUserRequest, schoolID uuid.UUID) (*model.User, error) {
 	if _, err := s.repo.GetByEmail(req.Email); err == nil {
 		return nil, errors.New("user with this email already exists")
 	}
@@ -78,7 +80,7 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 	if err != nil {
 		return nil, errors.New("invalid role_id format")
 	}
-	roleName, err := s.auth.GetRoleByID(roleID)
+	roleName, err := s.auth.GetRoleByID(ctx, roleID)
 	if err != nil || roleName == "" {
 		return nil, errors.New("role not found — make sure the role_id is valid")
 	}
@@ -88,13 +90,13 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 		roleData = map[string]interface{}{}
 	}
 
-	fieldDefs, _ := s.auth.GetRoleFields(roleID)
+	fieldDefs, _ := s.auth.GetRoleFields(ctx, roleID)
 	if err := validateRoleData(fieldDefs, roleData); err != nil {
 		return nil, err
 	}
 
 	if strings.EqualFold(roleName, "student") {
-		if err := s.enrichStudentRoleData(schoolID, roleData); err != nil {
+		if err := s.enrichStudentRoleData(ctx, schoolID, roleData); err != nil {
 			return nil, err
 		}
 	}
@@ -110,43 +112,43 @@ func (s *UserService) CreateUser(req model.CreateUserRequest, schoolID uuid.UUID
 
 	if err := s.profiles.Save(user.ID, roleID, schoolID, roleData); err != nil {
 		log.Error("create user: save role profile failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", schoolID))
-		s.rollbackCreate(user.ID, nil)
+		s.rollbackCreate(ctx, user.ID, nil)
 		return nil, fmt.Errorf("failed to save role profile: %w", err)
 	}
 
-	if err := s.auth.SetCredential(user.ID, req.Password); err != nil {
+	if err := s.auth.SetCredential(ctx, user.ID, req.Password); err != nil {
 		log.Error("create user: set credentials failed", log.Err(err), log.AddField("user_id", user.ID))
-		s.rollbackCreate(user.ID, nil)
+		s.rollbackCreate(ctx, user.ID, nil)
 		return nil, fmt.Errorf("failed to set credentials: %w", err)
 	}
-	if err := s.school.AddMember(schoolID, user.ID); err != nil {
+	if err := s.school.AddMember(ctx, schoolID, user.ID); err != nil {
 		log.Error("create user: add school member failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", schoolID))
-		s.rollbackCreate(user.ID, &schoolID)
+		s.rollbackCreate(ctx, user.ID, &schoolID)
 		return nil, fmt.Errorf("failed to link user to school: %w", err)
 	}
-	if err := s.auth.AssignUserRole(user.ID, schoolID, roleID); err != nil {
+	if err := s.auth.AssignUserRole(ctx, user.ID, schoolID, roleID); err != nil {
 		log.Error("create user: assign role failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", schoolID), log.AddField("role_id", roleID))
-		s.rollbackCreate(user.ID, &schoolID)
+		s.rollbackCreate(ctx, user.ID, &schoolID)
 		return nil, fmt.Errorf("failed to assign role: %w", err)
 	}
 
 	if strings.EqualFold(roleName, "student") {
 		classID := fmt.Sprint(roleData["class_id"])
 		sectionID := fmt.Sprint(roleData["section_id"])
-		if err := s.academic.UpsertEnrollment(user.ID, schoolID, classID, sectionID); err != nil {
+		if err := s.academic.UpsertEnrollment(ctx, user.ID, schoolID, classID, sectionID); err != nil {
 			log.Error("create user: enroll student failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", schoolID))
-			s.rollbackCreate(user.ID, &schoolID)
+			s.rollbackCreate(ctx, user.ID, &schoolID)
 			return nil, fmt.Errorf("failed to enroll student: %w", err)
 		}
 		parentID, err := parseParentUserID(roleData)
 		if err != nil {
-			s.rollbackCreate(user.ID, &schoolID)
+			s.rollbackCreate(ctx, user.ID, &schoolID)
 			return nil, err
 		}
 		if err := s.profiles.AppendChild(parentID, user.ID); err != nil {
 			log.Error("create user: link student to parent failed",
 				append([]log.Field{log.Err(err)}, logParentChild(parentID, user.ID)...)...)
-			s.rollbackCreate(user.ID, &schoolID)
+			s.rollbackCreate(ctx, user.ID, &schoolID)
 			return nil, fmt.Errorf("failed to link student to parent: %w", err)
 		}
 		log.Info("student linked to parent", logParentChild(parentID, user.ID)...)
@@ -201,7 +203,7 @@ func parseParentUserID(data map[string]interface{}) (uuid.UUID, error) {
 	return uuid.Parse(parentIDStr)
 }
 
-func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]interface{}) error {
+func (s *UserService) enrichStudentRoleData(ctx context.Context, schoolID uuid.UUID, data map[string]interface{}) error {
 	classID, ok := data["class_id"].(string)
 	if !ok || classID == "" {
 		if v, ok := data["class_id"]; ok {
@@ -229,7 +231,7 @@ func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]
 	if err != nil {
 		return errors.New("invalid parent_user_id")
 	}
-	parentUser, err := s.validateParentUser(parentID, schoolID)
+	parentUser, err := s.validateParentUser(ctx, parentID, schoolID)
 	if err != nil {
 		return err
 	}
@@ -238,8 +240,8 @@ func (s *UserService) enrichStudentRoleData(schoolID uuid.UUID, data map[string]
 	return nil
 }
 
-func (s *UserService) validateParentUser(parentID, schoolID uuid.UUID) (*model.User, error) {
-	if err := s.school.GetMembership(schoolID, parentID); err != nil {
+func (s *UserService) validateParentUser(ctx context.Context, parentID, schoolID uuid.UUID) (*model.User, error) {
+	if err := s.school.GetMembership(ctx, schoolID, parentID); err != nil {
 		return nil, errors.New("parent user not found in this school")
 	}
 	parent, err := s.repo.GetByID(parentID)
@@ -249,7 +251,7 @@ func (s *UserService) validateParentUser(parentID, schoolID uuid.UUID) (*model.U
 	if !parent.IsActive {
 		return nil, errors.New("parent user account is inactive")
 	}
-	ur, err := s.auth.GetUserRole(parentID, schoolID)
+	ur, err := s.auth.GetUserRole(ctx, parentID, schoolID)
 	if err != nil {
 		return nil, errors.New("parent role not found for user")
 	}
@@ -275,7 +277,7 @@ func (s *UserService) generateStudentCode(schoolID uuid.UUID, classID string, da
 	return fmt.Sprintf("%s%02d", codePrefix, 1), nil
 }
 
-func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*model.UserListResponse, error) {
+func (s *UserService) GetUsers(ctx context.Context, schoolID uuid.UUID, query model.UserListQuery) (*model.UserListResponse, error) {
 	params := pagination.Params{Page: query.Page, Limit: query.Limit}
 	if query.IDs != "" {
 		pagination.Normalize(&params, pagination.Options{MaxLimit: 200})
@@ -285,7 +287,7 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 	query.Page = params.Page
 	query.Limit = params.Limit
 
-	memberIDs, err := s.school.ListMemberUserIDs(schoolID)
+	memberIDs, err := s.school.ListMemberUserIDs(ctx, schoolID)
 	if err != nil {
 		log.Error("list users: school members lookup failed", log.Err(err), log.AddField("school_id", schoolID))
 		return nil, fmt.Errorf("failed to list school members: %w", err)
@@ -296,7 +298,7 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 		if err == nil {
 			filtered := make([]uuid.UUID, 0)
 			for _, uid := range memberIDs {
-				ur, err := s.auth.GetUserRole(uid, schoolID)
+				ur, err := s.auth.GetUserRole(ctx, uid, schoolID)
 				if err == nil && ur.RoleID == rid {
 					filtered = append(filtered, uid)
 				}
@@ -331,7 +333,7 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 	}
 
 	for i := range users {
-		if ur, err := s.auth.GetUserRole(users[i].ID, schoolID); err == nil {
+		if ur, err := s.auth.GetUserRole(ctx, users[i].ID, schoolID); err == nil {
 			users[i].RoleID = &ur.RoleID
 			users[i].RoleName = ur.RoleName
 		}
@@ -339,14 +341,14 @@ func (s *UserService) GetUsers(schoolID uuid.UUID, query model.UserListQuery) (*
 		if p, ok := profiles[users[i].ID]; ok {
 			users[i].RoleData = p.Data
 		}
-		s.mergeEnrollmentIntoRoleData(&users[i], schoolID)
+		s.mergeEnrollmentIntoRoleData(ctx, &users[i], schoolID)
 	}
 
 	return &model.UserListResponse{Users: users, Total: total, Page: query.Page, Limit: query.Limit}, nil
 }
 
-func (s *UserService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*model.User, error) {
-	if err := s.school.GetMembership(schoolID, id); err != nil {
+func (s *UserService) GetUserByID(ctx context.Context, id uuid.UUID, schoolID uuid.UUID) (*model.User, error) {
+	if err := s.school.GetMembership(ctx, schoolID, id); err != nil {
 		return nil, errors.New("user not found")
 	}
 	user, err := s.repo.GetByID(id)
@@ -356,7 +358,7 @@ func (s *UserService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*model.User
 		}
 		return nil, err
 	}
-	if ur, err := s.auth.GetUserRole(id, schoolID); err == nil {
+	if ur, err := s.auth.GetUserRole(ctx, id, schoolID); err == nil {
 		user.RoleID = &ur.RoleID
 		user.RoleName = ur.RoleName
 	}
@@ -364,12 +366,12 @@ func (s *UserService) GetUserByID(id uuid.UUID, schoolID uuid.UUID) (*model.User
 	if p, err := s.profiles.Get(id); err == nil {
 		user.RoleData = p.Data
 	}
-	s.mergeEnrollmentIntoRoleData(user, schoolID)
+	s.mergeEnrollmentIntoRoleData(ctx, user, schoolID)
 	return user, nil
 }
 
-func (s *UserService) mergeEnrollmentIntoRoleData(user *model.User, schoolID uuid.UUID) {
-	if enrollment, err := s.academic.GetEnrollment(user.ID, schoolID); err == nil && enrollment != nil {
+func (s *UserService) mergeEnrollmentIntoRoleData(ctx context.Context, user *model.User, schoolID uuid.UUID) {
+	if enrollment, err := s.academic.GetEnrollment(ctx, user.ID, schoolID); err == nil && enrollment != nil {
 		if user.RoleData == nil {
 			user.RoleData = map[string]interface{}{}
 		}
@@ -380,8 +382,8 @@ func (s *UserService) mergeEnrollmentIntoRoleData(user *model.User, schoolID uui
 	}
 }
 
-func (s *UserService) GetUserMe(userID, schoolID uuid.UUID) (*model.User, error) {
-	user, err := s.GetUserByID(userID, schoolID)
+func (s *UserService) GetUserMe(ctx context.Context, userID, schoolID uuid.UUID) (*model.User, error) {
+	user, err := s.GetUserByID(ctx, userID, schoolID)
 	if err != nil {
 		return nil, err
 	}
@@ -391,7 +393,7 @@ func (s *UserService) GetUserMe(userID, schoolID uuid.UUID) (*model.User, error)
 	return user, nil
 }
 
-func (s *UserService) GetUserForInternal(id uuid.UUID, schoolID *uuid.UUID) (*model.User, error) {
+func (s *UserService) GetUserForInternal(ctx context.Context, id uuid.UUID, schoolID *uuid.UUID) (*model.User, error) {
 	user, err := s.repo.GetByID(id)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -400,16 +402,16 @@ func (s *UserService) GetUserForInternal(id uuid.UUID, schoolID *uuid.UUID) (*mo
 		return nil, err
 	}
 	if schoolID != nil && *schoolID != uuid.Nil {
-		if ur, err := s.auth.GetUserRole(id, *schoolID); err == nil {
+		if ur, err := s.auth.GetUserRole(ctx, id, *schoolID); err == nil {
 			user.SchoolID = schoolID
 			user.RoleID = &ur.RoleID
 			user.RoleName = ur.RoleName
 		}
 	} else {
-		schools, err := s.school.ListMembershipsForUser(id)
+		schools, err := s.school.ListMembershipsForUser(ctx, id)
 		if err == nil && len(schools) == 1 {
 			sid := schools[0]
-			if ur, err := s.auth.GetUserRole(id, sid); err == nil {
+			if ur, err := s.auth.GetUserRole(ctx, id, sid); err == nil {
 				user.SchoolID = &sid
 				user.RoleID = &ur.RoleID
 				user.RoleName = ur.RoleName
@@ -422,7 +424,7 @@ func (s *UserService) GetUserForInternal(id uuid.UUID, schoolID *uuid.UUID) (*mo
 	return user, nil
 }
 
-func (s *UserService) GetUserProfileInternal(id uuid.UUID) (map[string]interface{}, error) {
+func (s *UserService) GetUserProfileInternal(ctx context.Context, id uuid.UUID) (map[string]interface{}, error) {
 	p, err := s.profiles.Get(id)
 	if err != nil {
 		return nil, err
@@ -436,7 +438,7 @@ func (s *UserService) GetUserProfileInternal(id uuid.UUID) (map[string]interface
 		result[k] = v
 	}
 	schoolID, _ := uuid.Parse(p.SchoolID)
-	if enrollment, err := s.academic.GetEnrollment(id, schoolID); err == nil && enrollment != nil {
+	if enrollment, err := s.academic.GetEnrollment(ctx, id, schoolID); err == nil && enrollment != nil {
 		result["class_id"] = enrollment.ClassID
 		if enrollment.SectionID != nil {
 			result["section_id"] = *enrollment.SectionID
@@ -445,8 +447,8 @@ func (s *UserService) GetUserProfileInternal(id uuid.UUID) (map[string]interface
 	return result, nil
 }
 
-func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, schoolID uuid.UUID) (*model.User, error) {
-	if err := s.school.GetMembership(schoolID, id); err != nil {
+func (s *UserService) UpdateUser(ctx context.Context, id uuid.UUID, req model.UpdateUserRequest, schoolID uuid.UUID) (*model.User, error) {
+	if err := s.school.GetMembership(ctx, schoolID, id); err != nil {
 		return nil, errors.New("user not found")
 	}
 	user, err := s.repo.GetByID(id)
@@ -464,7 +466,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 		user.Email = *req.Email
 	}
 	var roleID uuid.UUID
-	if ur, err := s.auth.GetUserRole(id, schoolID); err == nil {
+	if ur, err := s.auth.GetUserRole(ctx, id, schoolID); err == nil {
 		roleID = ur.RoleID
 		user.RoleID = &ur.RoleID
 		user.RoleName = ur.RoleName
@@ -474,11 +476,11 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 		if err != nil {
 			return nil, errors.New("invalid role_id format")
 		}
-		roleName, err := s.auth.GetRoleByID(parsed)
+		roleName, err := s.auth.GetRoleByID(ctx, parsed)
 		if err != nil || roleName == "" {
 			return nil, errors.New("role not found")
 		}
-		if err := s.auth.UpdateUserRole(id, schoolID, parsed); err != nil {
+		if err := s.auth.UpdateUserRole(ctx, id, schoolID, parsed); err != nil {
 			return nil, fmt.Errorf("failed to update role: %w", err)
 		}
 		roleID = parsed
@@ -507,12 +509,12 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 				}
 			}
 		}
-		fieldDefs, _ := s.auth.GetRoleFields(roleID)
+		fieldDefs, _ := s.auth.GetRoleFields(ctx, roleID)
 		if err := validateRoleData(fieldDefs, data); err != nil {
 			return nil, err
 		}
 		if strings.EqualFold(user.RoleName, "student") {
-			if err := s.enrichStudentRoleData(schoolID, data); err != nil {
+			if err := s.enrichStudentRoleData(ctx, schoolID, data); err != nil {
 				return nil, err
 			}
 		}
@@ -528,7 +530,7 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 			classID := fmt.Sprint(data["class_id"])
 			sectionID := fmt.Sprint(data["section_id"])
 			if classID != "" {
-				if err := s.academic.UpsertEnrollment(id, schoolID, classID, sectionID); err != nil {
+				if err := s.academic.UpsertEnrollment(ctx, id, schoolID, classID, sectionID); err != nil {
 					log.Error("update user: enrollment update failed", log.Err(err), log.AddField("user_id", id), log.AddField("school_id", schoolID))
 					return nil, fmt.Errorf("failed to update enrollment: %w", err)
 				}
@@ -558,11 +560,11 @@ func (s *UserService) UpdateUser(id uuid.UUID, req model.UpdateUserRequest, scho
 	return user, nil
 }
 
-func (s *UserService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUserID uuid.UUID) error {
+func (s *UserService) DeleteUser(ctx context.Context, id uuid.UUID, schoolID uuid.UUID, requestingUserID uuid.UUID) error {
 	if id == requestingUserID {
 		return errors.New("you cannot delete your own account")
 	}
-	if err := s.school.GetMembership(schoolID, id); err != nil {
+	if err := s.school.GetMembership(ctx, schoolID, id); err != nil {
 		return errors.New("user not found")
 	}
 	if profile, err := s.profiles.Get(id); err == nil && profile != nil {
@@ -570,23 +572,23 @@ func (s *UserService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUse
 			_ = s.profiles.RemoveChild(parentID, id)
 		}
 	}
-	if err := s.auth.RemoveUserRole(id, schoolID); err != nil {
+	if err := s.auth.RemoveUserRole(ctx, id, schoolID); err != nil {
 		log.Error("delete user: remove role failed", log.Err(err), log.AddField("user_id", id), log.AddField("school_id", schoolID))
 		return err
 	}
-	if err := s.school.RemoveMember(schoolID, id); err != nil {
+	if err := s.school.RemoveMember(ctx, schoolID, id); err != nil {
 		log.Error("delete user: remove school member failed", log.Err(err), log.AddField("user_id", id), log.AddField("school_id", schoolID))
 		return err
 	}
-	_ = s.academic.DeleteEnrollment(id, schoolID)
-	schools, err := s.school.ListMembershipsForUser(id)
+	_ = s.academic.DeleteEnrollment(ctx, id, schoolID)
+	schools, err := s.school.ListMembershipsForUser(ctx, id)
 	if err != nil {
 		log.Error("delete user: list memberships failed", log.Err(err), log.AddField("user_id", id))
 		return err
 	}
 	if len(schools) == 0 {
 		_ = s.profiles.Delete(id)
-		if err := s.auth.DeleteUserAuth(id); err != nil {
+		if err := s.auth.DeleteUserAuth(ctx, id); err != nil {
 			log.Error("delete user: delete auth record failed", log.Err(err), log.AddField("user_id", id))
 			return err
 		}
@@ -601,7 +603,7 @@ func (s *UserService) DeleteUser(id uuid.UUID, schoolID uuid.UUID, requestingUse
 	return nil
 }
 
-func (s *UserService) GetUserForInternalByEmail(email string) (*model.User, error) {
+func (s *UserService) GetUserForInternalByEmail(ctx context.Context, email string) (*model.User, error) {
 	user, err := s.repo.GetByEmail(email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -612,7 +614,7 @@ func (s *UserService) GetUserForInternalByEmail(email string) (*model.User, erro
 	return user, nil
 }
 
-func (s *UserService) DeleteProfileInternal(id uuid.UUID) error {
+func (s *UserService) DeleteProfileInternal(ctx context.Context, id uuid.UUID) error {
 	_ = s.profiles.Delete(id)
 	if err := s.repo.Delete(id); err != nil {
 		log.Error("delete profile internal: database delete failed", log.Err(err), log.AddField("user_id", id))
@@ -622,7 +624,7 @@ func (s *UserService) DeleteProfileInternal(id uuid.UUID) error {
 	return nil
 }
 
-func (s *UserService) UpdateProfileInternal(id uuid.UUID, name, email *string) (*model.User, error) {
+func (s *UserService) UpdateProfileInternal(ctx context.Context, id uuid.UUID, name, email *string) (*model.User, error) {
 	user, err := s.repo.GetByID(id)
 	if err != nil {
 		return nil, errors.New("user not found")
@@ -655,7 +657,7 @@ func parseParentUserIDOptional(data map[string]interface{}) (uuid.UUID, error) {
 	return uuid.Parse(parentIDStr)
 }
 
-func (s *UserService) ParentHasChild(parentID, childID uuid.UUID) (bool, error) {
+func (s *UserService) ParentHasChild(ctx context.Context, parentID, childID uuid.UUID) (bool, error) {
 	ok, err := s.profiles.HasChild(parentID, childID)
 	if err != nil {
 		log.Error("parent has-child check failed",
@@ -664,8 +666,8 @@ func (s *UserService) ParentHasChild(parentID, childID uuid.UUID) (bool, error) 
 	return ok, err
 }
 
-func (s *UserService) GetMyChildren(parentID, schoolID uuid.UUID) ([]model.User, error) {
-	ur, err := s.auth.GetUserRole(parentID, schoolID)
+func (s *UserService) GetMyChildren(ctx context.Context, parentID, schoolID uuid.UUID) ([]model.User, error) {
+	ur, err := s.auth.GetUserRole(ctx, parentID, schoolID)
 	if err != nil {
 		return nil, errors.New("parent role not found")
 	}
@@ -683,7 +685,7 @@ func (s *UserService) GetMyChildren(parentID, schoolID uuid.UUID) ([]model.User,
 		if err != nil {
 			continue
 		}
-		child, err := s.GetUserByID(childID, schoolID)
+		child, err := s.GetUserByID(ctx, childID, schoolID)
 		if err != nil {
 			continue
 		}
@@ -692,7 +694,7 @@ func (s *UserService) GetMyChildren(parentID, schoolID uuid.UUID) ([]model.User,
 	return children, nil
 }
 
-func (s *UserService) GetChildForParent(parentID, childID, schoolID uuid.UUID) (*model.User, error) {
+func (s *UserService) GetChildForParent(ctx context.Context, parentID, childID, schoolID uuid.UUID) (*model.User, error) {
 	ok, err := s.profiles.HasChild(parentID, childID)
 	if err != nil {
 		return nil, err
@@ -700,7 +702,7 @@ func (s *UserService) GetChildForParent(parentID, childID, schoolID uuid.UUID) (
 	if !ok {
 		return nil, errors.New("student is not linked to this parent account")
 	}
-	return s.GetUserByID(childID, schoolID)
+	return s.GetUserByID(ctx, childID, schoolID)
 }
 
 func extractClassNumber(className string) string {

@@ -1,10 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/service"
+	"github.com/Archiit19/School-management/pkg/apierrors"
 	"github.com/Archiit19/School-management/pkg/httputil"
 	"github.com/Archiit19/School-management/pkg/pupil"
 	"github.com/Archiit19/School-management/pkg/userclient"
@@ -13,8 +16,8 @@ import (
 )
 
 type AttendanceHandler struct {
-	svc    *service.AttendanceService
-	users  *userclient.Client
+	svc   *service.AttendanceService
+	users *userclient.Client
 }
 
 func NewAttendanceHandler(svc *service.AttendanceService, users *userclient.Client) *AttendanceHandler {
@@ -35,6 +38,7 @@ func NewAttendanceHandler(svc *service.AttendanceService, users *userclient.Clie
 func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	var req model.CreateAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -43,12 +47,13 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.CreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	record, err := h.svc.CreateAttendance(c.Request.Context(), req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "create attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("attendance created", log.AddField("attendance_id", record.ID), log.AddField("school_id", schoolID), log.AddField("student_id", record.StudentID))
 	c.JSON(http.StatusCreated, record)
 }
 
@@ -66,6 +71,7 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 	var req model.BulkCreateAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -74,12 +80,13 @@ func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.BulkCreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.BulkCreateAttendance(c.Request.Context(), req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "bulk create attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("attendance bulk created", log.AddField("school_id", schoolID), log.AddField("created", resp.Created), log.AddField("skipped", resp.Skipped))
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -103,6 +110,7 @@ func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	var query model.AttendanceQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -110,8 +118,9 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
-	resp, err := h.svc.GetAttendance(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.GetAttendance(c.Request.Context(), schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "list attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
@@ -139,20 +148,23 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		logServiceError(c, http.StatusForbidden, "resolve student for my attendance failed", err)
 		pupil.WriteForbidden(c, err)
 		return
 	}
 
 	var query model.AttendanceQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	query.StudentID = studentID.String()
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	resp, err := h.svc.GetAttendance(schoolID, query, uuid.Nil, "student", "")
+	resp, err := h.svc.GetAttendance(c.Request.Context(), schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "get my attendance failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		httputil.WriteError(c, err)
 		return
 	}
@@ -174,20 +186,23 @@ func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
 func (h *AttendanceHandler) GetMyAttendanceStats(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		logServiceError(c, http.StatusForbidden, "resolve student for my attendance stats failed", err)
 		pupil.WriteForbidden(c, err)
 		return
 	}
 
 	var query model.AttendanceStatsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	query.StudentID = studentID.String()
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	resp, err := h.svc.GetAttendanceStats(schoolID, query, uuid.Nil, "student", "")
+	resp, err := h.svc.GetAttendanceStats(c.Request.Context(), schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "get my attendance stats failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		httputil.WriteError(c, err)
 		return
 	}
@@ -215,6 +230,7 @@ func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 
 	var req model.UpdateAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -223,12 +239,13 @@ func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.UpdateAttendance(id, req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	record, err := h.svc.UpdateAttendance(c.Request.Context(), id, req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "update attendance failed", err, log.AddField("attendance_id", id), log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("attendance updated", log.AddField("attendance_id", record.ID), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusOK, record)
 }
 
@@ -258,6 +275,7 @@ func permissionsFromContext(c *gin.Context) []string {
 func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
 	var req model.CreateTeacherAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -266,12 +284,13 @@ func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.CreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	record, err := h.svc.CreateTeacherAttendance(c.Request.Context(), req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "create teacher attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("teacher attendance created", log.AddField("teacher_attendance_id", record.ID), log.AddField("school_id", schoolID), log.AddField("teacher_user_id", record.TeacherUserID))
 	c.JSON(http.StatusCreated, record)
 }
 
@@ -289,6 +308,7 @@ func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
 func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
 	var req model.BulkCreateTeacherAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -297,12 +317,13 @@ func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.BulkCreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	resp, err := h.svc.BulkCreateTeacherAttendance(c.Request.Context(), req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "bulk create teacher attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("teacher attendance bulk created", log.AddField("school_id", schoolID), log.AddField("created", resp.Created), log.AddField("skipped", resp.Skipped))
 	c.JSON(http.StatusCreated, resp)
 }
 
@@ -318,6 +339,7 @@ func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
 func (h *AttendanceHandler) GetTeacherAttendance(c *gin.Context) {
 	var query model.TeacherAttendanceQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -328,6 +350,7 @@ func (h *AttendanceHandler) GetTeacherAttendance(c *gin.Context) {
 
 	resp, err := h.svc.GetTeacherAttendance(schoolID, userID, roleName, permissionsFromContext(c), query)
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "list teacher attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
@@ -356,6 +379,7 @@ func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
 
 	var req model.UpdateTeacherAttendanceRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -366,10 +390,11 @@ func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
 
 	record, err := h.svc.UpdateTeacherAttendance(id, req, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "update teacher attendance failed", err, log.AddField("teacher_attendance_id", id), log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
-
+	requestLogger(c).Info("teacher attendance updated", log.AddField("teacher_attendance_id", record.ID), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusOK, record)
 }
 
@@ -391,6 +416,7 @@ func (h *AttendanceHandler) UpdateTeacherAttendance(c *gin.Context) {
 func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
 	var query model.AttendanceStatsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -399,8 +425,9 @@ func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.GetAttendanceStats(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.GetAttendanceStats(c.Request.Context(), schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "get attendance stats failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
@@ -423,6 +450,7 @@ func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
 func (h *AttendanceHandler) GetTeacherAttendanceStats(c *gin.Context) {
 	var query model.TeacherAttendanceStatsQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -433,9 +461,18 @@ func (h *AttendanceHandler) GetTeacherAttendanceStats(c *gin.Context) {
 
 	resp, err := h.svc.GetTeacherAttendanceStats(schoolID, userID, roleName, permissionsFromContext(c), query)
 	if err != nil {
+		logServiceError(c, serviceErrorStatus(err), "get teacher attendance stats failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, resp)
+}
+
+func serviceErrorStatus(err error) int {
+	var he *apierrors.HTTP
+	if errors.As(err, &he) {
+		return he.Status
+	}
+	return http.StatusBadRequest
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,7 +9,6 @@ import (
 	"net/url"
 
 	"github.com/Archiit19/School-management/pkg/httpclient"
-	"github.com/Archiit19/School-management/user-service/internal/config"
 	"github.com/google/uuid"
 )
 
@@ -16,12 +16,8 @@ type authClient struct {
 	*httpclient.Client
 }
 
-func newAuthClient(cfg *config.Config) *authClient {
-	return &authClient{Client: httpclient.New(cfg.AuthServiceURL, cfg.InternalServiceToken)}
-}
-
-func (c *authClient) SetCredential(userID uuid.UUID, password string) error {
-	resp, err := c.DoJSON(http.MethodPost, "/internal/credentials", map[string]string{
+func (c *authClient) SetCredential(ctx context.Context, userID uuid.UUID, password string) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, "/internal/credentials", map[string]string{
 		"user_id":  userID.String(),
 		"password": password,
 	}, nil)
@@ -32,12 +28,12 @@ func (c *authClient) SetCredential(userID uuid.UUID, password string) error {
 	return httpclient.CheckStatus(resp, http.StatusOK, "auth set credential")
 }
 
-func (c *authClient) DeleteUserAuth(userID uuid.UUID) error {
-	req, err := http.NewRequest(http.MethodDelete, c.URL("/internal/credentials/"+userID.String()), nil)
+func (c *authClient) DeleteUserAuth(ctx context.Context, userID uuid.UUID) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.URL("/internal/credentials/"+userID.String()), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}
@@ -45,8 +41,8 @@ func (c *authClient) DeleteUserAuth(userID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusOK, "auth delete credential")
 }
 
-func (c *authClient) AssignUserRole(userID, schoolID, roleID uuid.UUID) error {
-	resp, err := c.DoJSON(http.MethodPost, "/internal/user-roles", map[string]string{
+func (c *authClient) AssignUserRole(ctx context.Context, userID, schoolID, roleID uuid.UUID) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, "/internal/user-roles", map[string]string{
 		"user_id":   userID.String(),
 		"school_id": schoolID.String(),
 		"role_id":   roleID.String(),
@@ -58,8 +54,8 @@ func (c *authClient) AssignUserRole(userID, schoolID, roleID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusCreated, "auth assign role")
 }
 
-func (c *authClient) UpdateUserRole(userID, schoolID, roleID uuid.UUID) error {
-	resp, err := c.DoJSON(http.MethodPatch, "/internal/user-roles", map[string]string{
+func (c *authClient) UpdateUserRole(ctx context.Context, userID, schoolID, roleID uuid.UUID) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodPatch, "/internal/user-roles", map[string]string{
 		"user_id":   userID.String(),
 		"school_id": schoolID.String(),
 		"role_id":   roleID.String(),
@@ -71,8 +67,8 @@ func (c *authClient) UpdateUserRole(userID, schoolID, roleID uuid.UUID) error {
 	return httpclient.CheckStatus(resp, http.StatusOK, "auth update role")
 }
 
-func (c *authClient) RemoveUserRole(userID, schoolID uuid.UUID) error {
-	resp, err := c.DoJSON(http.MethodDelete, "/internal/user-roles", map[string]string{
+func (c *authClient) RemoveUserRole(ctx context.Context, userID, schoolID uuid.UUID) error {
+	resp, err := c.DoJSONContext(ctx, http.MethodDelete, "/internal/user-roles", map[string]string{
 		"user_id":   userID.String(),
 		"school_id": schoolID.String(),
 	}, nil)
@@ -90,13 +86,13 @@ type userRoleMember struct {
 	RoleName string    `json:"role_name"`
 }
 
-func (c *authClient) GetUserRole(userID, schoolID uuid.UUID) (*userRoleMember, error) {
+func (c *authClient) GetUserRole(ctx context.Context, userID, schoolID uuid.UUID) (*userRoleMember, error) {
 	path := fmt.Sprintf("/internal/user-roles/%s?school_id=%s", userID.String(), schoolID.String())
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -114,12 +110,12 @@ func (c *authClient) GetUserRole(userID, schoolID uuid.UUID) (*userRoleMember, e
 	return &m, nil
 }
 
-func (c *authClient) ListUserRoles(userID uuid.UUID) ([]userRoleMember, error) {
-	req, err := http.NewRequest(http.MethodGet, c.URL("/internal/user-roles/"+userID.String()), nil)
+func (c *authClient) ListUserRoles(ctx context.Context, userID uuid.UUID) ([]userRoleMember, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL("/internal/user-roles/"+userID.String()), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -134,8 +130,12 @@ func (c *authClient) ListUserRoles(userID uuid.UUID) ([]userRoleMember, error) {
 	return rows, nil
 }
 
-func (c *authClient) GetRoleByID(roleID uuid.UUID) (string, error) {
-	resp, err := c.HTTP.Get(c.URL(fmt.Sprintf("/api/v1/roles/%s", roleID.String())))
+func (c *authClient) GetRoleByID(ctx context.Context, roleID uuid.UUID) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(fmt.Sprintf("/api/v1/roles/%s", roleID.String())), nil)
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -152,9 +152,13 @@ func (c *authClient) GetRoleByID(roleID uuid.UUID) (string, error) {
 	return role.Name, nil
 }
 
-func (c *authClient) StudentRoleID(schoolID uuid.UUID) (uuid.UUID, error) {
+func (c *authClient) StudentRoleID(ctx context.Context, schoolID uuid.UUID) (uuid.UUID, error) {
 	path := fmt.Sprintf("/api/v1/internal/roles/by-name?school_id=%s&name=student", url.QueryEscape(schoolID.String()))
-	resp, err := c.HTTP.Get(c.URL(path))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -179,8 +183,12 @@ type fieldDefinition struct {
 	Options  []string `json:"options,omitempty"`
 }
 
-func (c *authClient) GetRoleFields(roleID uuid.UUID) ([]fieldDefinition, error) {
-	resp, err := c.HTTP.Get(c.URL(fmt.Sprintf("/api/v1/roles/%s/fields", roleID.String())))
+func (c *authClient) GetRoleFields(ctx context.Context, roleID uuid.UUID) ([]fieldDefinition, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(fmt.Sprintf("/api/v1/roles/%s/fields", roleID.String())), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}

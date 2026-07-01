@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,17 +18,17 @@ import (
 )
 
 type ExamService struct {
-	repo       *repository.ExamRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.ExamRepository
+	cfg          *config.Config
+	outboundHTTP *http.Client
 }
 
 func NewExamService(
 	repo *repository.ExamRepository,
 	cfg *config.Config,
-	httpClient *http.Client,
+	outboundHTTP *http.Client,
 ) *ExamService {
-	return &ExamService{repo: repo, cfg: cfg, httpClient: httpClient}
+	return &ExamService{repo: repo, cfg: cfg, outboundHTTP: outboundHTTP}
 }
 
 func (s *ExamService) CreateExam(
@@ -194,9 +195,9 @@ func (s *ExamService) GetExams(schoolID uuid.UUID, query model.ExamQuery) ([]mod
 }
 
 // GetMyExams returns exams scheduled for the pupil's own class only.
-// It resolves the pupil's class_id and section_id by calling academic-service
-// /enrollments/me with the pupil's JWT, so spoofing another student is impossible.
-func (s *ExamService) GetMyExams(
+// It resolves the pupil's class_id and section_id by calling user-service /users/me
+// with the pupil's JWT, so spoofing another student is impossible.
+func (s *ExamService) GetMyExams(ctx context.Context, 
 	schoolID, studentID uuid.UUID,
 	authHeader string,
 	upcoming bool,
@@ -209,13 +210,13 @@ func (s *ExamService) GetMyExams(
 		strings.TrimRight(s.cfg.AcademicServiceURL, "/"),
 		studentID.String(),
 	)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Authorization", authHeader)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		log.Error("get my exams: academic enrollment lookup failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		return nil, errors.New("failed to resolve pupil enrollment from academic-service")

@@ -5,13 +5,12 @@ go 1.24
 toolchain go1.24.4
 
 require (
-	github.com/Archiit19/School-management/pkg v0.0.0-00010101000000-000000000000
+	github.com/Archiit19/School-management/pkg v1.0.3
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.6.0
 	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.1
 	github.com/swaggo/swag v1.16.6
-	gorm.io/driver/postgres v1.5.7
 	gorm.io/gorm v1.25.9
 )
 
@@ -49,6 +48,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.8 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/rs/zerolog v1.35.1 // indirect
+	github.com/sony/gobreaker v1.0.0 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
@@ -64,6 +64,7 @@ require (
 	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gorm.io/driver/postgres v1.5.7 // indirect
 )
 
 replace github.com/Archiit19/School-management/pkg => ../pkg
