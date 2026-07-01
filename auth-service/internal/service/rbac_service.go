@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/google/uuid"
@@ -29,6 +30,7 @@ func (s *RBACService) CreateRole(req model.CreateRoleRequest, schoolID uuid.UUID
 		Description: req.Description,
 	}
 	if err := s.repo.CreateRole(role); err != nil {
+		log.Error("create role: database insert failed", log.Err(err), log.AddField("school_id", schoolID), log.AddField("name", req.Name))
 		return nil, fmt.Errorf("failed to create role: %w", err)
 	}
 	if len(req.Fields) > 0 {
@@ -36,6 +38,7 @@ func (s *RBACService) CreateRole(req model.CreateRoleRequest, schoolID uuid.UUID
 			return nil, err
 		}
 	}
+	log.Info("role created", log.AddField("role_id", role.ID), log.AddField("school_id", schoolID), log.AddField("name", role.Name))
 	return role, nil
 }
 
@@ -52,7 +55,12 @@ func (s *RBACService) GetRoleByID(id uuid.UUID) (*model.Role, error) {
 }
 
 func (s *RBACService) GetRolesBySchoolID(schoolID uuid.UUID) ([]model.Role, error) {
-	return s.repo.GetRolesBySchoolID(schoolID)
+	roles, err := s.repo.GetRolesBySchoolID(schoolID)
+	if err != nil {
+		log.Error("list roles: database query failed", log.Err(err), log.AddField("school_id", schoolID))
+		return nil, err
+	}
+	return roles, nil
 }
 
 func (s *RBACService) GetRoleByNameAndSchool(name string, schoolID uuid.UUID) (*model.Role, error) {
@@ -65,13 +73,20 @@ func (s *RBACService) CreatePermission(req model.CreatePermissionRequest) (*mode
 	}
 	perm := &model.Permission{Name: req.Name, Description: req.Description}
 	if err := s.repo.CreatePermission(perm); err != nil {
+		log.Error("create permission: database insert failed", log.Err(err), log.AddField("name", req.Name))
 		return nil, fmt.Errorf("failed to create permission: %w", err)
 	}
+	log.Info("permission created", log.AddField("permission_id", perm.ID), log.AddField("name", perm.Name))
 	return perm, nil
 }
 
 func (s *RBACService) GetAllPermissions() ([]model.Permission, error) {
-	return s.repo.GetAllPermissions()
+	perms, err := s.repo.GetAllPermissions()
+	if err != nil {
+		log.Error("list permissions: database query failed", log.Err(err))
+		return nil, err
+	}
+	return perms, nil
 }
 
 func (s *RBACService) AssignPermissionToRole(req model.AssignPermissionRequest) (*model.RolePermission, error) {
@@ -91,13 +106,20 @@ func (s *RBACService) AssignPermissionToRole(req model.AssignPermissionRequest) 
 	}
 	rp := &model.RolePermission{RoleID: roleID, PermissionID: permID}
 	if err := s.repo.AssignPermissionToRole(rp); err != nil {
+		log.Error("assign permission to role: database insert failed", log.Err(err), log.AddField("role_id", roleID), log.AddField("permission_id", permID))
 		return nil, fmt.Errorf("failed to assign permission: %w", err)
 	}
+	log.Info("permission assigned to role", log.AddField("role_id", roleID), log.AddField("permission_id", permID))
 	return rp, nil
 }
 
 func (s *RBACService) GetPermissionsByRoleID(roleID uuid.UUID) ([]model.Permission, error) {
-	return s.repo.GetPermissionsByRoleID(roleID)
+	perms, err := s.repo.GetPermissionsByRoleID(roleID)
+	if err != nil {
+		log.Error("get role permissions: database query failed", log.Err(err), log.AddField("role_id", roleID))
+		return nil, err
+	}
+	return perms, nil
 }
 
 func (s *RBACService) RemovePermissionFromRole(roleID, permissionID uuid.UUID) error {
@@ -107,7 +129,12 @@ func (s *RBACService) RemovePermissionFromRole(roleID, permissionID uuid.UUID) e
 	if _, err := s.repo.GetPermissionByID(permissionID); err != nil {
 		return errors.New("permission not found")
 	}
-	return s.repo.RemovePermissionFromRole(roleID, permissionID)
+	if err := s.repo.RemovePermissionFromRole(roleID, permissionID); err != nil {
+		log.Error("remove permission from role: database delete failed", log.Err(err), log.AddField("role_id", roleID), log.AddField("permission_id", permissionID))
+		return err
+	}
+	log.Info("permission removed from role", log.AddField("role_id", roleID), log.AddField("permission_id", permissionID))
+	return nil
 }
 
 func (s *RBACService) RoleName(roleID uuid.UUID) string {
@@ -135,7 +162,11 @@ func (s *RBACService) saveRoleFields(roleID uuid.UUID, fields []model.FieldDefin
 	if err != nil {
 		return fmt.Errorf("marshal role fields: %w", err)
 	}
-	return s.repo.UpsertRoleFields(&model.RoleField{RoleID: roleID, Fields: raw})
+	if err := s.repo.UpsertRoleFields(&model.RoleField{RoleID: roleID, Fields: raw}); err != nil {
+		log.Error("save role fields: database upsert failed", log.Err(err), log.AddField("role_id", roleID))
+		return err
+	}
+	return nil
 }
 
 func (s *RBACService) GetRoleFields(roleID uuid.UUID) ([]model.FieldDefinition, error) {
@@ -157,5 +188,9 @@ func (s *RBACService) UpdateRoleFields(roleID uuid.UUID, fields []model.FieldDef
 	if _, err := s.repo.GetRoleByID(roleID); err != nil {
 		return errors.New("role not found")
 	}
-	return s.saveRoleFields(roleID, fields)
+	if err := s.saveRoleFields(roleID, fields); err != nil {
+		return err
+	}
+	log.Info("role fields updated", log.AddField("role_id", roleID))
+	return nil
 }
