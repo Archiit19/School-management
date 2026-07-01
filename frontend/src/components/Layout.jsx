@@ -66,7 +66,7 @@ export default function Layout() {
       <aside className="sidebar">
         <div className="sidebar-brand">
           <span className="brand-icon">S</span>
-          <span className="brand-text">SchoolMgmt</span>
+          <span className="brand-text">School Management</span>
         </div>
 
         {inSchoolContext && user?.school && (

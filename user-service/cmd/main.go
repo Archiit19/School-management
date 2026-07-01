@@ -18,7 +18,6 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/user-service/docs"
 )
