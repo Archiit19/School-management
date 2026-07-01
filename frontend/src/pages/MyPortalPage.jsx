@@ -187,6 +187,7 @@ export default function MyPortalPage() {
 function ExamsTab() {
   const { isParent, selectedChildId } = usePortalChild();
   const [exams, setExams] = useState([]);
+  const [subjectsById, setSubjectsById] = useState(new Map());
   const [upcoming, setUpcoming] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -195,8 +196,15 @@ function ExamsTab() {
     if (isParent && !selectedChildId) return;
     setError(""); setLoading(true);
     try {
-      const data = await examApi.getMyExams({ upcoming }, isParent ? selectedChildId : undefined);
+      const pupilId = isParent ? selectedChildId : undefined;
+      const [data, academic] = await Promise.all([
+        examApi.getMyExams({ upcoming }, pupilId),
+        academicApi.getMyAcademic(pupilId).catch(() => null),
+      ]);
       setExams(data || []);
+      const map = new Map();
+      (academic?.subjects || []).forEach((s) => map.set(s.id, s.name));
+      setSubjectsById(map);
     } catch (e) {
       if (!isAccessDenied(e)) setError(e.message);
     } finally {
@@ -225,20 +233,21 @@ function ExamsTab() {
         </div>
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Title</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
+            <thead><tr><th>Title</th><th>Subject</th><th>Date</th><th>Total Marks</th><th>Status</th></tr></thead>
             <tbody>
-              {loading && <tr><td colSpan={4} className="empty">Loading...</td></tr>}
+              {loading && <tr><td colSpan={5} className="empty">Loading...</td></tr>}
               {!loading && exams.length === 0 && (
-                <tr><td colSpan={4} className="empty">{upcoming ? "No upcoming exams scheduled." : "No exams found."}</td></tr>
+                <tr><td colSpan={5} className="empty">{upcoming ? "No upcoming exams scheduled." : "No exams found."}</td></tr>
               )}
               {!loading && exams.map((e) => (
                 <tr key={e.id}>
                   <td><strong>{e.title}</strong></td>
+                  <td>{e.subject_id ? (subjectsById.get(e.subject_id) || "—") : "—"}</td>
                   <td>{fmtDate(e.exam_date)}</td>
                   <td>{e.total_marks}</td>
                   <td>
-                    <span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>
-                      {e.is_published ? "Results Published" : "Scheduled"}
+                    <span className={`status ${e.is_published ? "status-active" : e.is_complete ? "status-late" : "status-inactive"}`}>
+                      {e.is_published ? "Results Published" : e.is_complete ? "Completed" : "Scheduled"}
                     </span>
                   </td>
                 </tr>

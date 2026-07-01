@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { examApi, academicApi, studentApi } from "../api/client";
 import PermTabBar from "../components/PermTabBar";
 import { usePermTabs } from "../hooks/usePermTabs";
+import { useAuth } from "../context/AuthContext";
+import { subjectsForClassSection } from "../utils/teacherClassFilters";
 
 function classNodeId(node) {
   return (node.class || node).id;
@@ -16,6 +18,8 @@ const EXAM_TABS = [
 ];
 
 export default function ExamsPage() {
+  const { hasPerm } = useAuth();
+  const canManageExams = hasPerm("create_exam");
   const { visibleTabs, tab, setTab } = usePermTabs(EXAM_TABS, "exams");
   const [results, setResults] = useState([]);
   const [exams, setExams] = useState([]);
@@ -39,6 +43,9 @@ export default function ExamsPage() {
   const [publishMarksByStudent, setPublishMarksByStudent] = useState({});
   const [publishLoading, setPublishLoading] = useState(false);
   const [publishSaving, setPublishSaving] = useState(false);
+  const [editingExam, setEditingExam] = useState(null);
+  const [editForm, setEditForm] = useState({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
+  const [editSaving, setEditSaving] = useState(false);
 
   const loadExams = useCallback(async () => {
     try {
@@ -54,22 +61,9 @@ export default function ExamsPage() {
     catch (err) { setError(err.message); }
   }, [query]);
 
-  const [teacherAssignments, setTeacherAssignments] = useState([]);
-
   useEffect(() => { if (tab === "exams" || tab === "exam") loadExams(); }, [loadExams, tab]);
   useEffect(() => { if (tab === "results") loadResults(); }, [loadResults, tab]);
   useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
-
-  useEffect(() => {
-    if (!examForm.class_id) {
-      setTeacherAssignments([]);
-      return;
-    }
-    academicApi
-      .getTeacherAssignments({ class_id: examForm.class_id })
-      .then(setTeacherAssignments)
-      .catch(() => setTeacherAssignments([]));
-  }, [examForm.class_id]);
 
   const flatClasses = classes.map((c) => c.class || c);
   const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
@@ -82,26 +76,109 @@ export default function ExamsPage() {
   const examFormSections = examFormClassNode?.sections || [];
   const examFormHasSections = examFormSections.length > 0;
 
-  const assignedSubjectIdsForClass = useMemo(
-    () => new Set(teacherAssignments.map((ta) => ta.subject_id)),
-    [teacherAssignments],
+  const examFormAvailableSubjects = useMemo(
+    () => subjectsForClassSection(examFormClassNode, examForm.class_id, examForm.section_id, [], false),
+    [examFormClassNode, examForm.class_id, examForm.section_id],
   );
 
-  const examFormAvailableSubjects = useMemo(() => {
-    if (!examForm.class_id || !examFormClassNode) return [];
-    const subjects = examFormClassNode.subjects || [];
-    return subjects.filter((s) => {
-      if (!assignedSubjectIdsForClass.has(s.id)) return false;
-      if (examFormHasSections) {
-        if (!examForm.section_id) return false;
-        if (!s.section_id) return true;
-        return s.section_id === examForm.section_id;
-      }
-      return !s.section_id;
-    });
-  }, [examForm.class_id, examForm.section_id, examFormClassNode, examFormHasSections, assignedSubjectIdsForClass]);
-
   const canPickExamSubject = examForm.class_id && (!examFormHasSections || examForm.section_id);
+
+  const editFormClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === editForm.class_id),
+    [classes, editForm.class_id],
+  );
+  const editFormSections = editFormClassNode?.sections || [];
+  const editFormHasSections = editFormSections.length > 0;
+  const editFormAvailableSubjects = useMemo(
+    () => subjectsForClassSection(editFormClassNode, editForm.class_id, editForm.section_id, [], false),
+    [editFormClassNode, editForm.class_id, editForm.section_id],
+  );
+  const canPickEditSubject = editForm.class_id && (!editFormHasSections || editForm.section_id);
+
+  function examStatusLabel(e) {
+    if (e.is_published) return "Published";
+    if (e.is_complete) return "Complete";
+    return "Draft";
+  }
+
+  function openEditExam(exam) {
+    setEditingExam(exam);
+    setEditForm({
+      class_id: exam.class_id || "",
+      section_id: exam.section_id || "",
+      subject_id: exam.subject_id || "",
+      title: exam.title || "",
+      exam_date: exam.exam_date?.split("T")[0] || "",
+      total_marks: String(exam.total_marks ?? ""),
+    });
+  }
+
+  function closeEditExam() {
+    setEditingExam(null);
+    setEditForm({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
+  }
+
+  function onEditFormClassChange(classId) {
+    setEditForm((p) => ({ ...p, class_id: classId, section_id: "", subject_id: "" }));
+  }
+
+  function onEditFormSectionChange(sectionId) {
+    setEditForm((p) => ({ ...p, section_id: sectionId, subject_id: "" }));
+  }
+
+  async function handleUpdateExam(e) {
+    e.preventDefault();
+    if (!editingExam) return;
+    setError("");
+    if (!editForm.subject_id) {
+      setError("Select a subject.");
+      return;
+    }
+    setEditSaving(true);
+    try {
+      const body = {
+        title: editForm.title,
+        class_id: editForm.class_id,
+        exam_date: editForm.exam_date,
+        total_marks: parseFloat(editForm.total_marks),
+        section_id: editForm.section_id || "",
+        subject_id: editForm.subject_id,
+      };
+      await examApi.updateExam(editingExam.id, body);
+      msg("Exam updated.");
+      closeEditExam();
+      loadExams();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setEditSaving(false);
+    }
+  }
+
+  async function handleCompleteExam(exam) {
+    if (!window.confirm(`Mark "${exam.title}" as complete?`)) return;
+    setError("");
+    try {
+      await examApi.completeExam(exam.id);
+      msg("Exam marked complete.");
+      loadExams();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleDeleteExam(exam) {
+    if (!window.confirm(`Delete "${exam.title}"? This also removes entered marks.`)) return;
+    setError("");
+    try {
+      await examApi.deleteExam(exam.id);
+      msg("Exam deleted.");
+      if (editingExam?.id === exam.id) closeEditExam();
+      loadExams();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   function onExamFormClassChange(classId) {
     setExamForm((p) => ({ ...p, class_id: classId, section_id: "", subject_id: "" }));
@@ -350,11 +427,16 @@ export default function ExamsPage() {
   }
 
   async function handleCreateExam(e) {
-    e.preventDefault(); setError(""); setBusy(true);
+    e.preventDefault();
+    setError("");
+    if (!examForm.subject_id) {
+      setError("Select a subject.");
+      return;
+    }
+    setBusy(true);
     try {
       const payload = { ...examForm, total_marks: parseFloat(examForm.total_marks) };
       if (!payload.section_id) delete payload.section_id;
-      if (!payload.subject_id) delete payload.subject_id;
       const created = await examApi.createExam(payload);
       msg(`Exam created! ID: ${created.id}`);
       setExamForm({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
@@ -441,9 +523,9 @@ export default function ExamsPage() {
           </div>
           <div className="table-wrap">
             <table>
-              <thead><tr><th>Title</th><th>Class</th><th>Section</th><th>Subject</th><th>Date</th><th>Total</th><th>Status</th><th>Exam ID</th></tr></thead>
+              <thead><tr><th>Title</th><th>Class</th><th>Section</th><th>Subject</th><th>Date</th><th>Total</th><th>Status</th>{canManageExams && <th>Actions</th>}<th>Exam ID</th></tr></thead>
               <tbody>
-                {(!exams || exams.length === 0) && <tr><td colSpan={8} className="empty">No exams found.</td></tr>}
+                {(!exams || exams.length === 0) && <tr><td colSpan={canManageExams ? 9 : 8} className="empty">No exams found.</td></tr>}
                 {(exams || []).map((e) => (
                   <tr key={e.id}>
                     <td><strong>{e.title}</strong></td>
@@ -452,13 +534,107 @@ export default function ExamsPage() {
                     <td>{e.subject_id ? (subjectNameById.get(e.subject_id) || <span className="mono truncate">{e.subject_id}</span>) : "—"}</td>
                     <td>{e.exam_date?.split("T")[0]}</td>
                     <td>{e.total_marks}</td>
-                    <td><span className={`status ${e.is_published ? "status-active" : "status-inactive"}`}>{e.is_published ? "Published" : "Draft"}</span></td>
+                    <td>
+                      <span className={`status ${e.is_published ? "status-active" : e.is_complete ? "status-late" : "status-inactive"}`}>
+                        {examStatusLabel(e)}
+                      </span>
+                    </td>
+                    {canManageExams && (
+                      <td>
+                        {!e.is_published && (
+                          <div className="btn-row" style={{ gap: 4 }}>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={() => openEditExam(e)}>Edit</button>
+                            {!e.is_complete && (
+                              <button type="button" className="btn btn-secondary btn-sm" onClick={() => handleCompleteExam(e)}>Complete</button>
+                            )}
+                            <button type="button" className="btn btn-danger btn-sm" onClick={() => handleDeleteExam(e)}>Delete</button>
+                          </div>
+                        )}
+                        {e.is_published && <span className="text-muted text-sm">—</span>}
+                      </td>
+                    )}
                     <td><span className="mono truncate">{e.id}</span></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {editingExam && (
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="card-title">Edit Exam</div>
+          <form onSubmit={handleUpdateExam}>
+            <div className="grid-3">
+              <div className="form-group">
+                <label>Title</label>
+                <input required value={editForm.title} onChange={(ev) => setEditForm((p) => ({ ...p, title: ev.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Class</label>
+                <select required value={editForm.class_id} onChange={(ev) => onEditFormClassChange(ev.target.value)}>
+                  <option value="">Select class…</option>
+                  {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Section</label>
+                <select
+                  required={editFormHasSections}
+                  disabled={!editForm.class_id}
+                  value={editForm.section_id}
+                  onChange={(ev) => onEditFormSectionChange(ev.target.value)}
+                >
+                  <option value="">
+                    {!editForm.class_id ? "Select class first…" : editFormHasSections ? "Select section…" : "No sections (class-wide)"}
+                  </option>
+                  {editFormSections.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid-3">
+              <div className="form-group">
+                <label>Subject</label>
+                <select
+                  required
+                  value={editForm.subject_id}
+                  onChange={(ev) => setEditForm((p) => ({ ...p, subject_id: ev.target.value }))}
+                  disabled={!canPickEditSubject}
+                >
+                  <option value="">
+                    {!editForm.class_id
+                      ? "Select class first…"
+                      : editFormHasSections && !editForm.section_id
+                        ? "Select section first…"
+                        : editFormAvailableSubjects.length === 0
+                          ? "No subjects for this section"
+                          : "Select subject…"}
+                  </option>
+                  {editFormAvailableSubjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.code ? ` (${s.code})` : ""}
+                      {!s.section_id ? " — class-wide" : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Exam Date</label>
+                <input type="date" required value={editForm.exam_date} onChange={(ev) => setEditForm((p) => ({ ...p, exam_date: ev.target.value }))} />
+              </div>
+              <div className="form-group">
+                <label>Total Marks</label>
+                <input type="number" required min="1" value={editForm.total_marks} onChange={(ev) => setEditForm((p) => ({ ...p, total_marks: ev.target.value }))} />
+              </div>
+            </div>
+            <div className="btn-row">
+              <button type="submit" className="btn btn-primary" disabled={editSaving}>{editSaving ? "Saving…" : "Save changes"}</button>
+              <button type="button" className="btn btn-secondary" onClick={closeEditExam}>Cancel</button>
+            </div>
+          </form>
         </div>
       )}
 
@@ -539,6 +715,7 @@ export default function ExamsPage() {
               <div className="form-group">
                 <label>Subject</label>
                 <select
+                  required
                   value={examForm.subject_id}
                   onChange={(e) => setExamForm((p) => ({ ...p, subject_id: e.target.value }))}
                   disabled={!canPickExamSubject}
@@ -549,8 +726,8 @@ export default function ExamsPage() {
                       : examFormHasSections && !examForm.section_id
                         ? "Select section first…"
                         : examFormAvailableSubjects.length === 0
-                          ? "No subjects with teachers for this section"
-                          : "Select subject (optional)…"}
+                          ? "No subjects for this section"
+                          : "Select subject…"}
                   </option>
                   {examFormAvailableSubjects.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -570,7 +747,7 @@ export default function ExamsPage() {
               </div>
             </div>
             <p className="text-sm text-muted" style={{ marginTop: 8 }}>
-              Only subjects with a teacher assigned for this class and section are listed (see Teacher Assign).
+              All subjects configured for this class and section are listed.
             </p>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Exam</button></div>
           </form>

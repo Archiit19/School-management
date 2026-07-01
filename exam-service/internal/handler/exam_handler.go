@@ -54,6 +54,91 @@ func (h *ExamHandler) CreateExam(c *gin.Context) {
 	c.JSON(http.StatusCreated, exam)
 }
 
+// UpdateExam godoc
+// @Summary      Update exam
+// @Description  Update exam details (not allowed after results are published).
+// @Tags         Exams
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id    path      string  true  "Exam ID"
+// @Param        body  body      model.UpdateExamRequest  true  "Update payload"
+// @Success      200   {object}  model.Exam
+// @Failure      400   {object}  model.ErrorResponse
+// @Router       /exams/{id} [patch]
+func (h *ExamHandler) UpdateExam(c *gin.Context) {
+	examID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exam id"})
+		return
+	}
+
+	var req model.UpdateExamRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	exam, err := h.svc.UpdateExam(examID, req, schoolID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exam)
+}
+
+// CompleteExam godoc
+// @Summary      Mark exam complete
+// @Description  Mark an exam as conducted/complete (not allowed after results are published).
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id  path      string  true  "Exam ID"
+// @Success      200  {object}  model.Exam
+// @Failure      400  {object}  model.ErrorResponse
+// @Router       /exams/{id}/complete [post]
+func (h *ExamHandler) CompleteExam(c *gin.Context) {
+	examID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exam id"})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	exam, err := h.svc.CompleteExam(examID, schoolID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, exam)
+}
+
+// DeleteExam godoc
+// @Summary      Delete exam
+// @Description  Delete an exam and its marks (not allowed after results are published).
+// @Tags         Exams
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id  path      string  true  "Exam ID"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  model.ErrorResponse
+// @Router       /exams/{id} [delete]
+func (h *ExamHandler) DeleteExam(c *gin.Context) {
+	examID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid exam id"})
+		return
+	}
+
+	schoolID := c.MustGet("school_id").(uuid.UUID)
+	if err := h.svc.DeleteExam(examID, schoolID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "exam deleted"})
+}
+
 // EnterMarks godoc
 // @Summary      Enter marks
 // @Description  Enter or update marks for a student in an exam.
