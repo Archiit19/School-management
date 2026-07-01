@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -118,7 +119,7 @@ func RequireInternalToken(expectedSecret string) gin.HandlerFunc {
 		}
 
 		got := strings.TrimSpace(c.GetHeader(InternalTokenHeader))
-		if got == "" || got != expectedSecret {
+		if got == "" || subtle.ConstantTimeCompare([]byte(got), []byte(expectedSecret)) != 1 {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid internal token"})
 			return
 		}

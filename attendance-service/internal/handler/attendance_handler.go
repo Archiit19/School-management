@@ -47,7 +47,7 @@ func (h *AttendanceHandler) CreateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.CreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	record, err := h.svc.CreateAttendance(c.Request.Context(), req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "create attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -80,7 +80,7 @@ func (h *AttendanceHandler) BulkCreateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.BulkCreateAttendance(req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.BulkCreateAttendance(c.Request.Context(), req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "bulk create attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -118,7 +118,7 @@ func (h *AttendanceHandler) GetAttendance(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
-	resp, err := h.svc.GetAttendance(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.GetAttendance(c.Request.Context(), schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "list attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -162,7 +162,7 @@ func (h *AttendanceHandler) GetMyAttendance(c *gin.Context) {
 	query.StudentID = studentID.String()
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	resp, err := h.svc.GetAttendance(schoolID, query, uuid.Nil, "student", "")
+	resp, err := h.svc.GetAttendance(c.Request.Context(), schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "get my attendance failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		httputil.WriteError(c, err)
@@ -200,7 +200,7 @@ func (h *AttendanceHandler) GetMyAttendanceStats(c *gin.Context) {
 	query.StudentID = studentID.String()
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	resp, err := h.svc.GetAttendanceStats(schoolID, query, uuid.Nil, "student", "")
+	resp, err := h.svc.GetAttendanceStats(c.Request.Context(), schoolID, query, uuid.Nil, "student", "")
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "get my attendance stats failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		httputil.WriteError(c, err)
@@ -239,7 +239,7 @@ func (h *AttendanceHandler) UpdateAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.UpdateAttendance(id, req, schoolID, userID, roleName, c.GetHeader("Authorization"))
+	record, err := h.svc.UpdateAttendance(c.Request.Context(), id, req, schoolID, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "update attendance failed", err, log.AddField("attendance_id", id), log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -284,7 +284,7 @@ func (h *AttendanceHandler) CreateTeacherAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	record, err := h.svc.CreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	record, err := h.svc.CreateTeacherAttendance(c.Request.Context(), req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "create teacher attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -317,7 +317,7 @@ func (h *AttendanceHandler) BulkCreateTeacherAttendance(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.BulkCreateTeacherAttendance(req, schoolID, userID, roleName, permissionsFromContext(c))
+	resp, err := h.svc.BulkCreateTeacherAttendance(c.Request.Context(), req, schoolID, userID, roleName, permissionsFromContext(c))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "bulk create teacher attendance failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)
@@ -425,7 +425,7 @@ func (h *AttendanceHandler) GetAttendanceStats(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	resp, err := h.svc.GetAttendanceStats(schoolID, query, userID, roleName, c.GetHeader("Authorization"))
+	resp, err := h.svc.GetAttendanceStats(c.Request.Context(), schoolID, query, userID, roleName, c.GetHeader("Authorization"))
 	if err != nil {
 		logServiceError(c, serviceErrorStatus(err), "get attendance stats failed", err, log.AddField("school_id", schoolID))
 		httputil.WriteError(c, err)

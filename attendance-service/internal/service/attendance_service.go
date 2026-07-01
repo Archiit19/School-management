@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,21 +15,30 @@ import (
 	"github.com/Archiit19/School-management/attendance-service/internal/config"
 	"github.com/Archiit19/School-management/attendance-service/internal/model"
 	"github.com/Archiit19/School-management/attendance-service/internal/repository"
+	"github.com/Archiit19/School-management/pkg/httpclient"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 type AttendanceService struct {
-	repo       *repository.AttendanceRepository
-	cfg        *config.Config
-	httpClient *http.Client
+	repo         *repository.AttendanceRepository
+	cfg          *config.Config
+	userInternal *httpclient.Client
+	outboundHTTP *http.Client
 }
 
-func NewAttendanceService(repo *repository.AttendanceRepository, cfg *config.Config, httpClient *http.Client) *AttendanceService {
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 8 * time.Second}
+func NewAttendanceService(
+	repo *repository.AttendanceRepository,
+	cfg *config.Config,
+	userInternal *httpclient.Client,
+	outboundHTTP *http.Client,
+) *AttendanceService {
+	return &AttendanceService{
+		repo:         repo,
+		cfg:          cfg,
+		userInternal: userInternal,
+		outboundHTTP: outboundHTTP,
 	}
-	return &AttendanceService{repo: repo, cfg: cfg, httpClient: httpClient}
 }
 
 func isDuplicateKey(err error) bool {
@@ -54,13 +64,13 @@ type teacherAssignmentRow struct {
 	SubjectID     string `json:"subject_id"`
 }
 
-func (s *AttendanceService) fetchTeacherAssignments(
+func (s *AttendanceService) fetchTeacherAssignments(ctx context.Context, 
 	teacherUserID uuid.UUID,
 	authHeader string,
 ) ([]teacherAssignmentRow, error) {
 	base := strings.TrimRight(s.cfg.AcademicServiceURL, "/")
 	url := fmt.Sprintf("%s/teacher-assignments?teacher_user_id=%s", base, teacherUserID.String())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build academic request: %w", err)
 	}
@@ -68,7 +78,7 @@ func (s *AttendanceService) fetchTeacherAssignments(
 		req.Header.Set("Authorization", authHeader)
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.outboundHTTP.Do(req)
 	if err != nil {
 		return nil, apierrors.ServiceUnavailable("academic-service unreachable for teacher assignment check")
 	}
@@ -88,7 +98,7 @@ func (s *AttendanceService) fetchTeacherAssignments(
 	return rows, nil
 }
 
-func (s *AttendanceService) assertTeacherAssignedToClassSubject(
+func (s *AttendanceService) assertTeacherAssignedToClassSubject(ctx context.Context, 
 	roleName string,
 	teacherUserID uuid.UUID,
 	classID uuid.UUID,
@@ -102,7 +112,7 @@ func (s *AttendanceService) assertTeacherAssignedToClassSubject(
 		return apierrors.Forbidden("subject_id is required for teachers")
 	}
 
-	assignments, err := s.fetchTeacherAssignments(teacherUserID, authHeader)
+	assignments, err := s.fetchTeacherAssignments(ctx, teacherUserID, authHeader)
 	if err != nil {
 		return err
 	}
@@ -117,7 +127,7 @@ func (s *AttendanceService) assertTeacherAssignedToClassSubject(
 	return apierrors.Forbidden("you are not assigned to this class and subject")
 }
 
-func (s *AttendanceService) enforceTeacherAttendanceQuery(
+func (s *AttendanceService) enforceTeacherAttendanceQuery(ctx context.Context, 
 	roleName string,
 	teacherUserID uuid.UUID,
 	classID, subjectID string,
@@ -137,22 +147,21 @@ func (s *AttendanceService) enforceTeacherAttendanceQuery(
 	if err != nil {
 		return errors.New("invalid subject_id")
 	}
-	return s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, parsedClass, &parsedSubject, authHeader)
+	return s.assertTeacherAssignedToClassSubject(ctx, roleName, teacherUserID, parsedClass, &parsedSubject, authHeader)
 }
 
-func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID) error {
+func (s *AttendanceService) validateAuthUserInSchool(ctx context.Context, userID, schoolID uuid.UUID) error {
 	if strings.TrimSpace(s.cfg.InternalServiceToken) == "" {
 		return apierrors.ServiceUnavailable("user validation is not configured (set INTERNAL_SERVICE_TOKEN and USER_SERVICE_URL)")
 	}
 	base := strings.TrimRight(s.cfg.UserServiceURL, "/")
 	url := fmt.Sprintf("%s/internal/users/%s?school_id=%s", base, userID.String(), schoolID.String())
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to build auth request: %w", err)
 	}
-	req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := s.userInternal.DoContext(ctx, req)
 	if err != nil {
 		return apierrors.ServiceUnavailable("user-service unreachable for user validation")
 	}
@@ -180,7 +189,7 @@ func (s *AttendanceService) validateAuthUserInSchool(userID, schoolID uuid.UUID)
 	return nil
 }
 
-func (s *AttendanceService) CreateAttendance(
+func (s *AttendanceService) CreateAttendance(ctx context.Context, 
 	req model.CreateAttendanceRequest,
 	schoolID, teacherUserID uuid.UUID,
 	roleName, authHeader string,
@@ -222,7 +231,7 @@ func (s *AttendanceService) CreateAttendance(
 		return nil, errors.New("invalid status, allowed: present, absent, late, excused")
 	}
 
-	if err := s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
+	if err := s.assertTeacherAssignedToClassSubject(ctx, roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
 		return nil, err
 	}
 
@@ -263,7 +272,7 @@ func (s *AttendanceService) CreateAttendance(
 	return record, nil
 }
 
-func (s *AttendanceService) GetAttendance(
+func (s *AttendanceService) GetAttendance(ctx context.Context, 
 	schoolID uuid.UUID,
 	query model.AttendanceQuery,
 	requestingUserID uuid.UUID,
@@ -280,7 +289,7 @@ func (s *AttendanceService) GetAttendance(
 		}
 	}
 
-	if err := s.enforceTeacherAttendanceQuery(roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
+	if err := s.enforceTeacherAttendanceQuery(ctx, roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
 		return nil, err
 	}
 
@@ -298,7 +307,7 @@ func (s *AttendanceService) GetAttendance(
 	}, nil
 }
 
-func (s *AttendanceService) UpdateAttendance(
+func (s *AttendanceService) UpdateAttendance(ctx context.Context, 
 	id uuid.UUID,
 	req model.UpdateAttendanceRequest,
 	schoolID, requestingUserID uuid.UUID,
@@ -314,7 +323,7 @@ func (s *AttendanceService) UpdateAttendance(
 	}
 
 	if roleName == "teacher" {
-		if err := s.assertTeacherAssignedToClassSubject(roleName, requestingUserID, record.ClassID, record.SubjectID, authHeader); err != nil {
+		if err := s.assertTeacherAssignedToClassSubject(ctx, roleName, requestingUserID, record.ClassID, record.SubjectID, authHeader); err != nil {
 			return nil, err
 		}
 	} else if roleName != "super_admin" && record.TeacherUserID != requestingUserID {
@@ -342,7 +351,7 @@ func (s *AttendanceService) UpdateAttendance(
 	return record, nil
 }
 
-func (s *AttendanceService) BulkCreateAttendance(
+func (s *AttendanceService) BulkCreateAttendance(ctx context.Context, 
 	req model.BulkCreateAttendanceRequest,
 	schoolID, teacherUserID uuid.UUID,
 	roleName, authHeader string,
@@ -370,7 +379,7 @@ func (s *AttendanceService) BulkCreateAttendance(
 		subjectID = &parsed
 	}
 
-	if err := s.assertTeacherAssignedToClassSubject(roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
+	if err := s.assertTeacherAssignedToClassSubject(ctx, roleName, teacherUserID, classID, subjectID, authHeader); err != nil {
 		return nil, err
 	}
 
@@ -457,7 +466,7 @@ func hasPerm(perms []string, name string) bool {
 	return false
 }
 
-func (s *AttendanceService) CreateTeacherAttendance(
+func (s *AttendanceService) CreateTeacherAttendance(ctx context.Context, 
 	req model.CreateTeacherAttendanceRequest,
 	schoolID, currentUserID uuid.UUID,
 	roleName string,
@@ -478,7 +487,7 @@ func (s *AttendanceService) CreateTeacherAttendance(
 		return nil, err
 	}
 
-	if err := s.validateAuthUserInSchool(targetTeacherID, schoolID); err != nil {
+	if err := s.validateAuthUserInSchool(ctx, targetTeacherID, schoolID); err != nil {
 		return nil, err
 	}
 
@@ -548,7 +557,7 @@ func (s *AttendanceService) assertCanMarkTeacherAttendance(
 	return apierrors.Forbidden("can only mark your own attendance")
 }
 
-func (s *AttendanceService) BulkCreateTeacherAttendance(
+func (s *AttendanceService) BulkCreateTeacherAttendance(ctx context.Context, 
 	req model.BulkCreateTeacherAttendanceRequest,
 	schoolID, currentUserID uuid.UUID,
 	roleName string,
@@ -572,7 +581,7 @@ func (s *AttendanceService) BulkCreateTeacherAttendance(
 			continue
 		}
 
-		if err := s.validateAuthUserInSchool(teacherID, schoolID); err != nil {
+		if err := s.validateAuthUserInSchool(ctx, teacherID, schoolID); err != nil {
 			resp.Skipped++
 			continue
 		}
@@ -704,13 +713,13 @@ func (s *AttendanceService) UpdateTeacherAttendance(
 }
 
 // GetAttendanceStats calculates attendance percentages for students.
-func (s *AttendanceService) GetAttendanceStats(
+func (s *AttendanceService) GetAttendanceStats(ctx context.Context, 
 	schoolID uuid.UUID,
 	query model.AttendanceStatsQuery,
 	requestingUserID uuid.UUID,
 	roleName, authHeader string,
 ) (*model.AttendanceStatsResponse, error) {
-	if err := s.enforceTeacherAttendanceQuery(roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
+	if err := s.enforceTeacherAttendanceQuery(ctx, roleName, requestingUserID, query.ClassID, query.SubjectID, authHeader); err != nil {
 		return nil, err
 	}
 

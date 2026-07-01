@@ -26,7 +26,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 	schoolID, _ := c.Get("school_id")
-	user, err := h.svc.CreateUser(req, schoolID.(uuid.UUID))
+	user, err := h.svc.CreateUser(c.Request.Context(), req, schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "create user failed", err, log.AddField("school_id", schoolID.(uuid.UUID)))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -44,7 +44,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 		return
 	}
 	schoolID, _ := c.Get("school_id")
-	resp, err := h.svc.GetUsers(schoolID.(uuid.UUID), query)
+	resp, err := h.svc.GetUsers(c.Request.Context(), schoolID.(uuid.UUID), query)
 	if err != nil {
 		logServiceError(c, http.StatusInternalServerError, "list users failed", err, log.AddField("school_id", schoolID.(uuid.UUID)))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -60,7 +60,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 		return
 	}
 	schoolID, _ := c.Get("school_id")
-	user, err := h.svc.GetUserByID(id, schoolID.(uuid.UUID))
+	user, err := h.svc.GetUserByID(c.Request.Context(), id, schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get user failed", err, log.AddField("user_id", id), log.AddField("school_id", schoolID.(uuid.UUID)))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -72,7 +72,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 func (h *UserHandler) GetUserMe(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	schoolID, _ := c.Get("school_id")
-	user, err := h.svc.GetUserMe(userID.(uuid.UUID), schoolID.(uuid.UUID))
+	user, err := h.svc.GetUserMe(c.Request.Context(), userID.(uuid.UUID), schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get own profile failed", err, log.AddField("user_id", userID.(uuid.UUID)))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -84,7 +84,7 @@ func (h *UserHandler) GetUserMe(c *gin.Context) {
 func (h *UserHandler) GetMyChildren(c *gin.Context) {
 	userID, _ := c.Get("user_id")
 	schoolID, _ := c.Get("school_id")
-	children, err := h.svc.GetMyChildren(userID.(uuid.UUID), schoolID.(uuid.UUID))
+	children, err := h.svc.GetMyChildren(c.Request.Context(), userID.(uuid.UUID), schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusForbidden, "list children failed", err, log.AddField("user_id", userID.(uuid.UUID)))
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -101,7 +101,7 @@ func (h *UserHandler) GetChildForParent(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid child id"})
 		return
 	}
-	child, err := h.svc.GetChildForParent(parentID.(uuid.UUID), childID, schoolID.(uuid.UUID))
+	child, err := h.svc.GetChildForParent(c.Request.Context(), parentID.(uuid.UUID), childID, schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get child for parent failed", err,
 			log.AddField("user_id", parentID.(uuid.UUID)), log.AddField("child_id", childID))
@@ -122,7 +122,7 @@ func (h *UserHandler) ParentHasChildInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid child id"})
 		return
 	}
-	ok, err := h.svc.ParentHasChild(parentID, childID)
+	ok, err := h.svc.ParentHasChild(c.Request.Context(), parentID, childID)
 	if err != nil {
 		logServiceError(c, http.StatusInternalServerError, "parent has-child check failed", err,
 			log.AddField("parent_id", parentID), log.AddField("child_id", childID))
@@ -149,7 +149,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 	schoolID, _ := c.Get("school_id")
-	user, err := h.svc.UpdateUser(id, req, schoolID.(uuid.UUID))
+	user, err := h.svc.UpdateUser(c.Request.Context(), id, req, schoolID.(uuid.UUID))
 	if err != nil {
 		logServiceError(c, http.StatusBadRequest, "update user failed", err, log.AddField("user_id", id), log.AddField("school_id", schoolID.(uuid.UUID)))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -167,7 +167,7 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 	schoolID, _ := c.Get("school_id")
 	requestingUserID, _ := c.Get("user_id")
-	if err := h.svc.DeleteUser(id, schoolID.(uuid.UUID), requestingUserID.(uuid.UUID)); err != nil {
+	if err := h.svc.DeleteUser(c.Request.Context(), id, schoolID.(uuid.UUID), requestingUserID.(uuid.UUID)); err != nil {
 		logServiceError(c, http.StatusBadRequest, "delete user failed", err, log.AddField("user_id", id), log.AddField("school_id", schoolID.(uuid.UUID)))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -183,7 +183,7 @@ func (h *UserHandler) CreateProfileInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	user, err := h.svc.CreateProfileInternal(req)
+	user, err := h.svc.CreateProfileInternal(c.Request.Context(), req)
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "create profile internal failed", err, log.AddField("email", req.Email))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -208,7 +208,7 @@ func (h *UserHandler) GetUserInternal(c *gin.Context) {
 		}
 		schoolID = &parsed
 	}
-	user, err := h.svc.GetUserForInternal(id, schoolID)
+	user, err := h.svc.GetUserForInternal(c.Request.Context(), id, schoolID)
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get user internal failed", err, log.AddField("user_id", id))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -223,7 +223,7 @@ func (h *UserHandler) GetUserProfileInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
-	profile, err := h.svc.GetUserProfileInternal(id)
+	profile, err := h.svc.GetUserProfileInternal(c.Request.Context(), id)
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get user profile internal failed", err, log.AddField("user_id", id))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -238,7 +238,7 @@ func (h *UserHandler) GetUserByEmailInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "email query param required"})
 		return
 	}
-	user, err := h.svc.GetUserForInternalByEmail(email)
+	user, err := h.svc.GetUserForInternalByEmail(c.Request.Context(), email)
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get user by email internal failed", err, log.AddField("email", email))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -262,7 +262,7 @@ func (h *UserHandler) UpdateProfileInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	user, err := h.svc.UpdateProfileInternal(id, req.Name, req.Email)
+	user, err := h.svc.UpdateProfileInternal(c.Request.Context(), id, req.Name, req.Email)
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "update profile internal failed", err, log.AddField("user_id", id))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -278,7 +278,7 @@ func (h *UserHandler) DeleteProfileInternal(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
 		return
 	}
-	if err := h.svc.DeleteProfileInternal(id); err != nil {
+	if err := h.svc.DeleteProfileInternal(c.Request.Context(), id); err != nil {
 		logServiceError(c, http.StatusBadRequest, "delete profile internal failed", err, log.AddField("user_id", id))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

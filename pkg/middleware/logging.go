@@ -1,21 +1,26 @@
 package middleware
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
+	"github.com/Archiit19/School-management/pkg/correlation"
 	"github.com/Archiit19/School-management/pkg/logger"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/codes"
+	otrace "go.opentelemetry.io/otel/trace"
 )
 
 const requestIDKey = "request_id"
 
-// NewEngine returns a Gin engine with structured request logging and panic recovery.
+// NewEngine returns a Gin engine with tracing (when enabled), structured request logging, and panic recovery.
 // Prefer this over gin.Default() so HTTP access logs use pkg/logger.
-func NewEngine() *gin.Engine {
+func NewEngine(service string) *gin.Engine {
 	r := gin.New()
-	r.Use(RequestLogger(), Recovery())
+	r.Use(tracer.GinMiddleware(service), RequestLogger(), Recovery())
 	return r
 }
 
@@ -24,12 +29,13 @@ func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 
-		reqID := c.GetHeader("X-Request-ID")
+		reqID := c.GetHeader(correlation.RequestIDHeader)
 		if reqID == "" {
 			reqID = uuid.New().String()
 		}
 		c.Set(requestIDKey, reqID)
-		c.Header("X-Request-ID", reqID)
+		c.Header(correlation.RequestIDHeader, reqID)
+		c.Request = c.Request.WithContext(correlation.ContextWithRequestID(c.Request.Context(), reqID))
 
 		c.Next()
 
@@ -56,6 +62,9 @@ func RequestLogger() gin.HandlerFunc {
 		if role, ok := c.Get("role_name"); ok {
 			pairs = append(pairs, "role_name", role)
 		}
+		if traceFields := tracer.LogFields(c.Request.Context()); len(traceFields) > 0 {
+			pairs = append(pairs, traceFields...)
+		}
 
 		fields := logger.KV(pairs...)
 		status := c.Writer.Status()
@@ -70,18 +79,37 @@ func RequestLogger() gin.HandlerFunc {
 	}
 }
 
+// GetRequestID returns the request ID for the current Gin context.
+func GetRequestID(c *gin.Context) string {
+	if v, ok := c.Get(requestIDKey); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 // Recovery logs panics with request context and returns 500.
 func Recovery() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		defer func() {
 			if recovered := recover(); recovered != nil {
 				reqID, _ := c.Get(requestIDKey)
-				logger.Error("panic recovered", logger.KV(
+				panicErr := fmt.Errorf("panic: %v", recovered)
+				if span := otrace.SpanFromContext(c.Request.Context()); span != nil && span.IsRecording() {
+					span.RecordError(panicErr)
+					span.SetStatus(codes.Error, panicErr.Error())
+				}
+				pairs := []any{
 					"request_id", reqID,
 					"method", c.Request.Method,
 					"path", c.Request.URL.Path,
 					"panic", recovered,
-				)...)
+				}
+				if traceFields := tracer.LogFields(c.Request.Context()); len(traceFields) > 0 {
+					pairs = append(pairs, traceFields...)
+				}
+				logger.Error("panic recovered", logger.KV(pairs...)...)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": "internal server error",
 				})

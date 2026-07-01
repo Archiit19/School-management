@@ -1,21 +1,24 @@
 package main
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/handler"
+	"github.com/Archiit19/School-management/pkg/health"
 	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/auth-service/internal/migrate"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/Archiit19/School-management/auth-service/internal/service"
-	"github.com/gin-gonic/gin"
+	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
 	_ "github.com/Archiit19/School-management/auth-service/docs"
@@ -32,7 +35,7 @@ import (
 func seedPermissionsFromJSON(db *gorm.DB) {
 	list, err := rbacdata.LoadPredefinedPermissions()
 	if err != nil {
-		log.Fatalf("failed to load predefined_permissions.json: %v", err)
+		log.Fatal("failed to load predefined_permissions.json", log.Err(err))
 	}
 	for _, p := range list {
 		db.Where("name = ?", p.Name).FirstOrCreate(&model.Permission{
@@ -43,13 +46,35 @@ func seedPermissionsFromJSON(db *gorm.DB) {
 }
 
 func main() {
-	cfg := config.Load()
-
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+	if _, err := log.InitFromEnv("auth-service"); err != nil {
+		log.Fatal("failed to initialize logger", log.Err(err))
 	}
-	log.Println("Connected to Auth DB")
+
+	traceShutdown, err := tracer.InitFromEnv("auth-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
+
+	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
+
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
+	if err != nil {
+		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
+	}
+	log.Info("connected to database")
 
 	if err := db.AutoMigrate(
 		&model.UserCredential{},
@@ -59,15 +84,15 @@ func main() {
 		&model.RolePermission{},
 		&model.RoleField{},
 	); err != nil {
-		log.Fatalf("failed to migrate database: %v", err)
+		log.Fatal("failed to migrate database", log.Err(err))
 	}
 	if err := migrate.LegacySchema(db); err != nil {
-		log.Fatalf("failed legacy migration: %v", err)
+		log.Fatal("failed legacy migration", log.Err(err))
 	}
-	log.Println("Database migrated")
+	log.Info("database migrated")
 
 	seedPermissionsFromJSON(db)
-	log.Println("Predefined permissions seeded")
+	log.Info("predefined permissions seeded")
 
 	rbacRepo := repository.NewRBACRepository(db)
 	credRepo := repository.NewCredentialRepository(db)
@@ -76,18 +101,16 @@ func main() {
 	authSvc := service.NewAuthService(cfg, credSvc, rbacSvc)
 
 	if err := rbacSvc.SyncTemplateRolesForAllSchools(); err != nil {
-		log.Printf("template role sync: %v", err)
+		log.Warn("template role sync failed", log.Err(err))
 	}
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	rbacHandler := handler.NewRBACHandler(rbacSvc)
 	internalHandler := handler.NewInternalHandler(credSvc, rbacSvc)
 
-	r := gin.Default()
+	r := middleware.NewEngine("auth-service")
+	health.Register(r, "auth-service", health.CheckDB(db))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "auth-service is running"})
-	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	auth := r.Group("/auth")
@@ -143,10 +166,7 @@ func main() {
 		internal.GET("/user-roles/:userId", internalHandler.ListUserRoles)
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Printf("Auth Service starting on %s", addr)
-	log.Printf("Swagger UI: http://localhost%s/swagger/index.html", addr)
-	if err := r.Run(addr); err != nil {
-		log.Fatalf("failed to start server: %v", err)
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
+		log.Fatal("failed to start server", log.Err(err))
 	}
 }

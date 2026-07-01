@@ -25,7 +25,7 @@ func (h *SchoolHandler) CreateSchool(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(uuid.UUID)
-	school, err := h.svc.CreateSchoolForUser(userID, req)
+	school, err := h.svc.CreateSchoolForUser(c.Request.Context(), userID, req)
 	if err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 		return
@@ -159,7 +159,7 @@ func (h *SchoolHandler) CreateSchoolWithAdminInternal(c *gin.Context) {
 		return
 	}
 
-	school, err := h.svc.CreateSchoolForUser(userID, model.CreateSchoolRequest{
+	school, err := h.svc.CreateSchoolForUser(c.Request.Context(), userID, model.CreateSchoolRequest{
 		Name:    req.Name,
 		Address: req.Address,
 		Phone:   req.Phone,
