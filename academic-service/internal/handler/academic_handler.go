@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/academic-service/internal/model"
 	"github.com/Archiit19/School-management/academic-service/internal/service"
 	"github.com/Archiit19/School-management/pkg/pupil"
@@ -34,6 +36,7 @@ func NewAcademicHandler(svc *service.AcademicService, users *userclient.Client) 
 func (h *AcademicHandler) CreateClass(c *gin.Context) {
 	var req model.CreateClassRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -41,10 +44,11 @@ func (h *AcademicHandler) CreateClass(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	class, err := h.svc.CreateClass(req, schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create class failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("class created", log.AddField("class_id", class.ID), log.AddField("school_id", schoolID), log.AddField("name", class.Name))
 	c.JSON(http.StatusCreated, class)
 }
 
@@ -62,6 +66,7 @@ func (h *AcademicHandler) CreateClass(c *gin.Context) {
 func (h *AcademicHandler) CreateSection(c *gin.Context) {
 	var req model.CreateSectionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -69,10 +74,11 @@ func (h *AcademicHandler) CreateSection(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	section, err := h.svc.CreateSection(req, schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create section failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("section created", log.AddField("section_id", section.ID), log.AddField("school_id", schoolID), log.AddField("class_id", section.ClassID))
 	c.JSON(http.StatusCreated, section)
 }
 
@@ -90,6 +96,7 @@ func (h *AcademicHandler) CreateSection(c *gin.Context) {
 func (h *AcademicHandler) CreateSubject(c *gin.Context) {
 	var req model.CreateSubjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -97,10 +104,11 @@ func (h *AcademicHandler) CreateSubject(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	subject, err := h.svc.CreateSubject(req, schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create subject failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("subject created", log.AddField("subject_id", subject.ID), log.AddField("school_id", schoolID), log.AddField("class_id", subject.ClassID))
 	c.JSON(http.StatusCreated, subject)
 }
 
@@ -117,6 +125,7 @@ func (h *AcademicHandler) GetClasses(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	classes, err := h.svc.GetClasses(schoolID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list classes failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -138,6 +147,7 @@ func (h *AcademicHandler) GetClasses(c *gin.Context) {
 func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 	var req model.CreateTeacherAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -146,10 +156,11 @@ func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	assignment, err := h.svc.CreateTeacherAssignment(c.Request.Context(), req, schoolID, authHeader)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create teacher assignment failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("teacher assignment created", log.AddField("teacher_assignment_id", assignment.ID), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusCreated, assignment)
 }
 
@@ -168,6 +179,7 @@ func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 	var query model.TeacherAssignmentQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -175,6 +187,7 @@ func (h *AcademicHandler) GetTeacherAssignments(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	assignments, err := h.svc.GetTeacherAssignments(schoolID, query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list teacher assignments failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -203,6 +216,7 @@ func (h *AcademicHandler) UpdateTeacherAssignment(c *gin.Context) {
 
 	var req model.UpdateTeacherAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -211,10 +225,11 @@ func (h *AcademicHandler) UpdateTeacherAssignment(c *gin.Context) {
 	authHeader := c.GetHeader("Authorization")
 	assignment, err := h.svc.UpdateTeacherAssignment(c.Request.Context(), id, req, schoolID, authHeader)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "update teacher assignment failed", err, log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("teacher assignment updated", log.AddField("teacher_assignment_id", assignment.ID), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusOK, assignment)
 }
 
@@ -237,10 +252,11 @@ func (h *AcademicHandler) DeleteTeacherAssignment(c *gin.Context) {
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	if err := h.svc.DeleteTeacherAssignment(id, schoolID); err != nil {
+		logServiceError(c, http.StatusBadRequest, "delete teacher assignment failed", err, log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("teacher assignment deleted", log.AddField("teacher_assignment_id", id), log.AddField("school_id", schoolID))
 	c.JSON(http.StatusOK, gin.H{"message": "teacher assignment removed"})
 }
 
@@ -258,6 +274,7 @@ func (h *AcademicHandler) DeleteTeacherAssignment(c *gin.Context) {
 func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
 	var req model.CreateAssignmentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -268,10 +285,11 @@ func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
 
 	assignment, err := h.svc.CreateAssignment(req, schoolID, requestingUserID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create assignment failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("assignment created", log.AddField("assignment_id", assignment.ID), log.AddField("school_id", schoolID), log.AddField("title", assignment.Title))
 	c.JSON(http.StatusCreated, assignment)
 }
 
@@ -290,6 +308,7 @@ func (h *AcademicHandler) CreateAssignment(c *gin.Context) {
 func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 	var query model.AssignmentQuery
 	if err := c.ShouldBindQuery(&query); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -297,6 +316,7 @@ func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	assignments, err := h.svc.GetAssignments(schoolID, query)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "list assignments failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -317,6 +337,7 @@ func (h *AcademicHandler) GetAssignments(c *gin.Context) {
 func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		logServiceError(c, http.StatusForbidden, "resolve student for my assignments failed", err)
 		pupil.WriteForbidden(c, err)
 		return
 	}
@@ -325,6 +346,7 @@ func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
 
 	assignments, err := h.svc.GetMyAssignments(schoolID, studentID, authHeader)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "get my assignments failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -344,6 +366,7 @@ func (h *AcademicHandler) GetMyAssignments(c *gin.Context) {
 func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		logServiceError(c, http.StatusForbidden, "resolve student for my academic profile failed", err)
 		pupil.WriteForbidden(c, err)
 		return
 	}
@@ -352,6 +375,7 @@ func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
 
 	profile, err := h.svc.GetMyAcademicProfile(c.Request.Context(), schoolID, studentID, authHeader)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "get my academic profile failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -370,6 +394,7 @@ func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
 func (h *AcademicHandler) GetMySubmissions(c *gin.Context) {
 	studentID, err := pupil.ResolveStudentID(c, h.users)
 	if err != nil {
+		logServiceError(c, http.StatusForbidden, "resolve student for my submissions failed", err)
 		pupil.WriteForbidden(c, err)
 		return
 	}
@@ -377,6 +402,7 @@ func (h *AcademicHandler) GetMySubmissions(c *gin.Context) {
 
 	subs, err := h.svc.GetMySubmissions(schoolID, studentID)
 	if err != nil {
+		logServiceError(c, http.StatusInternalServerError, "get my submissions failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -398,6 +424,7 @@ func (h *AcademicHandler) GetMySubmissions(c *gin.Context) {
 func (h *AcademicHandler) CreateMySubmission(c *gin.Context) {
 	sidVal, ok := c.Get("student_id")
 	if !ok {
+		logServiceError(c, http.StatusForbidden, "create my submission failed", errors.New("this account is not linked to a student record"))
 		c.JSON(http.StatusForbidden, gin.H{"error": "this account is not linked to a student record"})
 		return
 	}
@@ -405,6 +432,7 @@ func (h *AcademicHandler) CreateMySubmission(c *gin.Context) {
 
 	var req model.CreateMySubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -412,9 +440,11 @@ func (h *AcademicHandler) CreateMySubmission(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	submission, err := h.svc.CreateOwnSubmission(req, schoolID, studentID)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create my submission failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("submission created", log.AddField("submission_id", submission.ID), log.AddField("school_id", schoolID), log.AddField("assignment_id", submission.AssignmentID))
 	c.JSON(http.StatusCreated, submission)
 }
 
@@ -432,6 +462,7 @@ func (h *AcademicHandler) CreateMySubmission(c *gin.Context) {
 func (h *AcademicHandler) CreateSubmission(c *gin.Context) {
 	var req model.CreateSubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -440,10 +471,11 @@ func (h *AcademicHandler) CreateSubmission(c *gin.Context) {
 	submittedBy := c.MustGet("user_id").(uuid.UUID)
 	submission, err := h.svc.CreateSubmission(req, schoolID, submittedBy)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "create submission failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-
+	requestLogger(c).Info("submission created", log.AddField("submission_id", submission.ID), log.AddField("school_id", schoolID), log.AddField("assignment_id", submission.AssignmentID))
 	c.JSON(http.StatusCreated, submission)
 }
 
@@ -471,6 +503,7 @@ func (h *AcademicHandler) GetAssignmentSubmissions(c *gin.Context) {
 
 	subs, err := h.svc.GetSubmissionsForAssignment(c.Request.Context(), assignmentID, schoolID, userID, roleName)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "list assignment submissions failed", err, log.AddField("assignment_id", assignmentID), log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -498,6 +531,7 @@ func (h *AcademicHandler) ReviewSubmission(c *gin.Context) {
 
 	var req model.UpdateSubmissionRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
+		logBindError(c, err)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
@@ -508,8 +542,10 @@ func (h *AcademicHandler) ReviewSubmission(c *gin.Context) {
 
 	submission, err := h.svc.ReviewSubmission(submissionID, schoolID, userID, roleName, req)
 	if err != nil {
+		logServiceError(c, http.StatusBadRequest, "review submission failed", err, log.AddField("submission_id", submissionID), log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	requestLogger(c).Info("submission reviewed", log.AddField("submission_id", submission.ID), log.AddField("school_id", schoolID), log.AddField("assignment_id", submission.AssignmentID))
 	c.JSON(http.StatusOK, submission)
 }
