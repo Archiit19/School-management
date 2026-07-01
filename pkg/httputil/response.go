@@ -20,7 +20,7 @@ func WriteError(c *gin.Context, err error) {
 		c.JSON(he.Status, ErrorResponse{Error: he.Error()})
 		return
 	}
-	c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+	c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
 }
 
 // WriteMessage writes a simple message response.

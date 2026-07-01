@@ -152,6 +152,36 @@ services:
       retries: 5
 
   # ──────────────────────────────────────
+  # Tracing (Grafana Tempo + Grafana UI)
+  # ──────────────────────────────────────
+  tempo:
+    image: grafana/tempo:2.7.2
+    container_name: tempo
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./observability/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "4318:4318" # OTLP HTTP
+      - "4317:4317" # OTLP gRPC
+      - "3200:3200" # Tempo API
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    container_name: grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - tempo
+
+  # ──────────────────────────────────────
   # Auth Service
   # ──────────────────────────────────────
   auth-service:
@@ -172,9 +202,16 @@ services:
       SCHOOL_SERVICE_URL: http://school-service:8088
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8081
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       auth-db:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
   # ──────────────────────────────────────
   # User Service
@@ -201,10 +238,17 @@ services:
       AWS_REGION: us-east-1
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8082
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       user-db:
         condition: service_healthy
       dynamodb-local:
+        condition: service_started
+      tempo:
         condition: service_started
 
   # ──────────────────────────────────────
@@ -227,9 +271,16 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8083
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       academic-db:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
   # ──────────────────────────────────────
   # Attendance Service
@@ -252,12 +303,19 @@ services:
       ACADEMIC_SERVICE_URL: http://academic-service:8083
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8085
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       attendance-db:
         condition: service_healthy
       user-service:
         condition: service_started
       academic-service:
+        condition: service_started
+      tempo:
         condition: service_started
 
   # ──────────────────────────────────────
@@ -281,9 +339,16 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8086
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       exam-db:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
   # ──────────────────────────────────────
   # Finance Service
@@ -305,9 +370,16 @@ services:
       USER_SERVICE_URL: http://user-service:8082
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8087
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       finance-db:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
   # ──────────────────────────────────────
   # School Service
@@ -329,11 +401,20 @@ services:
       AUTH_SERVICE_URL: http://auth-service:8081
       INTERNAL_SERVICE_TOKEN: dev-internal-token-change-in-production
       PORT: 8088
+      TRACE_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: tempo:4318
+      OTEL_EXPORTER_OTLP_INSECURE: "true"
+      TRACE_SAMPLE_RATIO: "1.0"
+      DEPLOYMENT_ENVIRONMENT: local
     depends_on:
       school-db:
         condition: service_healthy
+      tempo:
+        condition: service_started
 
 volumes:
+  tempo_data:
+  grafana_data:
   auth_db_data:
   user_db_data:
   academic_db_data:

@@ -29,7 +29,7 @@
   {"name": "create_assignment", "description": "Create homework / assignments"},
   {"name": "view_assignments", "description": "View assignments"},
   {"name": "submit_assignment", "description": "Submit student work for assignments"},
-  {"name": "create_exam", "description": "Create exams"},
+  {"name": "create_exam", "description": "Create, edit, complete, and delete exams"},
   {"name": "view_exams", "description": "View list of created exams"},
   {"name": "enter_marks", "description": "Enter or update exam marks"},
   {"name": "publish_results", "description": "Publish exam results"},

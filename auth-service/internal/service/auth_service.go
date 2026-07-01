@@ -1,13 +1,13 @@
 package service
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
+	log "github.com/Archiit19/School-management/pkg/logger"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/golang-jwt/jwt/v5"
@@ -39,24 +39,26 @@ type tokenContext struct {
 	Permissions []string
 }
 
-func (s *AuthService) Signup(req model.SignupRequest) (*model.LoginResponse, error) {
-	if _, err := s.users.GetByEmail(req.Email); err == nil {
+func (s *AuthService) Signup(ctx context.Context, req model.SignupRequest) (*model.LoginResponse, error) {
+	if _, err := s.users.GetByEmail(ctx, req.Email); err == nil {
 		return nil, errors.New("user with this email already exists")
 	} else if !strings.Contains(err.Error(), "not found") {
+		log.Error("signup: email lookup failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to check email: %w", err)
 	}
 
-	user, err := s.users.CreateProfile(req.Name, req.Email, nil)
+	user, err := s.users.CreateProfile(ctx, req.Name, req.Email, nil)
 	if err != nil {
+		log.Error("signup: create user profile failed", log.Err(err), log.AddField("email", req.Email))
 		return nil, fmt.Errorf("failed to create user profile: %w", err)
 	}
 	if err := s.creds.SetPassword(user.ID, req.Password); err != nil {
-		_ = s.users.DeleteProfile(user.ID)
+		_ = s.users.DeleteProfile(ctx, user.ID)
 		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
 	user.RoleName = platformAdminRole
-	token, err := s.generateToken(user, tokenContext{
+	token, err := s.generateToken(ctx, user, tokenContext{
 		RoleName:    platformAdminRole,
 		Permissions: platformAdminPermissions,
 	})
@@ -66,38 +68,40 @@ func (s *AuthService) Signup(req model.SignupRequest) (*model.LoginResponse, err
 	return &model.LoginResponse{Token: token, User: *user}, nil
 }
 
-func (s *AuthService) RegisterSchool(req model.RegisterSchoolRequest) (*model.RegisterSchoolResponse, error) {
-	if existing, err := s.school.GetSchoolByEmail(req.SchoolEmail); err == nil && existing != nil {
+func (s *AuthService) RegisterSchool(ctx context.Context, req model.RegisterSchoolRequest) (*model.RegisterSchoolResponse, error) {
+	if existing, err := s.school.GetSchoolByEmail(ctx, req.SchoolEmail); err == nil && existing != nil {
 		return nil, errors.New("school with this email already exists")
 	}
-	if _, err := s.users.GetByEmail(req.AdminEmail); err == nil {
+	if _, err := s.users.GetByEmail(ctx, req.AdminEmail); err == nil {
 		return nil, errors.New("user with this email already exists")
 	}
 
-	user, err := s.users.CreateProfile(req.AdminName, req.AdminEmail, nil)
+	user, err := s.users.CreateProfile(ctx, req.AdminName, req.AdminEmail, nil)
 	if err != nil {
+		log.Error("register school: create admin user failed", log.Err(err), log.AddField("email", req.AdminEmail))
 		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
 	if err := s.creds.SetPassword(user.ID, req.AdminPassword); err != nil {
-		_ = s.users.DeleteProfile(user.ID)
+		_ = s.users.DeleteProfile(ctx, user.ID)
 		return nil, fmt.Errorf("failed to set password: %w", err)
 	}
 
-	school, err := s.school.CreateSchoolForUser(user.ID, req.SchoolName, req.SchoolAddress, req.SchoolPhone, req.SchoolEmail)
+	school, err := s.school.CreateSchoolForUser(ctx, user.ID, req.SchoolName, req.SchoolAddress, req.SchoolPhone, req.SchoolEmail)
 	if err != nil {
 		_ = s.creds.RemoveUserCompletely(user.ID)
-		_ = s.users.DeleteProfile(user.ID)
+		_ = s.users.DeleteProfile(ctx, user.ID)
 		return nil, err
 	}
 
 	ur, err := s.creds.GetUserRole(user.ID, school.ID)
 	if err != nil {
+		log.Error("register school: load school role failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", school.ID))
 		return nil, fmt.Errorf("failed to load school role: %w", err)
 	}
 
 	roleName := s.rbac.RoleName(ur.RoleID)
 	perms := s.rbac.RolePermissionNames(ur.RoleID)
-	token, err := s.generateToken(user, tokenContext{
+	token, err := s.generateToken(ctx, user, tokenContext{
 		SchoolID:    &school.ID,
 		RoleID:      &ur.RoleID,
 		RoleName:    roleName,
@@ -124,18 +128,18 @@ func (s *AuthService) hasSuperAdminRole(userID uuid.UUID, memberships []schoolMe
 	return false
 }
 
-func (s *AuthService) platformLoginContext(user *model.User) tokenContext {
+func (s *AuthService) platformLoginContext(ctx context.Context, user *model.User) tokenContext {
 	user.RoleName = platformAdminRole
 	user.SchoolID = nil
 	user.RoleID = nil
-	if schools, err := s.school.ListSchoolsForUser(user.ID); err == nil {
+	if schools, err := s.school.ListSchoolsForUser(ctx, user.ID); err == nil {
 		user.Schools = schools
 	}
 	return tokenContext{RoleName: platformAdminRole, Permissions: platformAdminPermissions}
 }
 
-func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error) {
-	user, err := s.users.GetByEmail(req.Email)
+func (s *AuthService) Login(ctx context.Context, req model.LoginRequest) (*model.LoginResponse, error) {
+	user, err := s.users.GetByEmail(ctx, req.Email)
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
@@ -146,48 +150,50 @@ func (s *AuthService) Login(req model.LoginRequest) (*model.LoginResponse, error
 		return nil, errors.New("invalid email or password")
 	}
 
-	memberships, err := s.school.ListMembershipsForUser(user.ID)
+	memberships, err := s.school.ListMembershipsForUser(ctx, user.ID)
 	if err != nil {
+		log.Error("login: load school memberships failed", log.Err(err), log.AddField("user_id", user.ID))
 		return nil, fmt.Errorf("failed to load school memberships: %w", err)
 	}
 
-	var ctx tokenContext
+	var tokCtx tokenContext
 	if len(memberships) == 0 || s.hasSuperAdminRole(user.ID, memberships) {
-		ctx = s.platformLoginContext(user)
+		tokCtx = s.platformLoginContext(ctx, user)
 	} else if len(memberships) == 1 {
 		m := memberships[0]
 		ur, err := s.creds.GetUserRole(user.ID, m.SchoolID)
 		if err != nil {
+			log.Error("login: load role for school failed", log.Err(err), log.AddField("user_id", user.ID), log.AddField("school_id", m.SchoolID))
 			return nil, fmt.Errorf("failed to load role for school: %w", err)
 		}
 		roleName := s.rbac.RoleName(ur.RoleID)
 		user.RoleName = roleName
 		user.SchoolID = &m.SchoolID
 		user.RoleID = &ur.RoleID
-		ctx = tokenContext{
+		tokCtx = tokenContext{
 			SchoolID:    &m.SchoolID,
 			RoleID:      &ur.RoleID,
 			RoleName:    roleName,
 			Permissions: s.rbac.RolePermissionNames(ur.RoleID),
 		}
 	} else {
-		ctx = s.platformLoginContext(user)
+		tokCtx = s.platformLoginContext(ctx, user)
 	}
 
-	token, err := s.generateToken(user, ctx)
+	token, err := s.generateToken(ctx, user, tokCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate token: %w", err)
 	}
 	return &model.LoginResponse{Token: token, User: *user}, nil
 }
 
-func (s *AuthService) SelectSchool(userID uuid.UUID, schoolID uuid.UUID) (*model.LoginResponse, error) {
-	user, err := s.users.GetByID(userID)
+func (s *AuthService) SelectSchool(ctx context.Context, userID uuid.UUID, schoolID uuid.UUID) (*model.LoginResponse, error) {
+	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
 
-	memberships, err := s.school.ListMembershipsForUser(userID)
+	memberships, err := s.school.ListMembershipsForUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +205,7 @@ func (s *AuthService) SelectSchool(userID uuid.UUID, schoolID uuid.UUID) (*model
 		}
 	}
 
-	if _, err := s.school.GetMembership(schoolID, userID); err != nil {
+	if _, err := s.school.GetMembership(ctx, schoolID, userID); err != nil {
 		return nil, errors.New("you are not a member of this school")
 	}
 
@@ -213,11 +219,11 @@ func (s *AuthService) SelectSchool(userID uuid.UUID, schoolID uuid.UUID) (*model
 	user.RoleName = roleName
 	user.SchoolID = &schoolID
 	user.RoleID = &ur.RoleID
-	if school, err := s.school.GetSchoolByID(schoolID); err == nil {
+	if school, err := s.school.GetSchoolByID(ctx, schoolID); err == nil {
 		user.School = school
 	}
 
-	token, err := s.generateToken(user, tokenContext{
+	token, err := s.generateToken(ctx, user, tokenContext{
 		SchoolID: &schoolID, RoleID: &ur.RoleID, RoleName: roleName, Permissions: perms,
 	})
 	if err != nil {
@@ -226,21 +232,21 @@ func (s *AuthService) SelectSchool(userID uuid.UUID, schoolID uuid.UUID) (*model
 	return &model.LoginResponse{Token: token, User: *user}, nil
 }
 
-func (s *AuthService) ExitSchool(userID uuid.UUID) (*model.LoginResponse, error) {
-	user, err := s.users.GetByID(userID)
+func (s *AuthService) ExitSchool(ctx context.Context, userID uuid.UUID) (*model.LoginResponse, error) {
+	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
-	ctx := s.platformLoginContext(user)
-	token, err := s.generateToken(user, ctx)
+	tokCtx := s.platformLoginContext(ctx, user)
+	token, err := s.generateToken(ctx, user, tokCtx)
 	if err != nil {
 		return nil, err
 	}
 	return &model.LoginResponse{Token: token, User: *user}, nil
 }
 
-func (s *AuthService) UpdateProfile(userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error) {
-	user, err := s.users.UpdateProfile(userID, req)
+func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, req model.UpdateProfileRequest) (*model.User, error) {
+	user, err := s.users.UpdateProfile(ctx, userID, req)
 	if err != nil {
 		return nil, err
 	}
@@ -248,13 +254,13 @@ func (s *AuthService) UpdateProfile(userID uuid.UUID, req model.UpdateProfileReq
 	return user, nil
 }
 
-func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissions []string) (*model.MeResponse, error) {
-	user, err := s.users.GetByID(userID)
+func (s *AuthService) GetMe(ctx context.Context, userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissions []string) (*model.MeResponse, error) {
+	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, errors.New("user not found")
 	}
 
-	var ctx tokenContext
+	var tokCtx tokenContext
 	if jwtSchoolID != uuid.Nil {
 		ur, err := s.creds.GetUserRole(userID, jwtSchoolID)
 		if err != nil {
@@ -262,7 +268,7 @@ func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissi
 		}
 		roleName := s.rbac.RoleName(ur.RoleID)
 		freshPerms := s.rbac.RolePermissionNames(ur.RoleID)
-		ctx = tokenContext{
+		tokCtx = tokenContext{
 			SchoolID:    &jwtSchoolID,
 			RoleID:      &ur.RoleID,
 			RoleName:    roleName,
@@ -272,18 +278,19 @@ func (s *AuthService) GetMe(userID uuid.UUID, jwtSchoolID uuid.UUID, jwtPermissi
 		user.RoleID = &ur.RoleID
 		user.RoleName = roleName
 		user.Permissions = freshPerms
-		if school, err := s.school.GetSchoolByID(jwtSchoolID); err == nil {
+		if school, err := s.school.GetSchoolByID(ctx, jwtSchoolID); err == nil {
 			user.School = school
 		}
 	} else {
-		ctx = s.platformLoginContext(user)
-		user.Permissions = ctx.Permissions
+		tokCtx = s.platformLoginContext(ctx, user)
+		user.Permissions = tokCtx.Permissions
 	}
 
 	resp := &model.MeResponse{User: *user}
 	if !permissionSetsEqual(jwtPermissions, user.Permissions) {
-		token, err := s.generateToken(user, ctx)
+		token, err := s.generateToken(ctx, user, tokCtx)
 		if err != nil {
+			log.Error("get me: refresh session token failed", log.Err(err), log.AddField("user_id", userID))
 			return nil, fmt.Errorf("failed to refresh session token: %w", err)
 		}
 		resp.Token = token
@@ -308,24 +315,24 @@ func permissionSetsEqual(a, b []string) bool {
 	return true
 }
 
-func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string, error) {
+func (s *AuthService) generateToken(reqCtx context.Context, user *model.User, tokCtx tokenContext) (string, error) {
 	claims := jwt.MapClaims{
 		"user_id":     user.ID.String(),
-		"role_name":   ctx.RoleName,
-		"permissions": ctx.Permissions,
+		"role_name":   tokCtx.RoleName,
+		"permissions": tokCtx.Permissions,
 		"email":       user.Email,
 		"exp":         time.Now().Add(24 * time.Hour).Unix(),
 		"iat":         time.Now().Unix(),
 	}
-	if ctx.SchoolID != nil && *ctx.SchoolID != uuid.Nil {
-		claims["school_id"] = ctx.SchoolID.String()
+	if tokCtx.SchoolID != nil && *tokCtx.SchoolID != uuid.Nil {
+		claims["school_id"] = tokCtx.SchoolID.String()
 	}
-	if ctx.RoleID != nil && *ctx.RoleID != uuid.Nil {
-		claims["role_id"] = ctx.RoleID.String()
+	if tokCtx.RoleID != nil && *tokCtx.RoleID != uuid.Nil {
+		claims["role_id"] = tokCtx.RoleID.String()
 	}
-	if strings.EqualFold(ctx.RoleName, "student") {
+	if strings.EqualFold(tokCtx.RoleName, "student") {
 		claims["student_id"] = user.ID.String()
-		if profile := s.fetchUserProfile(user.ID); profile != nil {
+		if profile := s.fetchUserProfile(reqCtx, user.ID); profile != nil {
 			if classID, ok := profile["class_id"].(string); ok && classID != "" {
 				claims["class_id"] = classID
 			}
@@ -338,23 +345,9 @@ func (s *AuthService) generateToken(user *model.User, ctx tokenContext) (string,
 	return token.SignedString([]byte(s.cfg.JWTSecret))
 }
 
-func (s *AuthService) fetchUserProfile(userID uuid.UUID) map[string]interface{} {
-	url := fmt.Sprintf("%s/internal/users/%s/profile", s.cfg.UserServiceURL, userID.String())
-	client := &http.Client{Timeout: 5 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func (s *AuthService) fetchUserProfile(ctx context.Context, userID uuid.UUID) map[string]interface{} {
+	profile, err := s.users.GetProfile(ctx, userID)
 	if err != nil {
-		return nil
-	}
-	if s.cfg.InternalServiceToken != "" {
-		req.Header.Set("X-Internal-Token", s.cfg.InternalServiceToken)
-	}
-	resp, err := client.Do(req)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil
-	}
-	defer resp.Body.Close()
-	var profile map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&profile); err != nil {
 		return nil
 	}
 	return profile

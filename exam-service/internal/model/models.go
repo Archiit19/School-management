@@ -16,6 +16,7 @@ type Exam struct {
 	ExamDate    time.Time  `json:"exam_date" gorm:"type:date;not null"`
 	TotalMarks  float64    `json:"total_marks" gorm:"not null"`
 	IsPublished bool       `json:"is_published" gorm:"default:false"`
+	IsComplete  bool       `json:"is_complete" gorm:"default:false"`
 	CreatedBy   uuid.UUID  `json:"created_by" gorm:"type:uuid;not null"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
@@ -36,10 +37,19 @@ type Mark struct {
 type CreateExamRequest struct {
 	ClassID    string  `json:"class_id" binding:"required,uuid"`
 	SectionID  string  `json:"section_id" binding:"omitempty,uuid"`
-	SubjectID  string  `json:"subject_id" binding:"omitempty,uuid"`
+	SubjectID  string  `json:"subject_id" binding:"required,uuid"`
 	Title      string  `json:"title" binding:"required"`
 	ExamDate   string  `json:"exam_date" binding:"required"`
 	TotalMarks float64 `json:"total_marks" binding:"required,gt=0"`
+}
+
+type UpdateExamRequest struct {
+	ClassID    *string  `json:"class_id" binding:"omitempty,uuid"`
+	SectionID  *string  `json:"section_id" binding:"omitempty,uuid"`
+	SubjectID  *string  `json:"subject_id" binding:"omitempty,uuid"`
+	Title      *string  `json:"title"`
+	ExamDate   *string  `json:"exam_date"`
+	TotalMarks *float64 `json:"total_marks" binding:"omitempty,gt=0"`
 }
 
 type EnterMarksRequest struct {

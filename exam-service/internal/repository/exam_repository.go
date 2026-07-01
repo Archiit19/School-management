@@ -30,8 +30,27 @@ func (r *ExamRepository) UpdateExam(exam *model.Exam) error {
 	return r.db.Save(exam).Error
 }
 
+func (r *ExamRepository) DeleteExam(examID, schoolID uuid.UUID) error {
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("exam_id = ? AND school_id = ?", examID, schoolID).Delete(&model.Mark{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ? AND school_id = ?", examID, schoolID).Delete(&model.Exam{}).Error
+	})
+}
+
+func (r *ExamRepository) MaxMarksObtainedForExam(examID uuid.UUID) (float64, error) {
+	var max float64
+	err := r.db.Model(&model.Mark{}).
+		Where("exam_id = ?", examID).
+		Select("COALESCE(MAX(marks_obtained), 0)").
+		Scan(&max).Error
+	return max, err
+}
+
 // GetExams lists exams for a school with optional filters.
-// When `upcoming` is true, only exams scheduled for today or later are returned.
+// When `upcoming` is true, only exams scheduled for today or later that are not yet
+// marked complete are returned.
 // Results are ordered by exam_date ascending so callers see the next exam first.
 func (r *ExamRepository) GetExams(
 	schoolID uuid.UUID,
@@ -51,7 +70,7 @@ func (r *ExamRepository) GetExams(
 	}
 	if query.Upcoming {
 		today := time.Now().UTC().Truncate(24 * time.Hour)
-		q = q.Where("exam_date >= ?", today)
+		q = q.Where("exam_date >= ? AND is_complete = ?", today, false)
 	}
 	if query.Published != nil {
 		q = q.Where("is_published = ?", *query.Published)

@@ -7,7 +7,13 @@ import (
 	"time"
 
 	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/tracer"
 )
+
+// OutboundHTTP returns a production *http.Client without internal auth (e.g. JWT forwarding).
+func OutboundHTTP(name string) *http.Client {
+	return NewHTTPClient(name, pkgconfig.LoadHTTPClientConfigFromEnv())
+}
 
 // NewHTTPClient builds a production-ready *http.Client with pooling, retry, and optional circuit breaker.
 func NewHTTPClient(name string, cfg pkgconfig.HTTPClient) *http.Client {
@@ -18,6 +24,7 @@ func NewHTTPClient(name string, cfg pkgconfig.HTTPClient) *http.Client {
 	} else {
 		transport = &retryTransport{base: transport, cfg: cfg}
 	}
+	transport = tracer.WrapTransport(transport)
 	return &http.Client{
 		Timeout:   cfg.Timeout,
 		Transport: transport,

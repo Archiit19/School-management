@@ -215,6 +215,9 @@ export const attendanceApi = {
 
 export const examApi = {
   createExam: (body) => request("exams", "/exams", { method: "POST", body }),
+  updateExam: (id, body) => request("exams", `/exams/${id}`, { method: "PATCH", body }),
+  completeExam: (id) => request("exams", `/exams/${id}/complete`, { method: "POST" }),
+  deleteExam: (id) => request("exams", `/exams/${id}`, { method: "DELETE" }),
   getExams: (query) => request("exams", "/exams", { query }),
   getMyExams: (query, studentId) =>
     request("exams", "/exams/me", { query: pupilQuery(query, studentId) }),

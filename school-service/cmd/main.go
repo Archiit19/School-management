@@ -1,22 +1,22 @@
 package main
 
 import (
-	"fmt"
-	"net/http"
+	"context"
+	"time"
 
 	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
+	"github.com/Archiit19/School-management/pkg/health"
+	"github.com/Archiit19/School-management/pkg/middleware"
+	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	"github.com/Archiit19/School-management/school-service/internal/config"
 	"github.com/Archiit19/School-management/school-service/internal/handler"
 	"github.com/Archiit19/School-management/school-service/internal/migrate"
-	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/school-service/internal/middleware/schoolmw"
 	"github.com/Archiit19/School-management/school-service/internal/model"
 	"github.com/Archiit19/School-management/school-service/internal/repository"
 	"github.com/Archiit19/School-management/school-service/internal/service"
-	"github.com/gin-gonic/gin"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
-	gormlogger "gorm.io/gorm/logger"
 )
 
 // @title           School Service API
@@ -32,13 +32,29 @@ func main() {
 		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
-	cfg := config.Load()
+	traceShutdown, err := tracer.InitFromEnv("school-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger: gormlogger.Discard,
-	})
+	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
+
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
 	}
 	log.Info("connected to database")
 
@@ -54,11 +70,8 @@ func main() {
 	svc := service.NewSchoolService(repo, cfg.AuthServiceURL, cfg.InternalServiceToken)
 	h := handler.NewSchoolHandler(svc)
 
-	r := middleware.NewEngine()
-
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "school-service is running"})
-	})
+	r := middleware.NewEngine("school-service")
+	health.Register(r, "school-service", health.CheckDB(db))
 
 	internal := r.Group("/internal")
 	internal.Use(middleware.RequireInternalToken(cfg.InternalServiceToken))
@@ -93,9 +106,7 @@ func main() {
 		}
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Info("starting http server", log.AddField("addr", addr))
-	if err := r.Run(addr); err != nil {
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
 		log.Fatal("failed to start server", log.Err(err))
 	}
 }

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -48,18 +49,17 @@ func (s *SchoolService) CreateSchool(req model.CreateSchoolRequest) (*model.Scho
 	return school, nil
 }
 
-func (s *SchoolService) CreateSchoolForUser(userID uuid.UUID, req model.CreateSchoolRequest) (*model.School, error) {
+func (s *SchoolService) CreateSchoolForUser(ctx context.Context, userID uuid.UUID, req model.CreateSchoolRequest) (*model.School, error) {
 	school, err := s.CreateSchool(req)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.bootstrap.BootstrapSchool(school.ID); err != nil {
-		log.Error("create school for user: bootstrap roles failed", log.Err(err), log.AddField("school_id", school.ID), log.AddField("user_id", userID))
+	if err := s.bootstrap.BootstrapSchool(ctx, school.ID); err != nil {
 		return nil, fmt.Errorf("failed to bootstrap school roles: %w", err)
 	}
 
-	roleID, err := s.bootstrap.FetchRoleID(school.ID, "super_admin")
+	roleID, err := s.bootstrap.FetchRoleID(ctx, school.ID, "super_admin")
 	if err != nil {
 		log.Error("create school for user: resolve super_admin role failed", log.Err(err), log.AddField("school_id", school.ID), log.AddField("user_id", userID))
 		return nil, fmt.Errorf("failed to resolve super_admin role: %w", err)
@@ -70,8 +70,7 @@ func (s *SchoolService) CreateSchoolForUser(userID uuid.UUID, req model.CreateSc
 		return nil, fmt.Errorf("failed to link user to school: %w", err)
 	}
 
-	if err := s.bootstrap.AssignUserRole(userID, school.ID, roleID); err != nil {
-		log.Error("create school for user: assign super_admin role failed", log.Err(err), log.AddField("school_id", school.ID), log.AddField("user_id", userID))
+	if err := s.bootstrap.AssignUserRole(ctx, userID, school.ID, roleID); err != nil {
 		return nil, fmt.Errorf("failed to assign super_admin role: %w", err)
 	}
 
