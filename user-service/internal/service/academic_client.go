@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -21,7 +22,7 @@ type studentEnrollment struct {
 	SectionID *string `json:"section_id,omitempty"`
 }
 
-func (c *academicClient) UpsertEnrollment(userID, schoolID uuid.UUID, classID string, sectionID string) error {
+func (c *academicClient) UpsertEnrollment(ctx context.Context, userID, schoolID uuid.UUID, classID string, sectionID string) error {
 	body := map[string]string{
 		"user_id":   userID.String(),
 		"school_id": schoolID.String(),
@@ -30,7 +31,7 @@ func (c *academicClient) UpsertEnrollment(userID, schoolID uuid.UUID, classID st
 	if strings.TrimSpace(sectionID) != "" {
 		body["section_id"] = sectionID
 	}
-	resp, err := c.DoJSON(http.MethodPost, "/internal/enrollments", body, nil)
+	resp, err := c.DoJSONContext(ctx, http.MethodPost, "/internal/enrollments", body, nil)
 	if err != nil {
 		return err
 	}
@@ -38,13 +39,13 @@ func (c *academicClient) UpsertEnrollment(userID, schoolID uuid.UUID, classID st
 	return httpclient.CheckStatus(resp, http.StatusOK, "academic upsert enrollment")
 }
 
-func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnrollment, error) {
+func (c *academicClient) GetEnrollment(ctx context.Context, userID, schoolID uuid.UUID) (*studentEnrollment, error) {
 	path := fmt.Sprintf("/internal/enrollments/%s?school_id=%s", userID.String(), url.QueryEscape(schoolID.String()))
-	req, err := http.NewRequest(http.MethodGet, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.URL(path), nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +63,13 @@ func (c *academicClient) GetEnrollment(userID, schoolID uuid.UUID) (*studentEnro
 	return &row, nil
 }
 
-func (c *academicClient) DeleteEnrollment(userID, schoolID uuid.UUID) error {
+func (c *academicClient) DeleteEnrollment(ctx context.Context, userID, schoolID uuid.UUID) error {
 	path := fmt.Sprintf("/internal/enrollments/%s?school_id=%s", userID.String(), url.QueryEscape(schoolID.String()))
-	req, err := http.NewRequest(http.MethodDelete, c.URL(path), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, c.URL(path), nil)
 	if err != nil {
 		return err
 	}
-	resp, err := c.Do(req)
+	resp, err := c.DoContext(ctx, req)
 	if err != nil {
 		return err
 	}

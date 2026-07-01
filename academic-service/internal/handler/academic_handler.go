@@ -144,7 +144,7 @@ func (h *AcademicHandler) CreateTeacherAssignment(c *gin.Context) {
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
-	assignment, err := h.svc.CreateTeacherAssignment(req, schoolID, authHeader)
+	assignment, err := h.svc.CreateTeacherAssignment(c.Request.Context(), req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -209,7 +209,7 @@ func (h *AcademicHandler) UpdateTeacherAssignment(c *gin.Context) {
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
-	assignment, err := h.svc.UpdateTeacherAssignment(id, req, schoolID, authHeader)
+	assignment, err := h.svc.UpdateTeacherAssignment(c.Request.Context(), id, req, schoolID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -350,7 +350,7 @@ func (h *AcademicHandler) GetMyAcademicProfile(c *gin.Context) {
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	authHeader := c.GetHeader("Authorization")
 
-	profile, err := h.svc.GetMyAcademicProfile(schoolID, studentID, authHeader)
+	profile, err := h.svc.GetMyAcademicProfile(c.Request.Context(), schoolID, studentID, authHeader)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -469,7 +469,7 @@ func (h *AcademicHandler) GetAssignmentSubmissions(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
 
-	subs, err := h.svc.GetSubmissionsForAssignment(assignmentID, schoolID, userID, roleName)
+	subs, err := h.svc.GetSubmissionsForAssignment(c.Request.Context(), assignmentID, schoolID, userID, roleName)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

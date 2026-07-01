@@ -26,7 +26,7 @@ func (h *AuthHandler) Signup(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.Signup(req)
+	resp, err := h.svc.Signup(c.Request.Context(), req)
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "signup failed", err, log.AddField("email", req.Email))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -44,7 +44,7 @@ func (h *AuthHandler) RegisterSchool(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.RegisterSchool(req)
+	resp, err := h.svc.RegisterSchool(c.Request.Context(), req)
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "register school failed", err, log.AddField("school_email", req.SchoolEmail))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -66,7 +66,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	resp, err := h.svc.Login(req)
+	resp, err := h.svc.Login(c.Request.Context(), req)
 	if err != nil {
 		logServiceError(c, http.StatusUnauthorized, "login failed", err, log.AddField("email", req.Email))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
@@ -90,7 +90,7 @@ func (h *AuthHandler) SelectSchool(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(uuid.UUID)
-	resp, err := h.svc.SelectSchool(userID, schoolID)
+	resp, err := h.svc.SelectSchool(c.Request.Context(), userID, schoolID)
 	if err != nil {
 		logServiceError(c, http.StatusForbidden, "select school failed", err, log.AddField("user_id", userID), log.AddField("school_id", schoolID))
 		c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
@@ -102,7 +102,7 @@ func (h *AuthHandler) SelectSchool(c *gin.Context) {
 
 func (h *AuthHandler) ExitSchool(c *gin.Context) {
 	userID := c.MustGet("user_id").(uuid.UUID)
-	resp, err := h.svc.ExitSchool(userID)
+	resp, err := h.svc.ExitSchool(c.Request.Context(), userID)
 	if err != nil {
 		logServiceError(c, http.StatusBadRequest, "exit school failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -121,7 +121,7 @@ func (h *AuthHandler) UpdateProfile(c *gin.Context) {
 	}
 
 	userID := c.MustGet("user_id").(uuid.UUID)
-	user, err := h.svc.UpdateProfile(userID, req)
+	user, err := h.svc.UpdateProfile(c.Request.Context(), userID, req)
 	if err != nil {
 		logServiceError(c, http.StatusConflict, "update profile failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
@@ -143,7 +143,7 @@ func (h *AuthHandler) GetMe(c *gin.Context) {
 		}
 	}
 
-	resp, err := h.svc.GetMe(userID, sid, jwtPerms)
+	resp, err := h.svc.GetMe(c.Request.Context(), userID, sid, jwtPerms)
 	if err != nil {
 		logServiceError(c, http.StatusNotFound, "get me failed", err, log.AddField("user_id", userID))
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

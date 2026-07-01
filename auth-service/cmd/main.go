@@ -1,21 +1,24 @@
 package main
 
 import (
-	"fmt"
+	"context"
+	"time"
 
 	log "github.com/Archiit19/School-management/pkg/logger"
+	pkgconfig "github.com/Archiit19/School-management/pkg/config"
 	"github.com/Archiit19/School-management/auth-service/internal/config"
 	"github.com/Archiit19/School-management/auth-service/internal/handler"
+	"github.com/Archiit19/School-management/pkg/health"
+	"github.com/Archiit19/School-management/pkg/middleware"
 	"github.com/Archiit19/School-management/auth-service/internal/migrate"
 	"github.com/Archiit19/School-management/auth-service/internal/model"
 	"github.com/Archiit19/School-management/auth-service/internal/rbacdata"
 	"github.com/Archiit19/School-management/auth-service/internal/repository"
 	"github.com/Archiit19/School-management/auth-service/internal/service"
-	"github.com/Archiit19/School-management/pkg/middleware"
-	"github.com/gin-gonic/gin"
+	"github.com/Archiit19/School-management/pkg/server"
+	"github.com/Archiit19/School-management/pkg/tracer"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
-	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 
@@ -48,13 +51,29 @@ func main() {
 		log.Fatal("failed to initialize logger", log.Err(err))
 	}
 
-	cfg := config.Load()
+	traceShutdown, err := tracer.InitFromEnv("auth-service")
+	if err != nil {
+		log.Fatal("failed to initialize tracer", log.Err(err))
+	}
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := traceShutdown(ctx); err != nil {
+			log.Error("tracer shutdown", log.Err(err))
+		}
+	}()
 
-	db, err := gorm.Open(postgres.Open(cfg.DSN()), &gorm.Config{
-		Logger: gormlogger.Discard,
-	})
+	cfg := config.Load()
+	if err := pkgconfig.ValidateCommon(cfg.JWTSecret, cfg.InternalServiceToken); err != nil {
+		log.Fatal("invalid configuration", log.Err(err))
+	}
+
+	db, err := pkgconfig.OpenGORM(cfg.DSN(), nil)
 	if err != nil {
 		log.Fatal("failed to connect to database", log.Err(err))
+	}
+	if err := tracer.InstrumentGORM(db); err != nil {
+		log.Fatal("failed to instrument database", log.Err(err))
 	}
 	log.Info("connected to database")
 
@@ -83,18 +102,16 @@ func main() {
 	authSvc := service.NewAuthService(cfg, credSvc, rbacSvc)
 
 	if err := rbacSvc.SyncTemplateRolesForAllSchools(); err != nil {
-		log.Warn("template role sync", log.Err(err))
+		log.Warn("template role sync failed", log.Err(err))
 	}
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	rbacHandler := handler.NewRBACHandler(rbacSvc)
 	internalHandler := handler.NewInternalHandler(credSvc, rbacSvc)
 
-	r := middleware.NewEngine()
+	r := middleware.NewEngine("auth-service")
+	health.Register(r, "auth-service", health.CheckDB(db))
 
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "auth-service is running"})
-	})
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	auth := r.Group("/auth")
@@ -150,12 +167,7 @@ func main() {
 		internal.GET("/user-roles/:userId", internalHandler.ListUserRoles)
 	}
 
-	addr := fmt.Sprintf(":%s", cfg.Port)
-	log.Info("starting http server",
-		log.AddField("addr", addr),
-		log.AddField("swagger", fmt.Sprintf("http://localhost%s/swagger/index.html", addr)),
-	)
-	if err := r.Run(addr); err != nil {
+	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {
 		log.Fatal("failed to start server", log.Err(err))
 	}
 }
