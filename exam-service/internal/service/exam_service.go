@@ -373,8 +373,9 @@ func (s *ExamService) GetResults(
 	schoolID uuid.UUID,
 	query model.ResultQuery,
 	roleName string,
+	permissions []string,
 ) ([]model.ResultItem, error) {
-	includeUnpublished := roleName == "teacher" || roleName == "super_admin"
+	includeUnpublished := canViewUnpublishedResults(roleName, permissions)
 	results, err := s.repo.GetResults(schoolID, query, includeUnpublished)
 	if err != nil {
 		log.Error("get results: database query failed", log.Err(err), log.AddField("school_id", schoolID))
@@ -391,6 +392,18 @@ func (s *ExamService) GetResults(
 		results[i].Grade = gradeFromPercentage(results[i].Percentage)
 	}
 	return results, nil
+}
+
+func canViewUnpublishedResults(roleName string, permissions []string) bool {
+	if roleName == "super_admin" || roleName == "teacher" {
+		return true
+	}
+	for _, p := range permissions {
+		if p == "publish_results" || p == "enter_marks" {
+			return true
+		}
+	}
+	return false
 }
 
 func gradeFromPercentage(p float64) string {

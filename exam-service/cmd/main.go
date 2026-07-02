@@ -93,7 +93,7 @@ func main() {
 		protected.POST("/marks", middleware.RequirePermission("enter_marks"), h.EnterMarks)
 		protected.POST("/results/publish", middleware.RequirePermission("publish_results"), h.PublishResults)
 		protected.GET("/results/me", middleware.RequirePermission("view_own_results"), h.GetMyResults)
-		protected.GET("/results", middleware.RequirePermission("view_results"), h.GetResults)
+		protected.GET("/results", middleware.RequireAnyPermission("view_results", "publish_results", "enter_marks"), h.GetResults)
 	}
 
 	if err := server.Run(r, server.LoadConfigFromEnv(cfg.Port)); err != nil {

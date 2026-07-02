@@ -100,14 +100,32 @@ func main() {
 		protected.POST("/classes", middleware.RequirePermission("create_class"), h.CreateClass)
 		protected.POST("/sections", middleware.RequirePermission("create_section"), h.CreateSection)
 		protected.POST("/subjects", middleware.RequirePermission("create_subject"), h.CreateSubject)
-		protected.GET("/classes", middleware.RequirePermission("view_academic"), h.GetClasses)
+		protected.GET("/classes", middleware.RequireAnyPermission(
+			"view_academic",
+			"create_exam",
+			"view_exams",
+			"enter_marks",
+			"publish_results",
+		), h.GetClasses)
 		protected.POST("/teacher-assignments", middleware.RequirePermission("assign_teacher"), h.CreateTeacherAssignment)
-		protected.GET("/teacher-assignments", middleware.RequirePermission("view_academic"), h.GetTeacherAssignments)
+		protected.GET("/teacher-assignments", middleware.RequireAnyPermission(
+			"view_academic",
+			"assign_teacher",
+			"create_exam",
+			"enter_marks",
+			"mark_attendance",
+		), h.GetTeacherAssignments)
 		protected.PATCH("/teacher-assignments/:id", middleware.RequirePermission("assign_teacher"), h.UpdateTeacherAssignment)
 		protected.DELETE("/teacher-assignments/:id", middleware.RequirePermission("assign_teacher"), h.DeleteTeacherAssignment)
 		protected.GET("/academic/me", middleware.RequirePermission("view_own_profile"), h.GetMyAcademicProfile)
 		protected.GET("/enrollments/me", middleware.RequirePermission("view_own_profile"), eh.GetMyEnrollment)
-		protected.GET("/enrollments", middleware.RequireAnyPermission("view_students", "mark_attendance", "view_academic", "enter_marks"), eh.ListEnrollments)
+		protected.GET("/enrollments", middleware.RequireAnyPermission(
+			"view_students",
+			"mark_attendance",
+			"view_academic",
+			"enter_marks",
+			"publish_results",
+		), eh.ListEnrollments)
 		protected.POST("/assignments", middleware.RequirePermission("create_assignment"), h.CreateAssignment)
 		protected.GET("/assignments/me", middleware.RequirePermission("view_own_assignments"), h.GetMyAssignments)
 		protected.GET("/assignments", middleware.RequirePermission("view_assignments"), h.GetAssignments)

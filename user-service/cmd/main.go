@@ -18,6 +18,7 @@ import (
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"gorm.io/gorm"
+	gormlogger "gorm.io/gorm/logger"
 
 	_ "github.com/Archiit19/School-management/user-service/docs"
 )
@@ -99,7 +100,13 @@ func main() {
 	users.Use(middleware.JWTAuth(cfg.JWTSecret))
 	{
 		users.POST("", middleware.RequireAnyPermission("create_user", "admit_student"), h.CreateUser)
-		users.GET("", middleware.RequireAnyPermission("view_users", "view_students", "admit_student"), h.GetUsers)
+		users.GET("", middleware.RequireAnyPermission(
+			"view_users",
+			"view_students",
+			"admit_student",
+			"enter_marks",
+			"publish_results",
+		), h.GetUsers)
 		users.GET("/me", middleware.RequirePermission("view_own_profile"), h.GetUserMe)
 		users.GET("/me/children", middleware.RequirePermission("view_own_profile"), h.GetMyChildren)
 		users.GET("/me/children/:childId", middleware.RequirePermission("view_own_profile"), h.GetChildForParent)

@@ -226,7 +226,7 @@ func (h *ExamHandler) GetResults(c *gin.Context) {
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
 	roleName := c.MustGet("role_name").(string)
-	results, err := h.svc.GetResults(schoolID, query, roleName)
+	results, err := h.svc.GetResults(schoolID, query, roleName, permissionsFromContext(c))
 	if err != nil {
 		logServiceError(c, http.StatusInternalServerError, "get results failed", err, log.AddField("school_id", schoolID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -332,11 +332,23 @@ func (h *ExamHandler) GetMyResults(c *gin.Context) {
 	query.StudentID = studentID.String()
 
 	schoolID := c.MustGet("school_id").(uuid.UUID)
-	results, err := h.svc.GetResults(schoolID, query, "student")
+	results, err := h.svc.GetResults(schoolID, query, "student", nil)
 	if err != nil {
 		logServiceError(c, http.StatusInternalServerError, "get my results failed", err, log.AddField("school_id", schoolID), log.AddField("student_id", studentID))
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, results)
+}
+
+func permissionsFromContext(c *gin.Context) []string {
+	raw, ok := c.Get("permissions")
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]string)
+	if !ok {
+		return nil
+	}
+	return list
 }

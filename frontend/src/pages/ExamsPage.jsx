@@ -3,7 +3,11 @@ import { examApi, academicApi, studentApi } from "../api/client";
 import PermTabBar from "../components/PermTabBar";
 import { usePermTabs } from "../hooks/usePermTabs";
 import { useAuth } from "../context/AuthContext";
-import { subjectsForClassSection } from "../utils/teacherClassFilters";
+import {
+  classesForTeacher,
+  sectionsForAssignedClass,
+  subjectsForClassSection,
+} from "../utils/teacherClassFilters";
 
 function classNodeId(node) {
   return (node.class || node).id;
@@ -18,7 +22,8 @@ const EXAM_TABS = [
 ];
 
 export default function ExamsPage() {
-  const { hasPerm } = useAuth();
+  const { hasPerm, user } = useAuth();
+  const isTeacher = user?.role_name === "teacher";
   const canManageExams = hasPerm("create_exam");
   const { visibleTabs, tab, setTab } = usePermTabs(EXAM_TABS, "exams");
   const [results, setResults] = useState([]);
@@ -46,6 +51,7 @@ export default function ExamsPage() {
   const [editingExam, setEditingExam] = useState(null);
   const [editForm, setEditForm] = useState({ class_id: "", section_id: "", subject_id: "", title: "", exam_date: "", total_marks: "" });
   const [editSaving, setEditSaving] = useState(false);
+  const [teacherAssignments, setTeacherAssignments] = useState([]);
 
   const loadExams = useCallback(async () => {
     try {
@@ -63,22 +69,45 @@ export default function ExamsPage() {
 
   useEffect(() => { if (tab === "exams" || tab === "exam") loadExams(); }, [loadExams, tab]);
   useEffect(() => { if (tab === "results") loadResults(); }, [loadResults, tab]);
-  useEffect(() => { academicApi.getClasses().then(setClasses).catch(() => {}); }, []);
+  useEffect(() => {
+    academicApi.getClasses().then(setClasses).catch((err) => setError(err.message || "Failed to load classes."));
+    if (isTeacher && user?.id) {
+      academicApi
+        .getTeacherAssignments({ teacher_user_id: user.id })
+        .then(setTeacherAssignments)
+        .catch(() => setTeacherAssignments([]));
+    } else {
+      setTeacherAssignments([]);
+    }
+  }, [isTeacher, user?.id]);
 
-  const flatClasses = classes.map((c) => c.class || c);
-  const flatSubjects = classes.flatMap((c) => (c.subjects || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
-  const flatSections = classes.flatMap((c) => (c.sections || []).map((s) => ({ ...s, class_id: (c.class || c).id, className: (c.class || c).name })));
+  const availableClasses = useMemo(
+    () => classesForTeacher(classes, teacherAssignments, isTeacher),
+    [classes, teacherAssignments, isTeacher],
+  );
+
+  const filterClassNode = useMemo(
+    () => classes.find((c) => classNodeId(c) === examFilter.class_id),
+    [classes, examFilter.class_id],
+  );
+  const filterSections = useMemo(
+    () => sectionsForAssignedClass(filterClassNode, examFilter.class_id, teacherAssignments, isTeacher),
+    [filterClassNode, examFilter.class_id, teacherAssignments, isTeacher],
+  );
 
   const examFormClassNode = useMemo(
     () => classes.find((c) => classNodeId(c) === examForm.class_id),
     [classes, examForm.class_id],
   );
-  const examFormSections = examFormClassNode?.sections || [];
+  const examFormSections = useMemo(
+    () => sectionsForAssignedClass(examFormClassNode, examForm.class_id, teacherAssignments, isTeacher),
+    [examFormClassNode, examForm.class_id, teacherAssignments, isTeacher],
+  );
   const examFormHasSections = examFormSections.length > 0;
 
   const examFormAvailableSubjects = useMemo(
-    () => subjectsForClassSection(examFormClassNode, examForm.class_id, examForm.section_id, [], false),
-    [examFormClassNode, examForm.class_id, examForm.section_id],
+    () => subjectsForClassSection(examFormClassNode, examForm.class_id, examForm.section_id, teacherAssignments, isTeacher),
+    [examFormClassNode, examForm.class_id, examForm.section_id, teacherAssignments, isTeacher],
   );
 
   const canPickExamSubject = examForm.class_id && (!examFormHasSections || examForm.section_id);
@@ -87,11 +116,14 @@ export default function ExamsPage() {
     () => classes.find((c) => classNodeId(c) === editForm.class_id),
     [classes, editForm.class_id],
   );
-  const editFormSections = editFormClassNode?.sections || [];
+  const editFormSections = useMemo(
+    () => sectionsForAssignedClass(editFormClassNode, editForm.class_id, teacherAssignments, isTeacher),
+    [editFormClassNode, editForm.class_id, teacherAssignments, isTeacher],
+  );
   const editFormHasSections = editFormSections.length > 0;
   const editFormAvailableSubjects = useMemo(
-    () => subjectsForClassSection(editFormClassNode, editForm.class_id, editForm.section_id, [], false),
-    [editFormClassNode, editForm.class_id, editForm.section_id],
+    () => subjectsForClassSection(editFormClassNode, editForm.class_id, editForm.section_id, teacherAssignments, isTeacher),
+    [editFormClassNode, editForm.class_id, editForm.section_id, teacherAssignments, isTeacher],
   );
   const canPickEditSubject = editForm.class_id && (!editFormHasSections || editForm.section_id);
 
@@ -192,7 +224,10 @@ export default function ExamsPage() {
     () => classes.find((c) => classNodeId(c) === marksEntry.class_id),
     [classes, marksEntry.class_id],
   );
-  const marksSections = marksClassNode?.sections || [];
+  const marksSections = useMemo(
+    () => sectionsForAssignedClass(marksClassNode, marksEntry.class_id, teacherAssignments, isTeacher),
+    [marksClassNode, marksEntry.class_id, teacherAssignments, isTeacher],
+  );
   const marksHasSections = marksSections.length > 0;
   const canPickMarksExam = marksEntry.class_id && (!marksHasSections || marksEntry.section_id);
 
@@ -286,7 +321,10 @@ export default function ExamsPage() {
     () => classes.find((c) => classNodeId(c) === publishEntry.class_id),
     [classes, publishEntry.class_id],
   );
-  const publishSections = publishClassNode?.sections || [];
+  const publishSections = useMemo(
+    () => sectionsForAssignedClass(publishClassNode, publishEntry.class_id, teacherAssignments, isTeacher),
+    [publishClassNode, publishEntry.class_id, teacherAssignments, isTeacher],
+  );
   const publishHasSections = publishSections.length > 0;
   const canPickPublishExam = publishEntry.class_id && (!publishHasSections || publishEntry.section_id);
 
@@ -502,15 +540,15 @@ export default function ExamsPage() {
               <label>Class</label>
               <select value={examFilter.class_id} onChange={(e) => setExamFilter((q) => ({ ...q, class_id: e.target.value, section_id: "" }))}>
                 <option value="">All classes</option>
-                {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {availableClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div className="form-group">
               <label>Section</label>
               <select value={examFilter.section_id} onChange={(e) => setExamFilter((q) => ({ ...q, section_id: e.target.value }))}>
                 <option value="">Any section</option>
-                {flatSections
-                  .filter((s) => !examFilter.class_id || s.class_id === examFilter.class_id)
+                {filterSections
+                  .map((s) => ({ ...s, className: classNameById.get(examFilter.class_id) || "" }))
                   .map((s) => <option key={s.id} value={s.id}>{s.className} — {s.name}</option>)}
               </select>
             </div>
@@ -575,7 +613,7 @@ export default function ExamsPage() {
                 <label>Class</label>
                 <select required value={editForm.class_id} onChange={(ev) => onEditFormClassChange(ev.target.value)}>
                   <option value="">Select class…</option>
-                  {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {availableClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -648,7 +686,7 @@ export default function ExamsPage() {
               <label>Class</label>
               <select value={query.class_id} onChange={(e) => setQuery((q) => ({ ...q, class_id: e.target.value }))}>
                 <option value="">All</option>
-                {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {availableClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
           </div>
@@ -687,7 +725,7 @@ export default function ExamsPage() {
                 <label>Class</label>
                 <select required value={examForm.class_id} onChange={(e) => onExamFormClassChange(e.target.value)}>
                   <option value="">Select class…</option>
-                  {flatClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  {availableClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
               <div className="form-group">
@@ -747,7 +785,9 @@ export default function ExamsPage() {
               </div>
             </div>
             <p className="text-sm text-muted" style={{ marginTop: 8 }}>
-              All subjects configured for this class and section are listed.
+              {isTeacher
+                ? "Only subjects you are assigned to teach for this class and section are listed."
+                : "All subjects configured for this class and section are listed."}
             </p>
             <div className="btn-row"><button className="btn btn-primary" disabled={busy}>Create Exam</button></div>
           </form>
@@ -764,7 +804,7 @@ export default function ExamsPage() {
                   <label>Class</label>
                   <select required value={marksEntry.class_id} onChange={(e) => onMarksClassChange(e.target.value)}>
                     <option value="">Select class…</option>
-                    {flatClasses.map((c) => (
+                    {availableClasses.map((c) => (
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
@@ -898,7 +938,7 @@ export default function ExamsPage() {
                 <label>Class</label>
                 <select required value={publishEntry.class_id} onChange={(e) => onPublishClassChange(e.target.value)}>
                   <option value="">Select class…</option>
-                  {flatClasses.map((c) => (
+                  {availableClasses.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
